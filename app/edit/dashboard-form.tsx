@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { getDraftImage, putDraftImage, clearDraftImages } from '@/lib/imageDraftDb';
 import type { Site } from '@/lib/types';
+import { saveSite } from './actions';
 import styles from './editor.module.css';
 
 type ImageSlot = { kind: 'new'; blob: Blob } | { kind: 'existing'; url: string } | null;
@@ -40,22 +40,21 @@ const IMAGE_NAMES = ['background', 'avatar', 'ogp', 'icon'] as const;
 const SNAP_PX = 10;
 
 export function DashboardForm({
-  userId,
+  editToken,
   site,
   siteUrlOrigin,
 }: {
-  userId: string;
+  editToken: string;
   site: Site | null;
   siteUrlOrigin: string;
 }) {
-  const supabase = createClient();
   const rootRef = useRef<HTMLDivElement>(null);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ text: string; type?: 'ok' | 'err' }>({ text: '' });
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [restoredFromDraft, setRestoredFromDraft] = useState(false);
 
-  const draftKey = `profile-editor-draft:${userId}`;
+  const draftKey = `profile-editor-draft:${editToken}`;
 
   useEffect(() => {
     const root = rootRef.current;
@@ -237,7 +236,7 @@ export function DashboardForm({
       };
       showBgPreview(url);
       if (opts.persist !== false) {
-        putDraftImage(userId, 'background', file);
+        putDraftImage(editToken, 'background', file);
         saveState();
       }
       check();
@@ -329,17 +328,13 @@ export function DashboardForm({
         const file = this.files[0];
         state.avatar = { kind: 'new', blob: file };
         applyAvatarPreview(URL.createObjectURL(file));
-        putDraftImage(userId, 'avatar', file);
+        putDraftImage(editToken, 'avatar', file);
         saveState();
       }
     });
 
     // ===== OGP画像 / アプリアイコン =====
-    function bindFilePicker(
-      input: HTMLInputElement,
-      label: HTMLElement,
-      onPicked: (file: File) => void
-    ) {
+    function bindFilePicker(input: HTMLInputElement, label: HTMLElement, onPicked: (file: File) => void) {
       input.addEventListener('change', function () {
         if (this.files && this.files.length > 0) {
           onPicked(this.files[0]);
@@ -352,7 +347,7 @@ export function DashboardForm({
     }
     bindFilePicker(ogpInput, ogpLabel, (f) => {
       state.ogp = { kind: 'new', blob: f };
-      putDraftImage(userId, 'ogp', f);
+      putDraftImage(editToken, 'ogp', f);
       saveState();
     });
 
@@ -364,7 +359,7 @@ export function DashboardForm({
     bindFilePicker(iconInput, iconLabel, (f) => {
       state.icon = { kind: 'new', blob: f };
       applyIconPreview(URL.createObjectURL(f));
-      putDraftImage(userId, 'icon', f);
+      putDraftImage(editToken, 'icon', f);
       saveState();
     });
 
@@ -514,18 +509,7 @@ export function DashboardForm({
       });
     });
 
-    // ===== 保存(Supabaseへ) =====
-    async function uploadImageSlot(slot: ImageSlot, path: string): Promise<string | null> {
-      if (!slot) return null;
-      if (slot.kind === 'existing') return slot.url;
-      const { error } = await supabase.storage.from('site-images').upload(path, slot.blob, {
-        upsert: true,
-        contentType: 'image/png',
-      });
-      if (error) throw error;
-      return supabase.storage.from('site-images').getPublicUrl(path).data.publicUrl;
-    }
-
+    // ===== 保存(Server Action経由でSupabaseへ) =====
     deployBtn.addEventListener('click', async () => {
       const missing = getMissingFields();
       if (missing.length > 0) {
@@ -537,56 +521,45 @@ export function DashboardForm({
       setSaving(true);
       setStatusMsg({ text: '保存中... しばらくお待ちください' });
       try {
-        const slug = slugInput.value.trim().toLowerCase();
-        if (!/^[a-z0-9-]+$/.test(slug)) {
-          throw new Error('公開URL(slug)は半角英小文字・数字・ハイフンのみ使用できます');
-        }
-
         const bakedBg = await bakeBackground();
-        const bgSlot: ImageSlot = bakedBg ? { kind: 'new', blob: bakedBg } : state.bg;
 
-        const [backgroundUrl, avatarUrl, ogpUrl, iconUrl] = await Promise.all([
-          uploadImageSlot(bgSlot, `${userId}/background-${Date.now()}.png`),
-          uploadImageSlot(state.avatar, `${userId}/avatar-${Date.now()}.png`),
-          uploadImageSlot(state.ogp, `${userId}/ogp-${Date.now()}.png`),
-          uploadImageSlot(state.icon, `${userId}/icon-${Date.now()}.png`),
-        ]);
+        const fd = new FormData();
+        fd.append('editToken', editToken);
+        fd.append('slug', slugInput.value.trim());
+        fd.append('tiktokUrl', tiktokUrlInput.value.trim());
+        fd.append('ogpTitle', ogpTitleInput.value.trim());
+        fd.append('username', usernameEl.textContent?.trim() || '');
+        fd.append('description', descText);
+        fd.append('musicName', musicNameEl.textContent?.trim() || '');
+        fd.append('likeCount', likeCountEl.textContent?.trim() || '');
+        fd.append('commentCount', commentCountEl.textContent?.trim() || '');
+        fd.append('shareCount', shareCountEl.textContent?.trim() || '');
+        fd.append('showPageIndicator', piToggle.checked ? '1' : '0');
+        fd.append('pageIndicatorCount', piCount.value.trim() || '3');
 
-        const { error } = await supabase.from('sites').upsert(
-          {
-            user_id: userId,
-            slug,
-            title: ogpTitleInput.value.trim(),
-            description: descText,
-            image_url: avatarUrl,
-            content_data: {
-              username: usernameEl.textContent?.trim() || slug,
-              tiktokUrl: tiktokUrlInput.value.trim(),
-              musicName: musicNameEl.textContent?.trim() || 'オリジナル楽曲',
-              likeCount: likeCountEl.textContent?.trim() || '0',
-              commentCount: commentCountEl.textContent?.trim() || '0',
-              shareCount: shareCountEl.textContent?.trim() || '0',
-              showPageIndicator: piToggle.checked,
-              pageIndicatorCount: piCount.value.trim() || '3',
-              images: {
-                background: backgroundUrl ?? undefined,
-                ogpImage: ogpUrl ?? undefined,
-                appIcon: iconUrl ?? undefined,
-              },
-            },
-          },
-          { onConflict: 'user_id' }
-        );
-        if (error) throw error;
+        if (bakedBg) fd.append('backgroundFile', bakedBg, 'background.png');
+        else if (state.bg?.kind === 'existing') fd.append('backgroundUrl', state.bg.url);
+
+        if (state.avatar?.kind === 'new') fd.append('avatarFile', state.avatar.blob, 'avatar.png');
+        else if (state.avatar?.kind === 'existing') fd.append('avatarUrl', state.avatar.url);
+
+        if (state.ogp?.kind === 'new') fd.append('ogpFile', state.ogp.blob, 'ogp.png');
+        else if (state.ogp?.kind === 'existing') fd.append('ogpUrl', state.ogp.url);
+
+        if (state.icon?.kind === 'new') fd.append('iconFile', state.icon.blob, 'icon.png');
+        else if (state.icon?.kind === 'existing') fd.append('iconUrl', state.icon.url);
+
+        const result = await saveSite(fd, siteUrlOrigin);
+        if (!result.ok) throw new Error(result.error);
 
         setStatusMsg({ text: '✓ 公開しました', type: 'ok' });
-        setResultUrl(`${siteUrlOrigin}/${slug}`);
+        setResultUrl(result.url);
         try {
           window.localStorage.removeItem(draftKey);
         } catch {
           // noop
         }
-        await clearDraftImages(userId, [...IMAGE_NAMES]);
+        await clearDraftImages(editToken, [...IMAGE_NAMES]);
       } catch (err) {
         setStatusMsg({ text: 'エラー: ' + (err instanceof Error ? err.message : '保存に失敗しました'), type: 'err' });
       } finally {
@@ -625,10 +598,10 @@ export function DashboardForm({
       if (saved) setRestoredFromDraft(true);
 
       const [bgBlob, avatarBlob, ogpBlob, iconBlob] = await Promise.all([
-        getDraftImage(userId, 'background'),
-        getDraftImage(userId, 'avatar'),
-        getDraftImage(userId, 'ogp'),
-        getDraftImage(userId, 'icon'),
+        getDraftImage(editToken, 'background'),
+        getDraftImage(editToken, 'avatar'),
+        getDraftImage(editToken, 'ogp'),
+        getDraftImage(editToken, 'icon'),
       ]);
 
       if (bgBlob) {

@@ -3,7 +3,7 @@
  * KVから読んでいた値をSupabaseの `sites` レコードから読むように変更しただけで、
  * マークアップ・CSS・クライアントサイドJSの見た目/挙動は変更していない。
  */
-import type { Site } from '@/lib/types';
+import type { PublicSite } from '@/lib/types';
 
 export interface ViewerData {
   title: string;
@@ -23,7 +23,7 @@ export interface ViewerData {
   origin: string;
 }
 
-export function siteToViewerData(site: Site, origin: string): ViewerData {
+export function siteToViewerData(site: PublicSite, origin: string): ViewerData {
   const cd = site.content_data ?? {};
   const images = (cd.images as { background?: string; ogpImage?: string; appIcon?: string } | undefined) ?? {};
 

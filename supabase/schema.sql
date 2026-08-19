@@ -1,8 +1,17 @@
 -- Supabase SQL Editor で実行してください。
+-- このアプリはSupabase Authを使わない(ログイン機能なし)。
+-- 各サイトは作成時に発行される edit_token(推測不可能なUUID)を知っている人だけが
+-- 編集できる、「秘密の編集リンク」方式。
+--
+-- 書き込み(作成・更新・画像アップロード)はすべてNext.jsのServer Action経由で
+-- service_roleキー(サーバー専用シークレット。ブラウザには絶対に渡さない)を使って行う。
+-- service_roleはRLSを無視できるため、ブラウザ(anonキー)からの直接の書き込みは
+-- 全て禁止しておけば、そもそもRLSポリシーで edit_token の一致を検証する必要がない。
+
 -- 1) sites テーブル作成
 create table if not exists public.sites (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users (id) on delete cascade,
+  edit_token uuid not null default gen_random_uuid(),
   slug text not null unique,
   title text not null default '',
   description text default '',
@@ -11,40 +20,30 @@ create table if not exists public.sites (
   created_at timestamptz not null default now()
 );
 
--- ダッシュボードは「ユーザー1人につきサイト1つ」を前提にしているため、user_idにも一意制約を付与する
--- (複数サイト対応にしたい場合はこの制約を外し、ダッシュボード側の upsert キーも見直すこと)
-create unique index if not exists sites_user_id_key on public.sites (user_id);
-
+create unique index if not exists sites_edit_token_key on public.sites (edit_token);
 create index if not exists sites_slug_idx on public.sites (slug);
 
 -- 2) Row Level Security を有効化
 alter table public.sites enable row level security;
 
--- 3) ポリシー
--- 公開ページ(/[slug])は誰でも閲覧できる必要があるため、SELECTは全員に許可
+-- 3) ポリシー: 閲覧(SELECT)のみ全員に許可。INSERT/UPDATE/DELETEのポリシーは
+--    一切定義しない = anon/authenticatedロールからは常に拒否される。
+--    (service_roleはRLSをバイパスするため、Server Action経由の書き込みには影響しない)
 drop policy if exists "sites are viewable by everyone" on public.sites;
 create policy "sites are viewable by everyone"
   on public.sites for select
   using (true);
 
--- 作成・更新・削除は本人の行のみ
-drop policy if exists "users can insert their own site" on public.sites;
-create policy "users can insert their own site"
-  on public.sites for insert
-  with check (auth.uid() = user_id);
+-- 4) 列レベルのアクセス制御: edit_token列は anon/authenticated には絶対に見せない。
+--    (RLSは行単位の制御しかできないため、秘密の列を隠すには列権限を別途絞る必要がある)
+revoke select on public.sites from anon, authenticated;
+grant select (id, slug, title, description, image_url, content_data, created_at)
+  on public.sites to anon, authenticated;
 
-drop policy if exists "users can update their own site" on public.sites;
-create policy "users can update their own site"
-  on public.sites for update
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+-- アプリのコードでは公開ページ・一覧系のクエリで `select('*')` を使わず、
+-- 必ず上記の公開カラムを明示的に指定すること(edit_tokenはservice_role経由でのみ読む)。
 
-drop policy if exists "users can delete their own site" on public.sites;
-create policy "users can delete their own site"
-  on public.sites for delete
-  using (auth.uid() = user_id);
-
--- 4) Storage: プロフィール画像用バケット
+-- 5) Storage: プロフィール画像用バケット
 insert into storage.buckets (id, name, public)
 values ('site-images', 'site-images', true)
 on conflict (id) do nothing;
@@ -55,28 +54,5 @@ create policy "site-images are publicly accessible"
   on storage.objects for select
   using (bucket_id = 'site-images');
 
--- アップロード・更新・削除は、自分のuser_idをパスの先頭に持つファイルのみ許可
--- (アプリ側では `${user.id}/xxxx.png` というパスでアップロードする)
-drop policy if exists "users can upload their own images" on storage.objects;
-create policy "users can upload their own images"
-  on storage.objects for insert
-  with check (
-    bucket_id = 'site-images'
-    and (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-drop policy if exists "users can update their own images" on storage.objects;
-create policy "users can update their own images"
-  on storage.objects for update
-  using (
-    bucket_id = 'site-images'
-    and (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-drop policy if exists "users can delete their own images" on storage.objects;
-create policy "users can delete their own images"
-  on storage.objects for delete
-  using (
-    bucket_id = 'site-images'
-    and (storage.foldername(name))[1] = auth.uid()::text
-  );
+-- アップロード・更新・削除のポリシーは定義しない = anonからの直接アップロードは拒否。
+-- 画像アップロードもServer Action経由でservice_roleキーを使って行う。

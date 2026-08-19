@@ -1,13 +1,18 @@
-import { createClient } from '@/lib/supabase/server';
+import { createPublicClient } from '@/lib/supabase/public';
 import { renderViewerHtml, siteToViewerData } from '@/lib/tiktok-viewer';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
-  const { data: site } = await supabase.from('sites').select('*').eq('slug', slug).maybeSingle();
+  // edit_token列は列権限でrevokeされているため、ここで select('*') をしても含まれない。
+  const { data: site } = await supabase
+    .from('sites')
+    .select('id, slug, title, description, image_url, content_data, created_at')
+    .eq('slug', slug)
+    .maybeSingle();
 
   if (!site) {
     return new Response(

@@ -1,5 +1,5 @@
-import { Sparkles, Link2, KeyRound } from 'lucide-react';
-import { createSite } from './edit/actions';
+import Link from 'next/link';
+import { Sparkles, Link2, Smartphone } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -10,35 +10,37 @@ export default function HomePage() {
       <h1 className="mt-6 text-3xl font-bold text-slate-900 sm:text-4xl">
         TikTok風プロフィールサイトを、
         <br />
-        アカウント登録なしで公開しよう
+        いくつでも作って公開しよう
       </h1>
       <p className="mt-4 max-w-md text-slate-500">
-        「新しいサイトを作る」を押すだけで、あなた専用の編集リンクが発行されます。
-        ログインは不要です。その編集リンクをブックマークしておけば、いつでも内容を更新できます。
+        Googleアカウントでログインすると、作成したサイトを一覧で管理できます。
+        タイトル・自己紹介・画像を入力するだけで、自分専用のURLが完成します。
       </p>
 
       <div className="mt-8 flex gap-3">
-        <form action={createSite}>
-          <button
-            type="submit"
-            className="rounded-lg bg-slate-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-slate-700"
-          >
-            新しいサイトを作る
-          </button>
-        </form>
+        <Link
+          href="/login"
+          className="rounded-lg bg-slate-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-slate-700"
+        >
+          Googleでログインしてはじめる
+        </Link>
       </div>
 
       <div className="mt-16 grid w-full max-w-2xl grid-cols-1 gap-4 text-left sm:grid-cols-3">
-        <Feature icon={<Link2 size={18} />} title="専用URL" description="/自分のslug で世界に公開できます" />
         <Feature
-          icon={<KeyRound size={18} />}
-          title="秘密の編集リンク"
-          description="ログイン不要。発行された編集リンクを知っている人だけが編集できます"
+          icon={<Link2 size={18} />}
+          title="専用URL"
+          description="/自分のslug で世界に公開できます"
+        />
+        <Feature
+          icon={<Smartphone size={18} />}
+          title="端末に自動保存"
+          description="編集中の内容は端末にも自動保存され、安心して編集できます"
         />
         <Feature
           icon={<Sparkles size={18} />}
-          title="タップして編集"
-          description="プレビューを直接タップして、TikTok風の見た目そのままに編集できます"
+          title="複数サイトを管理"
+          description="ログイン後のマイページで、作成したサイトを一覧・新規作成・削除できます"
         />
       </div>
     </main>

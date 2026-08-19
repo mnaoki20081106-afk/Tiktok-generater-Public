@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>サイトジェネレーター</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#0f0f0f;color:#fff;font-family:-apple-system,"Hiragino Sans",sans-serif;min-height:100vh;padding:24px 16px 80px}
+.wrap{max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+h1{font-size:20px;font-weight:700}
+.sub{font-size:13px;color:rgba(255,255,255,.45);margin-top:4px;line-height:1.5}
+
+.layout{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
+
+/* ===== プレビュー(閲覧サイトの見た目そのもの) ===== */
+.preview-col{display:flex;flex-direction:column;align-items:center;gap:10px;flex:0 0 auto}
+.preview-hint{font-size:12px;color:rgba(255,255,255,.4);text-align:center;max-width:300px;line-height:1.6}
+.phone{position:relative;width:300px;aspect-ratio:9/19.5;border-radius:34px;overflow:hidden;background:#000;box-shadow:0 0 0 8px #1c1c1c,0 12px 40px rgba(0,0,0,.6)}
+.bg{position:absolute;inset:0;cursor:pointer;overflow:hidden;touch-action:none}
+.bg.has-image{cursor:grab}
+.bg.dragging{cursor:grabbing}
+.bg img{position:absolute;top:0;left:0;display:block;user-select:none;pointer-events:none}
+.bg-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;color:rgba(255,255,255,.35);font-size:12px;background:#151515}
+.edit-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-weight:600;padding:5px 9px;border-radius:20px;opacity:0;transition:opacity .15s;border:none;cursor:pointer;z-index:20}
+.bg.has-image .edit-badge{opacity:1}
+.zoom-row{align-items:center;gap:10px;width:300px;font-size:12px;color:rgba(255,255,255,.5);display:none}
+.zoom-row.visible{display:flex}
+.zoom-row input[type=range]{flex:1;accent-color:#fe2c55}
+
+.pi-row,.float-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:300px;font-size:12px;color:rgba(255,255,255,.5);background:#1a1a1a;border-radius:10px;padding:10px 12px}
+.pi-row .pi-left,.float-row .pi-left{display:flex;align-items:center;gap:8px}
+.pi-row input[type=checkbox],.float-row input[type=checkbox]{width:16px;height:16px}
+.pi-row input[type=text]{width:48px;background:#2a2a2a;border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#fff;padding:5px 6px;font-size:12px;text-align:center}
+
+/* ===== プレビュー内の誘導ダイアログ(見た目確認用。実際のサイトは常時表示) ===== */
+.p-ov{position:absolute;inset:0;background:rgba(0,0,0,0.62);z-index:3001;display:none;align-items:center;justify-content:center;padding:0 16px}
+.p-ov.visible{display:flex}
+.p-mc{background:#fff;border-radius:10px;width:100%;box-shadow:0 4px 24px rgba(0,0,0,0.3)}
+.p-mb{padding:20px 18px 0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px}
+.p-mi{width:47px;height:47px;border-radius:11px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer;background:#f2f2f2;display:flex;align-items:center;justify-content:center;font-size:9px;color:rgba(0,0,0,.35);text-align:center;position:relative}
+.p-mi img{width:100%;height:100%;object-fit:cover;display:block}
+.p-mi .p-mi-badge{position:absolute;inset:0;background:rgba(0,0,0,.45);color:#fff;font-size:8px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
+.p-mi:hover .p-mi-badge{opacity:1}
+.p-mt{font-size:13px;font-weight:700;color:#161823;line-height:1.35}
+.p-md{font-size:10px;color:rgba(22,24,35,.7);line-height:1.5}
+.p-ma{padding:14px 16px 17px;display:flex;flex-direction:column;align-items:center}
+.p-bo{display:block;width:100%;padding:10px 0;background:#fe2c55;color:#fff;font-size:12.5px;font-weight:700;border-radius:4px;text-align:center}
+.p-bl{display:block;width:100%;padding:9px 0 0;color:rgba(22,24,35,.55);font-size:11.5px;text-align:center}
+
+.rail{position:absolute;right:8px;bottom:62px;display:flex;flex-direction:column;align-items:center;gap:14px;z-index:10}
+.rail-avatar{position:relative;display:block;width:38px;height:38px;cursor:pointer}
+.avatar{width:38px;height:38px;border-radius:50%;overflow:hidden;border:2px solid #fff;background:#333;display:flex;align-items:center;justify-content:center;font-size:9px;color:rgba(255,255,255,.5);text-align:center}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.follow{position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);width:18px;height:18px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3));pointer-events:none}
+.rail-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:#fff}
+.rail-item svg{width:27px;height:27px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25));pointer-events:none}
+.rail-item span{font-size:10px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.4);cursor:pointer;border-radius:4px;padding:1px 3px;outline:none;min-width:14px;display:inline-block}
+.rail-item span:focus{background:rgba(255,255,255,.18)}
+.disc{width:34px;height:34px;border-radius:50%;overflow:hidden;border:3px solid #3a3a3a;background:#222;animation:spin 4s linear infinite;margin-top:1px}
+.disc img{width:100%;height:100%;object-fit:cover;display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.caption{position:absolute;left:12px;right:78px;bottom:58px;color:#fff;z-index:10}
+.uname{font-size:14px;font-weight:700;margin-bottom:4px;text-shadow:0 1px 3px rgba(0,0,0,.4);cursor:text;outline:none;border-radius:4px;padding:1px 3px}
+.uname:focus{background:rgba(255,255,255,.18)}
+.desc-wrap{max-height:32px;overflow:hidden;font-size:11.5px;line-height:1.4;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.4);word-break:break-word;cursor:text}
+.desc-wrap .tag{font-weight:700}
+.desc-edit{width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.3);border-radius:6px;color:#fff;font-size:11.5px;padding:4px;resize:vertical;font-family:inherit;display:none}
+.more-inline{display:none;font-weight:400;opacity:.8;margin-left:2px;white-space:nowrap}
+.music{display:flex;align-items:center;gap:5px;font-size:10.5px;opacity:.9;margin-top:6px;text-shadow:0 1px 3px rgba(0,0,0,.4)}
+.music span{cursor:text;outline:none;border-radius:4px;padding:1px 3px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.music span:focus{background:rgba(255,255,255,.18);white-space:normal;overflow:visible}
+
+.page-indicator{position:absolute;left:50%;bottom:62px;transform:translateX(-50%);display:flex;align-items:center;gap:5px;z-index:10;pointer-events:none}
+.pi-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.4)}
+.pi-dot.active{background:#fff}
+
+.navbar{position:absolute;left:0;right:0;bottom:0;height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 4px;background:linear-gradient(0deg,rgba(0,0,0,.55),rgba(0,0,0,0));z-index:15;pointer-events:none}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:#fff}
+.nav-item svg{width:27px;height:27px}
+.nav-item .nav-label{font-size:8.5px;font-weight:500}
+.nav-plus{flex:1;display:flex;align-items:center;justify-content:center}
+.nav-plus svg{width:45px;height:30px}
+
+/* ===== 右側:設定パネル ===== */
+.panel{flex:1 1 340px;min-width:300px;max-width:400px;display:flex;flex-direction:column;gap:20px}
+.card{background:#1a1a1a;border-radius:16px;padding:22px 20px;display:flex;flex-direction:column;gap:16px}
+.sec{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.3)}
+.field{display:flex;flex-direction:column;gap:8px}
+.fl{font-size:13px;font-weight:600;color:rgba(255,255,255,.7)}
+input[type=text],input[type=url]{background:#2a2a2a;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 13px;color:#fff;font-size:14px;outline:none;width:100%;transition:border-color .2s;font-family:inherit}
+input:focus{border-color:rgba(255,255,255,.35)}
+.hint{font-size:11.5px;color:rgba(255,255,255,.3);line-height:1.6}
+.file-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#2a2a2a;border:1.5px dashed rgba(255,255,255,.15);border-radius:10px;padding:12px 14px;cursor:pointer;transition:border-color .2s,background .2s;font-size:13px;color:rgba(255,255,255,.5)}
+.file-btn:hover{border-color:rgba(255,255,255,.35);background:#333}
+.file-btn.selected{border-color:#fe2c55;color:#fe2c55;border-style:solid}
+input[type=file]{display:none}
+.btn-deploy{display:block;width:100%;background:linear-gradient(90deg,#fe2c55,#ff4d6d);color:#fff;border:none;border-radius:12px;padding:15px;font-size:16px;font-weight:700;cursor:pointer;transition:opacity .2s}
+.btn-deploy:disabled{opacity:.4;cursor:not-allowed}
+.missing-warning{display:none;background:rgba(254,44,85,.1);border:1px solid rgba(254,44,85,.35);border-radius:10px;padding:12px 14px;font-size:12.5px;color:#ff8fa3;line-height:1.7}
+.missing-warning.visible{display:block}
+.file-btn.missing{border-color:#fe2c55;color:#fe2c55}
+input.missing{border-color:#fe2c55}
+.status{font-size:13px;text-align:center;color:rgba(255,255,255,.5);min-height:18px;line-height:1.6}
+.status.ok{color:#4ade80}.status.err{color:#fe2c55}
+.result{background:#1e2e1e;border:1px solid rgba(74,222,128,.3);border-radius:10px;padding:14px;font-size:13px;color:#4ade80;word-break:break-all;display:none;text-align:center;line-height:1.8}
+.result a{color:#4ade80}
+.info{background:#222;border-radius:10px;padding:12px 14px;font-size:11.5px;color:rgba(255,255,255,.45);line-height:1.8;border:1px solid rgba(255,255,255,.06)}
+.info strong{color:rgba(255,255,255,.75)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>サイトジェネレーター</h1>
+    <div class="sub">プレビューを直接タップして編集し、そのまま自動デプロイできます</div>
+  </div>
+
+  <div class="layout">
+    <div class="preview-col">
+      <div class="phone" id="phone">
+        <div class="bg" id="bgArea">
+          <div class="bg-empty" id="bgEmpty">タップして<br>背景画像を選択</div>
+          <img id="bgImg" style="display:none" alt="">
+          <button type="button" class="edit-badge" id="bgChangeBtn" style="display:none">画像を変更</button>
+        </div>
+
+        <div class="rail">
+          <div class="rail-avatar editable" id="avatarArea">
+            <div class="avatar" id="avatarBox">＋</div>
+            <svg class="follow" viewBox="0 0 28 28"><path fill="#FE2C55" d="M14 25C20.6274 25 26 19.6274 26 13C26 6.37258 20.6274 1 14 1C7.37258 1 2 6.37258 2 13C2 19.6274 7.37258 25 14 25Z"></path><path fill="#fff" d="M9.5 14C9.22386 14 9 13.7761 9 13.5V12.5C9 12.2239 9.22386 12 9.5 12H18.5C18.7761 12 19 12.2239 19 12.5V13.5C19 13.7761 18.7761 14 18.5 14H9.5Z"></path><path fill="#fff" d="M13 8.5C13 8.22386 13.2239 8 13.5 8H14.5C14.7761 8 15 8.22386 15 8.5V17.5C15 17.7761 14.7761 18 14.5 18H13.5C13.2239 18 13 17.7761 13 17.5V8.5Z"></path></svg>
+          </div>
+          <div class="rail-item">
+            <svg viewBox="0 0 48 48"><path fill="#fff" d="M24 9.44c3.2-4.03 7.61-5.56 12-4.67 2.31.47 5.59 2.28 7.75 5.48 2.26 3.32 3.21 7.99.98 13.85-1.75 4.57-5.5 8.83-9.28 12.2a56.6 56.6 0 0 1-10.52 7.47l-.93.49-.93-.49a56.6 56.6 0 0 1-10.52-7.47c-3.78-3.37-7.53-7.63-9.28-12.2-2.24-5.86-1.28-10.53.98-13.85C6.4 7.05 9.69 5.24 12 4.77c4.39-.9 8.8.64 12 4.67Z"></path></svg>
+            <span contenteditable="true" id="likeCount">3.1k</span>
+          </div>
+          <div class="rail-item">
+            <svg viewBox="0 0 48 48"><path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M38.5 35.31c4.1-4.11 6.5-8.4 6.5-13.38C45 11.8 35.73 3.6 24.3 3.6S3.6 11.8 3.6 21.93C3.6 32.05 13.17 39 24.6 39v3.36c0 1.06 1.1 1.75 2.04 1.24 2.92-1.58 8.33-4.76 11.85-8.29ZM14.23 19.46a2.95 2.95 0 0 1 2.96 2.93 2.95 2.95 0 0 1-2.96 2.94 2.95 2.95 0 0 1-2.95-2.94 2.95 2.95 0 0 1 2.95-2.93Zm13.02 2.93a2.95 2.95 0 0 0-2.96-2.93 2.95 2.95 0 0 0-2.96 2.93 2.95 2.95 0 0 0 2.96 2.94 2.95 2.95 0 0 0 2.96-2.94Zm7.1-2.93a2.95 2.95 0 0 1 2.95 2.93 2.95 2.95 0 0 1-2.96 2.94 2.95 2.95 0 0 1-2.95-2.94 2.95 2.95 0 0 1 2.95-2.93Z"></path></svg>
+            <span contenteditable="true" id="commentCount">686</span>
+          </div>
+          <div class="rail-item">
+            <svg viewBox="0 0 48 48"><path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M25.56 4.07a1.98 1.98 0 0 0-2.15-.42 1.95 1.95 0 0 0-1.21 1.8v8.34c-5.4.35-10.04 2.2-13.43 5.68C4.97 23.35 3 29.03 3 36.19c0 .79.48 1.5 1.22 1.8.73.3 1.58.13 2.14-.42 3.34-3.31 7.65-4.56 11.25-4.95 1.8-.2 3.37-.18 4.5-.1h.09v9.03c0 .78.46 1.48 1.18 1.79.72.3 1.56.16 2.13-.37l18.87-17.49a1.94 1.94 0 0 0 .04-2.8L25.56 4.07Z"></path></svg>
+            <span contenteditable="true" id="shareCount">2.8k</span>
+          </div>
+          <div class="disc" id="discArea"><img id="discImg" style="display:none" alt=""></div>
+        </div>
+
+        <div class="caption">
+          <div class="uname" contenteditable="true" id="username">username</div>
+          <div class="desc-wrap" id="descWrap"><span id="descDisplay">タップして動画の説明・ハッシュタグを入力</span><span class="more-inline" id="moreInline">もっと見る</span></div>
+          <textarea class="desc-edit" id="descEdit" rows="3" placeholder="例: 今日の一コマ #日常 #TikTok"></textarea>
+          <div class="music">♫<span contenteditable="true" id="musicName">オリジナル楽曲</span></div>
+        </div>
+
+        <div class="page-indicator" id="pageIndicator" style="display:none"></div>
+
+        <div class="navbar">
+          <div class="nav-item">
+            <svg viewBox="0 0 48 48" fill="#fff"><path fill-rule="evenodd" clip-rule="evenodd" d="M24.9505 7.84001C24.3975 7.38666 23.6014 7.38666 23.0485 7.84003L6.94846 21.04C6.45839 21.4418 6.2737 22.1083 6.48706 22.705C6.70041 23.3017 7.26576 23.7 7.89949 23.7H10.2311L11.4232 36.7278C11.5409 38.0149 12.6203 39 13.9128 39H21.5C22.0523 39 22.5 38.5523 22.5 38V28.3153C22.5 27.763 22.9477 27.3153 23.5 27.3153H24.5C25.0523 27.3153 25.5 27.763 25.5 28.3153V38C25.5 38.5523 25.9477 39 26.5 39H34.0874C35.3798 39 36.4592 38.0149 36.577 36.7278L37.7691 23.7H40.1001C40.7338 23.7 41.2992 23.3017 41.5125 22.705C41.7259 22.1082 41.5412 21.4418 41.0511 21.04L24.9505 7.84001Z"></path></svg>
+            <span class="nav-label">ホーム</span>
+          </div>
+          <div class="nav-item" style="opacity:.75">
+            <svg viewBox="0 0 36 36" fill="#fff"><path fill-rule="evenodd" clip-rule="evenodd" d="M18 28.0547C23.553 28.0547 28.0547 23.5531 28.0547 18C28.0547 12.4469 23.553 7.94531 18 7.94531C12.4469 7.94531 7.94531 12.4469 7.94531 18C7.94531 23.5531 12.4469 28.0547 18 28.0547ZM30.375 18C30.375 24.8345 24.8345 30.375 18 30.375C11.1655 30.375 5.625 24.8345 5.625 18C5.625 11.1655 11.1655 5.625 18 5.625C24.8345 5.625 30.375 11.1655 30.375 18Z"></path><path fill-rule="evenodd" clip-rule="evenodd" d="M20.3508 20.3864C20.712 20.1679 20.9645 19.8074 21.0462 19.3932L22.427 12.3948C22.5027 12.0113 22.0871 11.7204 21.7527 11.9226L15.6486 15.6137C15.2874 15.8322 15.0349 16.1928 14.9532 16.6069L13.5724 23.6053C13.4967 23.9888 13.9123 24.2797 14.2467 24.0775L20.3508 20.3864ZM16.5684 20.0442L18.9029 18.6325L19.431 15.9559L17.0965 17.3676L16.5684 20.0442Z"></path></svg>
+            <span class="nav-label">トレンド</span>
+          </div>
+          <div class="nav-plus">
+            <svg viewBox="0 0 75 49" fill="none">
+              <path fill="#FA2D6C" fill-rule="evenodd" d="M23.5 23.3c0-4.48 0-6.72.872-8.432a8 8 0 0 1 3.496-3.496C29.58 10.5 31.82 10.5 36.3 10.5h9.9c4.48 0 6.72 0 8.432.872a8 8 0 0 1 3.496 3.496C59 16.58 59 18.82 59 23.3v2.4c0 4.48 0 6.72-.872 8.432a8 8 0 0 1-3.496 3.496c-1.711.872-3.952.872-8.432.872h-9.9c-4.48 0-6.72 0-8.432-.872a8 8 0 0 1-3.496-3.496C23.5 32.42 23.5 30.18 23.5 25.7z" clip-rule="evenodd"></path>
+              <path fill="#20D5EC" fill-rule="evenodd" d="M16 23.3c0-4.48 0-6.72.872-8.432a8 8 0 0 1 3.496-3.496C22.08 10.5 24.32 10.5 28.8 10.5h9.9c4.48 0 6.72 0 8.432.872a8 8 0 0 1 3.496 3.496c.872 1.711.872 3.952.872 8.432v2.4c0 4.48 0 6.72-.872 8.432a8 8 0 0 1-3.496 3.496c-1.711.872-3.952.872-8.432.872h-9.9c-4.48 0-6.72 0-8.432-.872a8 8 0 0 1-3.496-3.496C16 32.42 16 30.18 16 25.7z" clip-rule="evenodd"></path>
+              <rect width="36" height="28" x="19.5" y="10.5" fill="#fff" rx="8"></rect>
+              <path fill="#161823" fill-rule="evenodd" d="M36.5 18.25a.5.5 0 0 0-.5.5v4.75h-4.75a.5.5 0 0 0-.5.5v1.5a.5.5 0 0 0 .5.5H36v4.75a.5.5 0 0 0 .5.5H38a.5.5 0 0 0 .5-.5V26h4.75a.5.5 0 0 0 .5-.5V24a.5.5 0 0 0-.5-.5H38.5v-4.75a.5.5 0 0 0-.5-.5z" clip-rule="evenodd"></path>
+            </svg>
+          </div>
+          <div class="nav-item" style="opacity:.75">
+            <svg viewBox="0 0 32 32" fill="#fff"><path fill-rule="evenodd" clip-rule="evenodd" d="M24.0362 21.3333H18.5243L15.9983 24.4208L13.4721 21.3333H7.96047L7.99557 8H24.0009L24.0362 21.3333ZM24.3705 23.3333H19.4721L17.2883 26.0026C16.6215 26.8176 15.3753 26.8176 14.7084 26.0026L12.5243 23.3333H7.62626C6.70407 23.3333 5.95717 22.5845 5.9596 21.6623L5.99646 7.66228C5.99887 6.74352 6.74435 6 7.66312 6H24.3333C25.2521 6 25.9975 6.7435 26 7.66224L26.0371 21.6622C26.0396 22.5844 25.2927 23.3333 24.3705 23.3333ZM12.6647 14C12.2965 14 11.998 14.2985 11.998 14.6667V15.3333C11.998 15.7015 12.2965 16 12.6647 16H19.3313C19.6995 16 19.998 15.7015 19.998 15.3333V14.6667C19.998 14.2985 19.6995 14 19.3313 14H12.6647Z"></path></svg>
+            <span class="nav-label">メッセージ</span>
+          </div>
+          <div class="nav-item" style="opacity:.75">
+            <svg viewBox="0 0 48 48" fill="#fff"><path fill-rule="evenodd" clip-rule="evenodd" d="M24.0001 11.5C20.9625 11.5 18.5001 13.9624 18.5001 17C18.5001 20.0376 20.9625 22.5 24.0001 22.5C27.0377 22.5 29.5001 20.0376 29.5001 17C29.5001 13.9624 27.0377 11.5 24.0001 11.5ZM15.5001 17C15.5001 12.3056 19.3057 8.5 24.0001 8.5C28.6945 8.5 32.5001 12.3056 32.5001 17C32.5001 21.6944 28.6945 25.5 24.0001 25.5C19.3057 25.5 15.5001 21.6944 15.5001 17ZM24.0001 30.5C19.1458 30.5 15.0586 33.7954 13.8578 38.2712C13.7147 38.8046 13.2038 39.1741 12.6591 39.0827L11.6729 38.9173C11.1282 38.8259 10.7571 38.3085 10.8888 37.7722C12.3362 31.8748 17.6559 27.5 24.0001 27.5C30.3443 27.5 35.664 31.8748 37.1114 37.7722C37.2431 38.3085 36.872 38.8259 36.3273 38.9173L35.3411 39.0827C34.7964 39.1741 34.2855 38.8046 34.1424 38.2712C32.9416 33.7954 28.8544 30.5 24.0001 30.5Z"></path></svg>
+            <span class="nav-label">プロフィール</span>
+          </div>
+        </div>
+
+        <div class="p-ov" id="floatPreview">
+          <div class="p-mc">
+            <div class="p-mb">
+              <div class="p-mi" id="previewIconArea">
+                <span id="previewIconPlaceholder">＋</span>
+                <img id="previewIconImg" style="display:none" alt="">
+                <div class="p-mi-badge">変更</div>
+              </div>
+              <p class="p-mt">アプリで全機能をお試しください</p>
+              <p class="p-md">アプリでさらに多くの動画と優れた機能をお楽しみください</p>
+            </div>
+            <div class="p-ma">
+              <div class="p-bo">TikTokを開く</div>
+              <div class="p-bl">後で</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="zoom-row" id="zoomRow">
+        <span>ズーム</span>
+        <input type="range" id="zoomSlider" min="1" max="4" step="0.01" value="1">
+      </div>
+      <div class="float-row">
+        <div class="pi-left">
+          <input type="checkbox" id="floatToggle">
+          <label for="floatToggle">誘導ダイアログをプレビュー表示</label>
+        </div>
+      </div>
+      <div class="pi-row">
+        <div class="pi-left">
+          <input type="checkbox" id="piToggle">
+          <label for="piToggle">ページインジケーター（見た目のみ）</label>
+        </div>
+        <div class="pi-left">
+          <span>個数</span>
+          <input type="text" id="piCount" value="3" inputmode="numeric">
+        </div>
+      </div>
+      <div class="preview-hint">背景はドラッグで位置調整・スライダーで拡大縮小、アイコンはタップして画像を選択、数値やテキストはタップして直接入力できます</div>
+    </div>
+
+    <div class="panel">
+      <div class="card">
+        <div class="info">
+          この画面(GitHub Pages)はデプロイAPIを叩くだけです。実際のデプロイ処理はCloudflare Worker側で行われます。
+        </div>
+        <div class="field">
+          <label class="fl">デプロイAPIのURL</label>
+          <input type="url" id="apiBase" placeholder="https://your-generator-api.your-subdomain.workers.dev">
+          <div class="hint">一度入力すればブラウザに保存されます</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sec">デプロイ設定</div>
+        <div class="field">
+          <label class="fl">Worker名</label>
+          <input type="text" id="workerName" placeholder="例: my-tiktok-site">
+          <div class="hint">英小文字・数字・ハイフンのみ。<strong>worker名.subdomain.workers.dev</strong> になります</div>
+        </div>
+        <div class="field">
+          <label class="fl">TikTokプロフィールURL（ボタンの遷移先）</label>
+          <input type="url" id="tiktokUrl" placeholder="https://www.tiktok.com/@username">
+        </div>
+        <div class="field">
+          <label class="fl">OGPタイトル <span style="color:rgba(255,255,255,.3);font-weight:400">(SNSシェア時のタイトル)</span></label>
+          <input type="text" id="ogpTitle" placeholder="例: 俺の動画見て">
+        </div>
+        <div class="field">
+          <label class="fl">OGP画像</label>
+          <label class="file-btn" id="ogpLabel" for="ogpInput"><span>タップして選択</span></label>
+          <input type="file" id="ogpInput" accept="image/*">
+        </div>
+        <div class="field">
+          <label class="fl">アプリアイコン画像 <span style="color:rgba(255,255,255,.3);font-weight:400">(誘導ダイアログ用)</span></label>
+          <label class="file-btn" id="iconLabel" for="iconInput"><span>タップして選択</span></label>
+          <input type="file" id="iconInput" accept="image/*">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="missing-warning" id="missingWarning"></div>
+        <button class="btn-deploy" id="deployBtn" disabled>自動デプロイ</button>
+        <div class="status" id="status"></div>
+        <div class="result" id="result"></div>
+      </div>
+
+      <div class="card">
+        <div class="info">
+          入力内容はブラウザに自動保存され、次回このページを開いたときに復元されます。
+        </div>
+        <button type="button" class="file-btn" id="clearSavedBtn" style="justify-content:center">保存内容をクリア</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="bgInput" accept="image/*" style="display:none">
+<input type="file" id="avatarInput" accept="image/*" style="display:none">
+
+<script>
+const state = { bg:null, avatar:null, ogp:null, icon:null };
+
+// ===== 保存(次回開いた時に編集内容を復元) =====
+// テキスト系はlocalStorage、画像はIndexedDBに保存する
+const IDB_NAME = 'tiktokGeneratorDB', IDB_STORE = 'images';
+function openImageDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbPutImage(key, blob) {
+  try {
+    const db = await openImageDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(blob, key);
+      tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) { /* IndexedDBが使えない場合は諦める(画像以外は保存される) */ }
+}
+async function idbGetImage(key) {
+  try {
+    const db = await openImageDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) { return null; }
+}
+async function idbClearImages() {
+  try {
+    const db = await openImageDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).clear();
+      tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {}
+}
+
+function saveState() {
+  const data = {
+    workerName: document.getElementById('workerName').value,
+    tiktokUrl: document.getElementById('tiktokUrl').value,
+    ogpTitle: document.getElementById('ogpTitle').value,
+    username: document.getElementById('username').textContent.trim(),
+    description: typeof descText === 'string' ? descText : '',
+    musicName: document.getElementById('musicName').textContent.trim(),
+    likeCount: document.getElementById('likeCount').textContent.trim(),
+    commentCount: document.getElementById('commentCount').textContent.trim(),
+    shareCount: document.getElementById('shareCount').textContent.trim(),
+    piToggle: piToggle.checked,
+    piCount: piCount.value,
+    floatToggle: floatToggle.checked,
+    bgTransform: state.bg ? { zoom: bgTransform.zoom, offsetX: bgTransform.offsetX, offsetY: bgTransform.offsetY } : null,
+  };
+  try { localStorage.setItem('generatorFormState', JSON.stringify(data)); } catch (e) {}
+}
+
+const apiBaseInput = document.getElementById('apiBase');
+apiBaseInput.value = localStorage.getItem('generatorApiBase') || '';
+apiBaseInput.addEventListener('input', () => {
+  localStorage.setItem('generatorApiBase', apiBaseInput.value.trim());
+  check();
+});
+
+// ===== 画像アップロード共通処理 =====
+function bindImagePick(triggerEl, inputEl, onPicked) {
+  triggerEl.addEventListener('click', () => inputEl.click());
+  inputEl.addEventListener('change', function () {
+    if (this.files.length > 0) onPicked(this.files[0]);
+  });
+}
+
+// ===== 背景画像: ズーム・パン・スナップ =====
+const bgArea = document.getElementById('bgArea');
+const bgImg = document.getElementById('bgImg');
+const bgInput = document.getElementById('bgInput');
+const bgChangeBtn = document.getElementById('bgChangeBtn');
+const bgEmpty = document.getElementById('bgEmpty');
+const zoomRow = document.getElementById('zoomRow');
+const zoomSlider = document.getElementById('zoomSlider');
+const SNAP_PX = 10;
+
+const bgTransform = { naturalW: 0, naturalH: 0, dispW: 0, dispH: 0, baseScale: 1, zoom: 1, offsetX: 0, offsetY: 0 };
+
+function clampOffsets() {
+  const imgW = bgTransform.naturalW * bgTransform.baseScale * bgTransform.zoom;
+  const imgH = bgTransform.naturalH * bgTransform.baseScale * bgTransform.zoom;
+  // 画像がその軸でコンテナより小さい場合(レターボックス)も、
+  // 完全に上端(0)〜下端(dispH-imgH)まで指でドラッグして位置調整できるようにする
+  const dX = bgTransform.dispW - imgW;
+  const dY = bgTransform.dispH - imgH;
+  const minX = Math.min(0, dX), maxX = Math.max(0, dX);
+  const minY = Math.min(0, dY), maxY = Math.max(0, dY);
+  bgTransform.offsetX = Math.max(minX, Math.min(maxX, bgTransform.offsetX));
+  bgTransform.offsetY = Math.max(minY, Math.min(maxY, bgTransform.offsetY));
+  return { imgW, imgH, minX, minY, maxX, maxY };
+}
+
+function applyBgTransform() {
+  const { imgW, imgH } = clampOffsets();
+  bgImg.style.width = imgW + 'px';
+  bgImg.style.height = imgH + 'px';
+  bgImg.style.left = bgTransform.offsetX + 'px';
+  bgImg.style.top = bgTransform.offsetY + 'px';
+}
+
+function snapAxis(offset, min, max) {
+  const candidates = [0, min, max];
+  for (const c of candidates) {
+    if (Math.abs(offset - c) < SNAP_PX) return c;
+  }
+  return offset;
+}
+function snapBgOffsets() {
+  const { minX, minY, maxX, maxY } = clampOffsets();
+  bgTransform.offsetX = snapAxis(bgTransform.offsetX, minX, maxX);
+  bgTransform.offsetY = snapAxis(bgTransform.offsetY, minY, maxY);
+  applyBgTransform();
+}
+
+function loadBackgroundFile(file, opts) {
+  opts = opts || {};
+  state.bg = file;
+  const url = URL.createObjectURL(file);
+  bgImg.onload = () => {
+    const rect = bgArea.getBoundingClientRect();
+    bgTransform.naturalW = bgImg.naturalWidth;
+    bgTransform.naturalH = bgImg.naturalHeight;
+    bgTransform.dispW = rect.width;
+    bgTransform.dispH = rect.height;
+    bgTransform.baseScale = Math.max(bgTransform.dispW / bgTransform.naturalW, bgTransform.dispH / bgTransform.naturalH);
+    const containScale = Math.min(bgTransform.dispW / bgTransform.naturalW, bgTransform.dispH / bgTransform.naturalH);
+    const minZoom = Math.max(0.2, containScale / bgTransform.baseScale);
+    if (opts.savedTransform) {
+      bgTransform.zoom = opts.savedTransform.zoom || 1;
+      bgTransform.offsetX = opts.savedTransform.offsetX || 0;
+      bgTransform.offsetY = opts.savedTransform.offsetY || 0;
+    } else {
+      bgTransform.zoom = 1;
+      const imgW = bgTransform.naturalW * bgTransform.baseScale;
+      const imgH = bgTransform.naturalH * bgTransform.baseScale;
+      bgTransform.offsetX = (bgTransform.dispW - imgW) / 2;
+      bgTransform.offsetY = (bgTransform.dispH - imgH) / 2;
+    }
+    applyBgTransform();
+    zoomSlider.min = String(minZoom);
+    zoomSlider.max = '4';
+    zoomSlider.value = String(bgTransform.zoom);
+    zoomRow.classList.add('visible');
+  };
+  bgImg.src = url;
+  bgImg.style.display = 'block';
+  bgEmpty.style.display = 'none';
+  bgArea.classList.add('has-image');
+  bgChangeBtn.style.display = 'block';
+  if (!opts.skipPersist) { idbPutImage('background', file); saveState(); }
+  check();
+}
+
+bindImagePick(bgEmpty, bgInput, loadBackgroundFile);
+bgChangeBtn.addEventListener('click', (e) => { e.stopPropagation(); bgInput.click(); });
+bgInput.addEventListener('change', function () { if (this.files.length > 0) loadBackgroundFile(this.files[0]); });
+
+let bgDrag = null;
+bgArea.addEventListener('pointerdown', (e) => {
+  if (!state.bg) return;
+  bgDrag = { startX: e.clientX, startY: e.clientY, offsetX: bgTransform.offsetX, offsetY: bgTransform.offsetY };
+  bgArea.classList.add('dragging');
+  bgArea.setPointerCapture(e.pointerId);
+});
+bgArea.addEventListener('pointermove', (e) => {
+  if (!bgDrag) return;
+  bgTransform.offsetX = bgDrag.offsetX + (e.clientX - bgDrag.startX);
+  bgTransform.offsetY = bgDrag.offsetY + (e.clientY - bgDrag.startY);
+  applyBgTransform();
+});
+function endBgDrag(e) {
+  if (!bgDrag) return;
+  bgDrag = null;
+  bgArea.classList.remove('dragging');
+  snapBgOffsets();
+  saveState();
+}
+bgArea.addEventListener('pointerup', endBgDrag);
+bgArea.addEventListener('pointercancel', endBgDrag);
+
+zoomSlider.addEventListener('input', () => {
+  bgTransform.zoom = parseFloat(zoomSlider.value) || 1;
+  applyBgTransform();
+});
+zoomSlider.addEventListener('change', () => { snapBgOffsets(); saveState(); });
+
+function bakeBackground() {
+  return new Promise((resolve) => {
+    if (!state.bg) { resolve(null); return; }
+    if (!bgTransform.naturalW) { resolve(state.bg); return; }
+    const bakeW = 1080, bakeH = Math.round(bakeW * 19.5 / 9);
+    const canvas = document.createElement('canvas');
+    canvas.width = bakeW; canvas.height = bakeH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, bakeW, bakeH);
+    // dispW/dispHとbakeW/bakeHは同じアスペクト比なのでscaleRatioは縦横共通
+    const scaleRatio = bakeW / bgTransform.dispW;
+    const effScale = bgTransform.baseScale * bgTransform.zoom * scaleRatio;
+    const destW = bgTransform.naturalW * effScale;
+    const destH = bgTransform.naturalH * effScale;
+    const destX = bgTransform.offsetX * scaleRatio;
+    const destY = bgTransform.offsetY * scaleRatio;
+    ctx.drawImage(bgImg, 0, 0, bgTransform.naturalW, bgTransform.naturalH, destX, destY, destW, destH);
+    canvas.toBlob((blob) => resolve(blob), 'image/png');
+  });
+}
+
+function applyAvatarPreview(file) {
+  const url = URL.createObjectURL(file);
+  document.getElementById('avatarBox').innerHTML = '<img src="' + url + '" alt="">';
+  const discImg = document.getElementById('discImg');
+  discImg.src = url; discImg.style.display = 'block';
+}
+bindImagePick(document.getElementById('avatarArea'), document.getElementById('avatarInput'), (file) => {
+  state.avatar = file;
+  applyAvatarPreview(file);
+  idbPutImage('avatar', file);
+  saveState();
+});
+
+function bindFilePicker(inputId, labelId, setter) {
+  const input = document.getElementById(inputId);
+  const label = document.getElementById(labelId);
+  input.addEventListener('change', function () {
+    if (this.files.length > 0) {
+      setter(this.files[0]);
+      label.querySelector('span').textContent = this.files[0].name;
+      label.classList.add('selected');
+    }
+    check();
+  });
+}
+bindFilePicker('ogpInput', 'ogpLabel', f => { state.ogp = f; idbPutImage('ogp', f); saveState(); });
+
+function applyIconPreview(file) {
+  const url = URL.createObjectURL(file);
+  const img = document.getElementById('previewIconImg');
+  img.src = url; img.style.display = 'block';
+  document.getElementById('previewIconPlaceholder').style.display = 'none';
+}
+bindFilePicker('iconInput', 'iconLabel', f => { state.icon = f; applyIconPreview(f); idbPutImage('icon', f); saveState(); });
+
+// ===== 誘導ダイアログのプレビュー表示切り替え =====
+const floatToggle = document.getElementById('floatToggle');
+const floatPreview = document.getElementById('floatPreview');
+floatToggle.addEventListener('change', () => {
+  floatPreview.classList.toggle('visible', floatToggle.checked);
+  saveState();
+});
+document.getElementById('previewIconArea').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('iconInput').click();
+});
+
+// ===== 数値・テキストのタップ編集(contenteditable) =====
+['likeCount','commentCount','shareCount','username','musicName'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('focus', () => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+  });
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } });
+  el.addEventListener('blur', () => {
+    if (!el.textContent.trim()) el.textContent = id === 'username' ? 'username' : (id === 'musicName' ? 'オリジナル楽曲' : '0');
+    saveState();
+  });
+});
+
+// ===== 動画説明(ハッシュタグ強調 + 続きを見る) =====
+const descDisplay = document.getElementById('descDisplay');
+const descEdit = document.getElementById('descEdit');
+const descWrap = document.getElementById('descWrap');
+const moreInline = document.getElementById('moreInline');
+let descText = '';
+
+function escDesc(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function renderDescCut(n) {
+  const t = n === null ? descText : descText.slice(0, n);
+  descDisplay.innerHTML = escDesc(t).replace(/(^|\s)(#[^\s#]+)/g, (m, pre, tag) => pre + '<span class="tag">' + tag + '</span>');
+}
+// 実際のサイトと同じロジックで、必ず2行に収まるように末尾を切り詰めて
+// 「もっと見る」を末尾にインライン表示する(タップしても展開しない見た目だけの表示)
+function renderDesc() {
+  moreInline.style.display = 'none';
+  if (!descText.trim()) {
+    descDisplay.textContent = 'タップして動画の説明・ハッシュタグを入力';
+    return;
+  }
+  renderDescCut(null);
+  requestAnimationFrame(() => {
+    if (descWrap.scrollHeight <= descWrap.clientHeight + 1) return;
+    moreInline.style.display = 'inline';
+    let lo = 0, hi = descText.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      renderDescCut(mid);
+      if (descWrap.scrollHeight <= descWrap.clientHeight + 1) lo = mid; else hi = mid - 1;
+    }
+    renderDescCut(lo);
+  });
+}
+descWrap.addEventListener('click', () => {
+  descEdit.value = descText;
+  descWrap.style.display = 'none';
+  descEdit.style.display = 'block';
+  descEdit.focus();
+});
+descEdit.addEventListener('blur', () => {
+  descText = descEdit.value;
+  descEdit.style.display = 'none';
+  descWrap.style.display = 'block';
+  renderDesc();
+  check();
+  saveState();
+});
+renderDesc();
+
+// ===== ページインジケーター(見た目のみ) =====
+const piToggle = document.getElementById('piToggle');
+const piCount = document.getElementById('piCount');
+const pageIndicator = document.getElementById('pageIndicator');
+
+function renderPageIndicator() {
+  if (!piToggle.checked) {
+    pageIndicator.style.display = 'none';
+    pageIndicator.innerHTML = '';
+    return;
+  }
+  let n = parseInt(piCount.value, 10);
+  if (!Number.isFinite(n) || n < 1) n = 1;
+  if (n > 6) n = 6;
+  piCount.value = String(n);
+  let dots = '';
+  for (let i = 0; i < n; i++) dots += '<span class="pi-dot' + (i === 0 ? ' active' : '') + '"></span>';
+  pageIndicator.innerHTML = dots;
+  pageIndicator.style.display = 'flex';
+}
+piToggle.addEventListener('change', () => { renderPageIndicator(); saveState(); });
+piCount.addEventListener('input', () => { renderPageIndicator(); saveState(); });
+renderPageIndicator();
+
+// ===== デプロイ設定フィールド =====
+['workerName','tiktokUrl','ogpTitle'].forEach(id => document.getElementById(id).addEventListener('input', () => { check(); saveState(); }));
+
+const REQUIRED_FIELDS = [
+  { test: () => !!state.bg, label: '背景画像', highlightEl: () => bgArea },
+  { test: () => !!state.ogp, label: 'OGP画像', highlightEl: () => document.getElementById('ogpLabel') },
+  { test: () => !!state.icon, label: 'アプリアイコン画像', highlightEl: () => document.getElementById('iconLabel') },
+  { test: () => !!apiBaseInput.value.trim(), label: 'デプロイAPIのURL', highlightEl: () => apiBaseInput },
+  { test: () => !!document.getElementById('workerName').value.trim(), label: 'Worker名', highlightEl: () => document.getElementById('workerName') },
+  { test: () => !!document.getElementById('tiktokUrl').value.trim(), label: 'TikTokプロフィールURL', highlightEl: () => document.getElementById('tiktokUrl') },
+  { test: () => !!document.getElementById('ogpTitle').value.trim(), label: 'OGPタイトル', highlightEl: () => document.getElementById('ogpTitle') },
+];
+
+function getMissingFields() {
+  return REQUIRED_FIELDS.filter(f => !f.test());
+}
+
+function check() {
+  const missing = getMissingFields();
+  document.getElementById('deployBtn').disabled = missing.length > 0;
+  REQUIRED_FIELDS.forEach(f => {
+    const el = f.highlightEl();
+    if (el) el.classList.toggle('missing', !f.test());
+  });
+  const warn = document.getElementById('missingWarning');
+  if (missing.length > 0) {
+    warn.textContent = '⚠ 未入力の項目があります: ' + missing.map(f => f.label).join('、');
+    warn.classList.add('visible');
+  } else {
+    warn.classList.remove('visible');
+  }
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg; el.className = 'status' + (type ? ' ' + type : '');
+}
+
+document.getElementById('deployBtn').addEventListener('click', async () => {
+  const missing = getMissingFields();
+  if (missing.length > 0) { check(); return; }
+  const btn = document.getElementById('deployBtn');
+  btn.disabled = true;
+  document.getElementById('result').style.display = 'none';
+  setStatus('デプロイ中... しばらくお待ちください');
+  try {
+    const apiBase = apiBaseInput.value.trim().replace(/\/+$/, '');
+    const form = new FormData();
+    form.append('workerName', document.getElementById('workerName').value.trim().toLowerCase());
+    form.append('tiktokUrl', document.getElementById('tiktokUrl').value.trim());
+    form.append('title', document.getElementById('ogpTitle').value.trim());
+    form.append('username', document.getElementById('username').textContent.trim());
+    form.append('description', descText);
+    form.append('musicName', document.getElementById('musicName').textContent.trim());
+    form.append('likeCount', document.getElementById('likeCount').textContent.trim());
+    form.append('commentCount', document.getElementById('commentCount').textContent.trim());
+    form.append('shareCount', document.getElementById('shareCount').textContent.trim());
+    form.append('showPageIndicator', piToggle.checked ? '1' : '0');
+    form.append('pageIndicatorCount', piCount.value.trim() || '3');
+    const bakedBg = await bakeBackground();
+    form.append('background', bakedBg || state.bg, 'background.png');
+    form.append('ogpImage', state.ogp, 'ogp-image.png');
+    form.append('appIcon', state.icon, 'app-icon.png');
+    if (state.avatar) form.append('avatar', state.avatar, 'avatar.png');
+    const res = await fetch(apiBase + '/deploy', { method: 'POST', body: form });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.error || 'デプロイ失敗');
+    setStatus('✓ デプロイ完了！', 'ok');
+    const r = document.getElementById('result');
+    r.innerHTML = '公開URL: <a href="' + json.url + '" target="_blank">' + json.url + '</a><br><small style="opacity:.6">（反映まで数秒かかる場合があります）</small>';
+    r.style.display = 'block';
+    saveState();
+  } catch (e) {
+    setStatus('エラー: ' + e.message, 'err');
+  }
+  btn.disabled = false;
+});
+
+document.getElementById('clearSavedBtn').addEventListener('click', async () => {
+  if (!confirm('保存されている入力内容・画像をすべて削除します。よろしいですか？')) return;
+  try { localStorage.removeItem('generatorFormState'); } catch (e) {}
+  await idbClearImages();
+  location.reload();
+});
+
+// ===== 保存内容の復元 =====
+async function restoreState() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('generatorFormState') || 'null'); } catch (e) {}
+  if (saved) {
+    if (saved.workerName) document.getElementById('workerName').value = saved.workerName;
+    if (saved.tiktokUrl) document.getElementById('tiktokUrl').value = saved.tiktokUrl;
+    if (saved.ogpTitle) document.getElementById('ogpTitle').value = saved.ogpTitle;
+    if (saved.username) document.getElementById('username').textContent = saved.username;
+    if (saved.description) { descText = saved.description; renderDesc(); }
+    if (saved.musicName) document.getElementById('musicName').textContent = saved.musicName;
+    if (saved.likeCount) document.getElementById('likeCount').textContent = saved.likeCount;
+    if (saved.commentCount) document.getElementById('commentCount').textContent = saved.commentCount;
+    if (saved.shareCount) document.getElementById('shareCount').textContent = saved.shareCount;
+    if (typeof saved.piToggle === 'boolean') piToggle.checked = saved.piToggle;
+    if (saved.piCount) piCount.value = saved.piCount;
+    renderPageIndicator();
+    if (typeof saved.floatToggle === 'boolean') {
+      floatToggle.checked = saved.floatToggle;
+      floatPreview.classList.toggle('visible', saved.floatToggle);
+    }
+  }
+
+  const [bgBlob, avatarBlob, ogpBlob, iconBlob] = await Promise.all([
+    idbGetImage('background'), idbGetImage('avatar'), idbGetImage('ogp'), idbGetImage('icon'),
+  ]);
+  if (bgBlob) loadBackgroundFile(bgBlob, { savedTransform: saved && saved.bgTransform, skipPersist: true });
+  if (avatarBlob) { state.avatar = avatarBlob; applyAvatarPreview(avatarBlob); }
+  if (ogpBlob) {
+    state.ogp = ogpBlob;
+    const label = document.getElementById('ogpLabel');
+    label.querySelector('span').textContent = '保存済みの画像';
+    label.classList.add('selected');
+  }
+  if (iconBlob) {
+    state.icon = iconBlob;
+    const label = document.getElementById('iconLabel');
+    label.querySelector('span').textContent = '保存済みの画像';
+    label.classList.add('selected');
+    applyIconPreview(iconBlob);
+  }
+  check();
+}
+restoreState();
+</script>
+</body>
+</html>

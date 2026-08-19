@@ -27,8 +27,8 @@ export default async function DashboardPage() {
   const siteUrlOrigin = `${protocol}://${host}`;
 
   return (
-    <main className="mx-auto min-h-screen max-w-xl px-6 py-12">
-      <div className="mb-8 flex items-center justify-between">
+    <main className="mx-auto min-h-screen max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">ダッシュボード</h1>
           <p className="text-sm text-slate-500">{user.email}</p>
@@ -36,9 +36,7 @@ export default async function DashboardPage() {
         <LogoutButton />
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <DashboardForm userId={user.id} site={site} siteUrlOrigin={siteUrlOrigin} />
-      </div>
+      <DashboardForm userId={user.id} site={site} siteUrlOrigin={siteUrlOrigin} />
     </main>
   );
 }

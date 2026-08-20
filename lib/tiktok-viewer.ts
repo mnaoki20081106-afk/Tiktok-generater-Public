@@ -151,9 +151,10 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
 .nav-item .nav-label{font-size:11px;font-weight:500}
 .nav-plus{flex:1;display:flex;align-items:center;justify-content:center}
 .nav-plus svg{width:58px;height:38px}
-.ov{position:absolute;inset:0;background:rgba(0,0,0,0.62);z-index:3001;display:flex;align-items:center;justify-content:center;padding:0 20px}
-.mc{background:#fff;border-radius:12px;width:100%;max-width:336px;box-shadow:0 4px 24px rgba(0,0,0,0.3);animation:fu .25s cubic-bezier(.22,1,.36,1)}
-@keyframes fu{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+.ov{position:absolute;inset:0;background:rgba(0,0,0,0.62);z-index:3001;display:flex;align-items:center;justify-content:center;padding:0 20px;animation:ovIn .5s cubic-bezier(.075,.82,.165,1)}
+@keyframes ovIn{from{opacity:0}to{opacity:1}}
+.mc{background:#fff;border-radius:12px;width:100%;max-width:336px;box-shadow:0 4px 24px rgba(0,0,0,0.3);animation:fu .3s cubic-bezier(.075,.82,.165,1)}
+@keyframes fu{from{opacity:0;transform:scale(.1)}to{opacity:1;transform:scale(1)}}
 .mb{padding:28px 24px 0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
 .mi{width:60px;height:60px;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .mi img{width:100%;height:100%;object-fit:cover;display:block}
@@ -163,6 +164,35 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
 .bo{display:block;width:100%;padding:13px 0;background:#fe2c55;color:#fff;font-size:16px;font-weight:700;border:none;border-radius:4px;text-align:center;text-decoration:none;cursor:pointer;box-shadow:0 2px 8px rgba(254,44,85,.35);transition:opacity .15s}
 .bo:active{opacity:.82}
 .bl{display:block;width:100%;padding:12px 0 0;background:none;border:none;color:rgba(22,24,35,.55);font-size:15px;cursor:pointer;text-align:center}
+.tg{position:absolute;right:38px;top:16px;width:44px;height:44px;pointer-events:none;z-index:5}
+.tg-ripple{position:absolute;left:16px;top:30px;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fe2c55;transform:scale(0);opacity:0;animation:tgRipple 5.5s cubic-bezier(.4,0,.2,1) infinite}
+.tg-hand{position:absolute;left:0;top:0;width:44px;height:44px;display:block;filter:drop-shadow(0 2px 5px rgba(0,0,0,.25));animation:tgTap 5.5s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes tgTap{
+  0%{transform:translate(0,0) scale(1);opacity:1}
+  4%{transform:translate(10px,12px) scale(.92)}
+  9%{transform:translate(0,0) scale(1)}
+  13%{transform:translate(0,0) scale(1)}
+  17%{transform:translate(10px,12px) scale(.92)}
+  22%{transform:translate(0,0) scale(1)}
+  26%{transform:translate(0,0) scale(1)}
+  30%{transform:translate(10px,12px) scale(.92)}
+  35%{transform:translate(0,0) scale(1);opacity:1}
+  40%{opacity:0}
+  97%{opacity:0}
+  100%{transform:translate(0,0) scale(1);opacity:1}
+}
+@keyframes tgRipple{
+  0%,2%{transform:scale(0);opacity:0}
+  4%{transform:scale(.3);opacity:.6}
+  10%{transform:scale(1.8);opacity:0}
+  13%,15%{transform:scale(0);opacity:0}
+  17%{transform:scale(.3);opacity:.6}
+  23%{transform:scale(1.8);opacity:0}
+  26%,28%{transform:scale(0);opacity:0}
+  30%{transform:scale(.3);opacity:.6}
+  36%{transform:scale(1.8);opacity:0}
+  100%{transform:scale(0);opacity:0}
+}
 </style></head><body>
 <div class="s">
   <div class="bg"><img src="${bg}" alt=""></div>
@@ -232,6 +262,10 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
       <div class="ma">
         <a href="${tkUrl}" class="bo">TikTokを開く</a>
         <button class="bl" type="button">後で</button>
+        <div class="tg" aria-hidden="true">
+          <span class="tg-ripple"></span>
+          <img class="tg-hand" src="/hand-tap.png" alt="">
+        </div>
       </div>
     </div>
   </div>

@@ -45,7 +45,7 @@ export function DashboardForm({
   siteUrlOrigin,
 }: {
   userId: string;
-  site: Site | null;
+  site: Site;
   siteUrlOrigin: string;
 }) {
   const supabase = createClient();
@@ -55,7 +55,9 @@ export function DashboardForm({
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [restoredFromDraft, setRestoredFromDraft] = useState(false);
 
-  const draftKey = `profile-editor-draft:${userId}`;
+  // 複数サイトを扱えるよう、下書きはユーザーとサイトの組み合わせごとに保存する
+  const scopeKey = `${userId}:${site.id}`;
+  const draftKey = `profile-editor-draft:${scopeKey}`;
 
   useEffect(() => {
     const root = rootRef.current;
@@ -237,7 +239,7 @@ export function DashboardForm({
       };
       showBgPreview(url);
       if (opts.persist !== false) {
-        putDraftImage(userId, 'background', file);
+        putDraftImage(scopeKey, 'background', file);
         saveState();
       }
       check();
@@ -329,17 +331,13 @@ export function DashboardForm({
         const file = this.files[0];
         state.avatar = { kind: 'new', blob: file };
         applyAvatarPreview(URL.createObjectURL(file));
-        putDraftImage(userId, 'avatar', file);
+        putDraftImage(scopeKey, 'avatar', file);
         saveState();
       }
     });
 
     // ===== OGP画像 / アプリアイコン =====
-    function bindFilePicker(
-      input: HTMLInputElement,
-      label: HTMLElement,
-      onPicked: (file: File) => void
-    ) {
+    function bindFilePicker(input: HTMLInputElement, label: HTMLElement, onPicked: (file: File) => void) {
       input.addEventListener('change', function () {
         if (this.files && this.files.length > 0) {
           onPicked(this.files[0]);
@@ -352,7 +350,7 @@ export function DashboardForm({
     }
     bindFilePicker(ogpInput, ogpLabel, (f) => {
       state.ogp = { kind: 'new', blob: f };
-      putDraftImage(userId, 'ogp', f);
+      putDraftImage(scopeKey, 'ogp', f);
       saveState();
     });
 
@@ -364,7 +362,7 @@ export function DashboardForm({
     bindFilePicker(iconInput, iconLabel, (f) => {
       state.icon = { kind: 'new', blob: f };
       applyIconPreview(URL.createObjectURL(f));
-      putDraftImage(userId, 'icon', f);
+      putDraftImage(scopeKey, 'icon', f);
       saveState();
     });
 
@@ -514,7 +512,7 @@ export function DashboardForm({
       });
     });
 
-    // ===== 保存(Supabaseへ) =====
+    // ===== 保存(Supabaseへ、RLSでauth.uid()=user_idの行のみ許可) =====
     async function uploadImageSlot(slot: ImageSlot, path: string): Promise<string | null> {
       if (!slot) return null;
       if (slot.kind === 'existing') return slot.url;
@@ -546,15 +544,15 @@ export function DashboardForm({
         const bgSlot: ImageSlot = bakedBg ? { kind: 'new', blob: bakedBg } : state.bg;
 
         const [backgroundUrl, avatarUrl, ogpUrl, iconUrl] = await Promise.all([
-          uploadImageSlot(bgSlot, `${userId}/background-${Date.now()}.png`),
-          uploadImageSlot(state.avatar, `${userId}/avatar-${Date.now()}.png`),
-          uploadImageSlot(state.ogp, `${userId}/ogp-${Date.now()}.png`),
-          uploadImageSlot(state.icon, `${userId}/icon-${Date.now()}.png`),
+          uploadImageSlot(bgSlot, `${userId}/${site.id}/background-${Date.now()}.png`),
+          uploadImageSlot(state.avatar, `${userId}/${site.id}/avatar-${Date.now()}.png`),
+          uploadImageSlot(state.ogp, `${userId}/${site.id}/ogp-${Date.now()}.png`),
+          uploadImageSlot(state.icon, `${userId}/${site.id}/icon-${Date.now()}.png`),
         ]);
 
-        const { error } = await supabase.from('sites').upsert(
-          {
-            user_id: userId,
+        const { error } = await supabase
+          .from('sites')
+          .update({
             slug,
             title: ogpTitleInput.value.trim(),
             description: descText,
@@ -574,10 +572,16 @@ export function DashboardForm({
                 appIcon: iconUrl ?? undefined,
               },
             },
-          },
-          { onConflict: 'user_id' }
-        );
-        if (error) throw error;
+          })
+          .eq('id', site.id)
+          .eq('user_id', userId);
+
+        if (error) {
+          if (error.code === '23505') {
+            throw new Error('そのURL(slug)はすでに使われています。別の名前にしてください');
+          }
+          throw error;
+        }
 
         setStatusMsg({ text: '✓ 公開しました', type: 'ok' });
         setResultUrl(`${siteUrlOrigin}/${slug}`);
@@ -586,7 +590,7 @@ export function DashboardForm({
         } catch {
           // noop
         }
-        await clearDraftImages(userId, [...IMAGE_NAMES]);
+        await clearDraftImages(scopeKey, [...IMAGE_NAMES]);
       } catch (err) {
         setStatusMsg({ text: 'エラー: ' + (err instanceof Error ? err.message : '保存に失敗しました'), type: 'err' });
       } finally {
@@ -604,14 +608,14 @@ export function DashboardForm({
         saved = null;
       }
 
-      const cd = site?.content_data ?? {};
+      const cd = site.content_data ?? {};
       const images = (cd.images as { background?: string; ogpImage?: string; appIcon?: string } | undefined) ?? {};
 
-      slugInput.value = saved?.slug || site?.slug || '';
+      slugInput.value = saved?.slug || site.slug || '';
       tiktokUrlInput.value = saved?.tiktokUrl || (cd.tiktokUrl as string) || '';
-      ogpTitleInput.value = saved?.ogpTitle || site?.title || '';
+      ogpTitleInput.value = saved?.ogpTitle || site.title || '';
       usernameEl.textContent = saved?.username || (cd.username as string) || 'username';
-      descText = saved?.description ?? site?.description ?? '';
+      descText = saved?.description ?? site.description ?? '';
       musicNameEl.textContent = saved?.musicName || (cd.musicName as string) || 'オリジナル楽曲';
       likeCountEl.textContent = saved?.likeCount || (cd.likeCount as string) || '0';
       commentCountEl.textContent = saved?.commentCount || (cd.commentCount as string) || '0';
@@ -625,10 +629,10 @@ export function DashboardForm({
       if (saved) setRestoredFromDraft(true);
 
       const [bgBlob, avatarBlob, ogpBlob, iconBlob] = await Promise.all([
-        getDraftImage(userId, 'background'),
-        getDraftImage(userId, 'avatar'),
-        getDraftImage(userId, 'ogp'),
-        getDraftImage(userId, 'icon'),
+        getDraftImage(scopeKey, 'background'),
+        getDraftImage(scopeKey, 'avatar'),
+        getDraftImage(scopeKey, 'ogp'),
+        getDraftImage(scopeKey, 'icon'),
       ]);
 
       if (bgBlob) {
@@ -645,7 +649,7 @@ export function DashboardForm({
         state.avatar = { kind: 'new', blob: avatarBlob };
         applyAvatarPreview(URL.createObjectURL(avatarBlob));
       } else {
-        const existingAvatar = saved?.existingUrls.avatar || site?.image_url;
+        const existingAvatar = saved?.existingUrls.avatar || site.image_url;
         if (existingAvatar) {
           state.avatar = { kind: 'existing', url: existingAvatar };
           applyAvatarPreview(existingAvatar);

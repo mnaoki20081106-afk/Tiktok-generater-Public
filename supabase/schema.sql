@@ -1,4 +1,6 @@
 -- Supabase SQL Editor で実行してください。
+-- Googleログイン(Supabase Auth)必須。1ユーザーが複数サイトを作成できる。
+
 -- 1) sites テーブル作成
 create table if not exists public.sites (
   id uuid primary key default gen_random_uuid(),
@@ -11,10 +13,8 @@ create table if not exists public.sites (
   created_at timestamptz not null default now()
 );
 
--- ダッシュボードは「ユーザー1人につきサイト1つ」を前提にしているため、user_idにも一意制約を付与する
--- (複数サイト対応にしたい場合はこの制約を外し、ダッシュボード側の upsert キーも見直すこと)
-create unique index if not exists sites_user_id_key on public.sites (user_id);
-
+-- 1ユーザーが複数サイトを持てるので user_id にはユニーク制約を付けない
+create index if not exists sites_user_id_idx on public.sites (user_id);
 create index if not exists sites_slug_idx on public.sites (slug);
 
 -- 2) Row Level Security を有効化

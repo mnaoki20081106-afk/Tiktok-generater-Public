@@ -8,13 +8,13 @@ export default function HomePage() {
         <Sparkles size={22} />
       </div>
       <h1 className="mt-6 text-3xl font-bold text-slate-900 sm:text-4xl">
-        あなただけのプロフィールサイトを、
+        TikTok風プロフィールサイトを、
         <br />
-        数分で公開しよう
+        いくつでも作って公開しよう
       </h1>
       <p className="mt-4 max-w-md text-slate-500">
-        アカウントを作成してタイトル・自己紹介・画像を入力するだけ。
-        自分専用のURLで、誰でも見られるポートフォリオページが完成します。
+        Googleアカウントでログインすると、作成したサイトを一覧で管理できます。
+        タイトル・自己紹介・画像を入力するだけで、自分専用のURLが完成します。
       </p>
 
       <div className="mt-8 flex gap-3">
@@ -22,7 +22,7 @@ export default function HomePage() {
           href="/login"
           className="rounded-lg bg-slate-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-slate-700"
         >
-          はじめる / ログイン
+          Googleでログインしてはじめる
         </Link>
       </div>
 
@@ -39,8 +39,8 @@ export default function HomePage() {
         />
         <Feature
           icon={<Sparkles size={18} />}
-          title="かんたん編集"
-          description="ダッシュボードでテキストと画像を入力するだけ"
+          title="複数サイトを管理"
+          description="ログイン後のマイページで、作成したサイトを一覧・新規作成・削除できます"
         />
       </div>
     </main>

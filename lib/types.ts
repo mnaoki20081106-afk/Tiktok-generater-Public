@@ -2,7 +2,6 @@
  * Supabaseの `sites` テーブルに対応する型定義。
  * content_data は将来のリンク集・レイアウト設定などを自由に追加できるよう JSONB で保持する。
  *
- * TikTok風プロフィールページ(旧Cloudflare Worker版)の設定値もここに保持する。
  * - sites.title       -> OGPタイトル / ページタイトル
  * - sites.description -> 動画説明キャプション(ハッシュタグ含む)
  * - sites.image_url   -> プロフィールアバター画像
@@ -38,7 +37,6 @@ export interface Site {
   created_at: string;
 }
 
-export type SiteInsert = Omit<Site, 'id' | 'created_at'>;
 export type SiteUpdate = Partial<Omit<Site, 'id' | 'user_id' | 'created_at'>>;
 
 /** Supabaseクライアントに渡すDBスキーマ型 */
@@ -47,7 +45,7 @@ export interface Database {
     Tables: {
       sites: {
         Row: Site;
-        Insert: Partial<Site> & { user_id: string; slug: string; title: string };
+        Insert: Partial<Site> & { user_id: string; slug: string };
         Update: SiteUpdate;
         Relationships: [];
       };

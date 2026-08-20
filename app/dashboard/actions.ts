@@ -11,8 +11,12 @@ function randomSlug() {
   return `site-${randomUUID().slice(0, 8)}`;
 }
 
-/** ログイン中のユーザーに紐づく新しいサイトを作成し、その編集ページへ移動する */
-export async function createSite() {
+/**
+ * ログイン中のユーザーに紐づく新しいサイトを作成し、その編集ページへ移動する。
+ * fingerprint は作成ボタンをクリックした端末のブラウザフィンガープリント(任意)。
+ * dvid Cookie削除時に作成者本人を判定するための補助シグナルとして保存する。
+ */
+export async function createSite(fingerprint?: string | null) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -38,6 +42,7 @@ export async function createSite() {
       description: '',
       content_data: {},
       creator_device_id: creatorDeviceId,
+      creator_fingerprint: fingerprint || null,
     })
     .select('id')
     .single();
@@ -47,6 +52,19 @@ export async function createSite() {
   }
 
   redirect(`/dashboard/${data.id}`);
+}
+
+/** ログイン中ユーザーの端末フィンガープリントを known_fingerprints に記録する */
+export async function recordFingerprint(fingerprint: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !fingerprint) return;
+
+  await supabase
+    .from('known_fingerprints')
+    .upsert({ user_id: user.id, fingerprint }, { onConflict: 'user_id,fingerprint', ignoreDuplicates: true });
 }
 
 /** 自分のサイトを削除する(RLSにより他人のサイトは削除できない) */

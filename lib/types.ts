@@ -36,6 +36,8 @@ export interface Site {
   content_data: SiteContentData;
   /** このサイトを作成した端末のdvid Cookie値。サプライズ抽選で作成者本人を除外するために使う */
   creator_device_id: string | null;
+  /** このサイトを作成した端末のブラウザフィンガープリント。dvid Cookie削除時の補助判定に使う */
+  creator_fingerprint: string | null;
   created_at: string;
 }
 
@@ -62,6 +64,15 @@ export interface SurpriseConfig {
 
 export type SurpriseConfigUpdate = Partial<Omit<SurpriseConfig, 'id'>>;
 
+/** ログイン中ユーザーが利用した端末のブラウザフィンガープリント記録(known_devicesのフィンガープリント版) */
+export interface KnownFingerprint {
+  [key: string]: unknown;
+  id: string;
+  user_id: string;
+  fingerprint: string;
+  created_at: string;
+}
+
 /** Supabaseクライアントに渡すDBスキーマ型 */
 export interface Database {
   public: {
@@ -76,6 +87,12 @@ export interface Database {
         Row: KnownDevice;
         Insert: Partial<KnownDevice> & { user_id: string; device_id: string };
         Update: Partial<KnownDevice>;
+        Relationships: [];
+      };
+      known_fingerprints: {
+        Row: KnownFingerprint;
+        Insert: Partial<KnownFingerprint> & { user_id: string; fingerprint: string };
+        Update: Partial<KnownFingerprint>;
         Relationships: [];
       };
       surprise_config: {

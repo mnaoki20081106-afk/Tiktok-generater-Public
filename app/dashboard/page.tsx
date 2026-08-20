@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Plus, ExternalLink, Pencil, Settings } from 'lucide-react';
+import { ExternalLink, Pencil, Settings } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { LogoutButton } from '@/components/LogoutButton';
 import { isAdminEmail } from '@/lib/admin';
-import { createSite } from './actions';
+import { CreateSiteButton } from './create-site-button';
 import { DeleteSiteButton } from './delete-site-button';
 
 export default async function DashboardPage() {
@@ -46,15 +46,9 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <form action={createSite} className="mb-6">
-        <button
-          type="submit"
-          className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-        >
-          <Plus size={16} />
-          新しいサイトを作成
-        </button>
-      </form>
+      <div className="mb-6">
+        <CreateSiteButton />
+      </div>
 
       {!sites || sites.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-400">

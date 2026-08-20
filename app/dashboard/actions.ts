@@ -51,6 +51,7 @@ export async function createSite(fingerprint?: string | null) {
     throw new Error('サイトの作成に失敗しました: ' + (error?.message ?? '不明なエラー'));
   }
 
+  revalidatePath('/dashboard');
   redirect(`/dashboard/${data.id}`);
 }
 

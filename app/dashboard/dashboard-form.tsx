@@ -338,6 +338,9 @@ export function DashboardForm({
 
     // ===== OGP画像 / アプリアイコン =====
     function bindFilePicker(input: HTMLInputElement, label: HTMLElement, onPicked: (file: File) => void) {
+      // input[type=file]はCSS(.card input[type=file])で非表示にしているため、
+      // ラベルをクリックした際に明示的にファイル選択ダイアログを開く必要がある
+      label.addEventListener('click', () => input.click());
       input.addEventListener('change', function () {
         if (this.files && this.files.length > 0) {
           onPicked(this.files[0]);

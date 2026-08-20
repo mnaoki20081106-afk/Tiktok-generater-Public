@@ -2,14 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
 import { DEVICE_COOKIE, DEVICE_COOKIE_MAX_AGE } from '@/lib/device';
-
-function isAdminEmail(email: string | null | undefined) {
-  const adminEmails = (process.env.ADMIN_EMAILS ?? '')
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  return !!email && adminEmails.includes(email.toLowerCase());
-}
+import { isAdminEmail } from '@/lib/admin';
 
 /**
  * セッションCookieのrefreshを行い、必要に応じて未ログインユーザーを/loginへ誘導する。

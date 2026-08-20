@@ -21,11 +21,19 @@ create index if not exists sites_slug_idx on public.sites (slug);
 alter table public.sites enable row level security;
 
 -- 3) ポリシー
--- 公開ページ(/[slug])は誰でも閲覧できる必要があるため、SELECTは全員に許可
+-- 公開ページ(/[slug])の表示はService Roleクライアント(RLSをバイパス)で行うため、
+-- 匿名ロール(anon)がこのテーブルを直接読み取る必要は無い。sites.creator_device_id /
+-- creator_fingerprint はサプライズ抽選の判定にのみ使う非公開の値であり、anonの
+-- SELECT権限を残していると、Supabaseの公開REST API経由で誰でもこれらの値を直接
+-- 読み取れてしまう(=抽選機能の存在を示唆してしまう)ため、明示的に外している。
+-- ログイン中のユーザー(authenticated)は自分のサイトの一覧表示のために必要なので、
+-- ポリシー自体は残し、anonのみGRANTを剥奪する形にする。
 drop policy if exists "sites are viewable by everyone" on public.sites;
 create policy "sites are viewable by everyone"
   on public.sites for select
   using (true);
+
+revoke select on public.sites from anon;
 
 -- 作成・更新・削除は本人の行のみ
 drop policy if exists "users can insert their own site" on public.sites;

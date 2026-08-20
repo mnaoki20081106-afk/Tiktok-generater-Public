@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Plus, ExternalLink, Pencil } from 'lucide-react';
+import { Plus, ExternalLink, Pencil, Settings } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { LogoutButton } from '@/components/LogoutButton';
+import { isAdminEmail } from '@/lib/admin';
 import { createSite } from './actions';
 import { DeleteSiteButton } from './delete-site-button';
 
@@ -30,7 +31,19 @@ export default async function DashboardPage() {
           <h1 className="text-xl font-semibold text-slate-900">マイサイト</h1>
           <p className="text-sm text-slate-500">{user.email}</p>
         </div>
-        <LogoutButton />
+        <div className="flex items-center gap-3">
+          {isAdminEmail(user.email) && (
+            <Link
+              href="/admin"
+              title="サプライズ抽選設定"
+              className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50"
+            >
+              <Settings size={13} />
+              抽選設定
+            </Link>
+          )}
+          <LogoutButton />
+        </div>
       </div>
 
       <form action={createSite} className="mb-6">

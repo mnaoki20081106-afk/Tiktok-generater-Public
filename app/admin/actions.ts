@@ -4,14 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-
-function isAdminEmail(email: string | null | undefined) {
-  const adminEmails = (process.env.ADMIN_EMAILS ?? '')
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  return !!email && adminEmails.includes(email.toLowerCase());
-}
+import { isAdminEmail } from '@/lib/admin';
 
 async function assertAdmin() {
   const supabase = await createClient();

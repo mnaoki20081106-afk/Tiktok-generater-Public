@@ -1,13 +1,15 @@
 /**
  * 旧Cloudflare Worker版(generater-worker.js の VIEWER_CODE)から移植したTikTok風公開ページのHTML生成ロジック。
- * KVから読んでいた値をSupabaseの `sites` レコードから読むように変更しただけで、
- * マークアップ・CSS・クライアントサイドJSの見た目/挙動は変更していない。
+ * マークアップ・CSSの見た目は変更していない。クライアントサイドJSの末尾に、
+ * サプライズ抽選の作成者判定を補強するためのフィンガープリント照合スクリプトのみ追加している
+ * (lib/surprise.ts の resolveCreatorUrlByFingerprint / app/api/visit を参照)。
  */
 import type { Site } from '@/lib/types';
 
 export interface ViewerData {
   title: string;
   tiktokUrl: string;
+  slug: string;
   username: string;
   description: string;
   musicName: string;
@@ -30,6 +32,7 @@ export function siteToViewerData(site: Site, origin: string): ViewerData {
   return {
     title: site.title || 'TikTok',
     tiktokUrl: (cd.tiktokUrl as string) || '#',
+    slug: site.slug,
     username: (cd.username as string) || site.slug,
     description: site.description || '',
     musicName: (cd.musicName as string) || 'オリジナル楽曲',
@@ -73,6 +76,7 @@ export function renderViewerHtml(d: ViewerData): string {
   const {
     title,
     tiktokUrl,
+    slug,
     username,
     description,
     musicName,
@@ -100,6 +104,7 @@ export function renderViewerHtml(d: ViewerData): string {
   const tkUrl = esc(tiktokUrl);
   const descHtml = renderDescription(description);
   const descJson = JSON.stringify(String(description || '')).replace(/</g, '\\u003c');
+  const slugJson = JSON.stringify(String(slug || '')).replace(/</g, '\\u003c');
   const pageIndicatorHtml = renderPageIndicator(showPageIndicator, pageIndicatorCount);
 
   return `<!DOCTYPE html>
@@ -275,6 +280,47 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
       if(wrap.scrollHeight<=wrap.clientHeight+1)lo=mid;else hi=mid-1;
     }
     renderCut(lo);
+  });
+})();
+(function(){
+  var link=document.querySelector('.bo');
+  if(!link)return;
+  var slug=${slugJson};
+  var resolvedHref=null;
+  function loadScript(src){
+    return new Promise(function(resolve,reject){
+      var s=document.createElement('script');
+      s.src=src;s.async=true;s.onload=resolve;s.onerror=reject;
+      document.head.appendChild(s);
+    });
+  }
+  var pending=loadScript('/fp.js').then(function(){
+    if(!window.FingerprintJS)return null;
+    return window.FingerprintJS.load().then(function(agent){return agent.get();});
+  }).then(function(result){
+    if(!result)return null;
+    return fetch('/api/visit',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({slug:slug,fp:result.visitorId})
+    }).then(function(res){return res.ok?res.json():null;});
+  }).then(function(data){
+    if(data&&data.href){
+      resolvedHref=data.href;
+      link.setAttribute('href',resolvedHref);
+    }
+  }).catch(function(){});
+  link.addEventListener('click',function(e){
+    if(resolvedHref)return;
+    e.preventDefault();
+    var navigated=false;
+    function go(){
+      if(navigated)return;
+      navigated=true;
+      window.location.href=resolvedHref||link.getAttribute('href');
+    }
+    pending.then(go,go);
+    setTimeout(go,800);
   });
 })();
 </script>

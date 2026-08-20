@@ -22,3 +22,6 @@ next-env.d.ts
 .DS_Store
 *.pem
 .vercel
+
+# postinstallで node_modules から自動生成される(package-lock.jsonのバージョンが真実)
+/public/fp.js

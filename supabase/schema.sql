@@ -135,3 +135,34 @@ values (1, false, 0, null)
 on conflict (id) do nothing;
 
 alter table public.surprise_config enable row level security;
+
+-- 5-4) ブラウザフィンガープリント(FingerprintJS)による補助的な端末判定
+--    dvid Cookieが削除された場合でも、できるだけ作成者本人・同一アカウントの端末を
+--    正しく判定できるようにするための追加シグナル(Cookie判定を置き換えるものではなく、
+--    Cookieが失われたときの保険として使う。100%の精度を保証するものではない)
+
+-- サイト作成端末のフィンガープリント
+alter table public.sites add column if not exists creator_fingerprint text;
+
+-- ログイン中ユーザーが利用した端末のフィンガープリント記録(known_devicesのフィンガープリント版)
+create table if not exists public.known_fingerprints (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  fingerprint text not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, fingerprint)
+);
+
+create index if not exists known_fingerprints_user_id_idx on public.known_fingerprints (user_id);
+
+alter table public.known_fingerprints enable row level security;
+
+drop policy if exists "users can register their own fingerprints" on public.known_fingerprints;
+create policy "users can register their own fingerprints"
+  on public.known_fingerprints for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "users can view their own fingerprints" on public.known_fingerprints;
+create policy "users can view their own fingerprints"
+  on public.known_fingerprints for select
+  using (auth.uid() = user_id);

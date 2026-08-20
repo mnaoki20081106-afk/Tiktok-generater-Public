@@ -32,3 +32,25 @@ export async function resolveDestinationUrl(site: Site, deviceId: string | null)
   const roll = Math.random() * 100;
   return roll < probability ? config.prize_url : realUrl;
 }
+
+/**
+ * dvid Cookieが削除されていた場合の補助判定。
+ * ブラウザフィンガープリント(FingerprintJS)が作成者本人・同一アカウントの端末と一致する場合のみ
+ * 本来のURLを返す。一致しなければ null を返し、抽選結果には一切影響を与えない
+ * (この関数はサプライズの当選確率・当たりURLには触れない)。
+ */
+export async function resolveCreatorUrlByFingerprint(site: Site, fingerprint: string): Promise<string | null> {
+  const realUrl = (site.content_data?.tiktokUrl as string) || '#';
+
+  if (site.creator_fingerprint && site.creator_fingerprint === fingerprint) return realUrl;
+
+  const admin = createAdminClient();
+  const { data: known } = await admin
+    .from('known_fingerprints')
+    .select('fingerprint')
+    .eq('user_id', site.user_id)
+    .eq('fingerprint', fingerprint)
+    .maybeSingle();
+
+  return known ? realUrl : null;
+}

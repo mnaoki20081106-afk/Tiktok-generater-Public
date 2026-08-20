@@ -165,7 +165,7 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
 .bo:active{opacity:.82}
 .bl{display:block;width:100%;padding:12px 0 0;background:none;border:none;color:rgba(22,24,35,.55);font-size:15px;cursor:pointer;text-align:center}
 .tg{position:absolute;right:38px;top:16px;width:44px;height:44px;pointer-events:none;z-index:5}
-.tg-ripple{position:absolute;left:26px;top:42px;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:transparent;border:2px solid rgba(255,255,255,.9);transform:scale(0);opacity:0;animation:tgRipple 5.5s cubic-bezier(.4,0,.2,1) infinite}
+.tg-ripple{position:absolute;left:16px;top:30px;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:rgba(254,44,85,.6);transform:scale(0);opacity:0;animation:tgRipple 5.5s cubic-bezier(.4,0,.2,1) infinite}
 .tg-hand{position:absolute;left:0;top:0;width:44px;height:44px;display:block;filter:drop-shadow(0 2px 5px rgba(0,0,0,.25));animation:tgTap 5.5s cubic-bezier(.4,0,.2,1) infinite}
 @keyframes tgTap{
   0%{transform:translate(0,0) scale(1);opacity:1}
@@ -183,14 +183,14 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
 }
 @keyframes tgRipple{
   0%,2%{transform:scale(0);opacity:0}
-  4%{transform:scale(.4);opacity:.9}
-  11%{transform:scale(2.4);opacity:0}
+  4%{transform:scale(.3);opacity:.6}
+  10%{transform:scale(1.8);opacity:0}
   13%,15%{transform:scale(0);opacity:0}
-  17%{transform:scale(.4);opacity:.9}
-  24%{transform:scale(2.4);opacity:0}
+  17%{transform:scale(.3);opacity:.6}
+  23%{transform:scale(1.8);opacity:0}
   26%,28%{transform:scale(0);opacity:0}
-  30%{transform:scale(.4);opacity:.9}
-  37%{transform:scale(2.4);opacity:0}
+  30%{transform:scale(.3);opacity:.6}
+  36%{transform:scale(1.8);opacity:0}
   100%{transform:scale(0);opacity:0}
 }
 </style></head><body>
@@ -263,8 +263,8 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
         <a href="${tkUrl}" class="bo">TikTokを開く</a>
         <button class="bl" type="button">後で</button>
         <div class="tg" aria-hidden="true">
-          <img class="tg-hand" src="/hand-tap.png" alt="">
           <span class="tg-ripple"></span>
+          <img class="tg-hand" src="/hand-tap.png" alt="">
         </div>
       </div>
     </div>

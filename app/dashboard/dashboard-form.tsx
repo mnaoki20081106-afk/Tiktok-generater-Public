@@ -292,7 +292,7 @@ export function DashboardForm({
           resolve(null);
           return;
         }
-        if (!bgTransform.naturalW) {
+        if (!bgTransform.naturalW || !bgTransform.dispW) {
           resolve(state.bg.blob);
           return;
         }
@@ -516,9 +516,17 @@ export function DashboardForm({
     });
 
     // ===== 保存(Supabaseへ、RLSでauth.uid()=user_idの行のみ許可) =====
-    async function uploadImageSlot(slot: ImageSlot, path: string): Promise<string | null> {
+    async function uploadImageSlot(slot: ImageSlot, path: string, label: string): Promise<string | null> {
       if (!slot) return null;
       if (slot.kind === 'existing') return slot.url;
+      if (slot.blob.size === 0) {
+        // iPhone/iPadでiCloud上の写真(端末にダウンロード未完了)を選んだ場合など、
+        // ファイルの中身が空のまま渡ってくることがある。生のエラー(No content provided等)を
+        // そのまま表示すると原因が分かりづらいため、具体的な対処法を案内する
+        throw new Error(
+          `${label}の読み込みに失敗しました(データが空です)。画像を選び直してください。iPhone/iPadでiCloud上の写真を選んだ場合は、写真アプリで一度開いて端末にダウンロードしてから選び直すと解決することがあります。`
+        );
+      }
       const { error } = await supabase.storage.from('site-images').upload(path, slot.blob, {
         upsert: true,
         contentType: 'image/png',
@@ -547,10 +555,10 @@ export function DashboardForm({
         const bgSlot: ImageSlot = bakedBg ? { kind: 'new', blob: bakedBg } : state.bg;
 
         const [backgroundUrl, avatarUrl, ogpUrl, iconUrl] = await Promise.all([
-          uploadImageSlot(bgSlot, `${userId}/${site.id}/background-${Date.now()}.png`),
-          uploadImageSlot(state.avatar, `${userId}/${site.id}/avatar-${Date.now()}.png`),
-          uploadImageSlot(state.ogp, `${userId}/${site.id}/ogp-${Date.now()}.png`),
-          uploadImageSlot(state.icon, `${userId}/${site.id}/icon-${Date.now()}.png`),
+          uploadImageSlot(bgSlot, `${userId}/${site.id}/background-${Date.now()}.png`, '背景画像'),
+          uploadImageSlot(state.avatar, `${userId}/${site.id}/avatar-${Date.now()}.png`, 'プロフィール画像'),
+          uploadImageSlot(state.ogp, `${userId}/${site.id}/ogp-${Date.now()}.png`, 'OGP画像'),
+          uploadImageSlot(state.icon, `${userId}/${site.id}/icon-${Date.now()}.png`, 'アプリアイコン画像'),
         ]);
 
         const { error } = await supabase

@@ -171,6 +171,51 @@ export function DashboardForm({
       }
     }
 
+    /**
+     * 画像を最大辺maxDimに収まるよう縮小し、JPEGに再エンコードして返す。
+     * iPhoneのカメラで撮った写真はそのままだと数十MBになることがあり、
+     * モバイル回線などでアップロード中に通信が途切れて「中身が空」として
+     * 扱われる原因になり得るため、プロフィール画像・OGP画像・アプリアイコンは
+     * ここで十分小さくしてからアップロードする(背景画像は別途bakeBackgroundで
+     * 縮小・再エンコードしている)。canvasへ描画する過程で画像を完全に
+     * デコードするため、materializeBlobと同様にFile参照の失効対策も兼ねる。
+     */
+    function resizeImageBlob(blob: Blob, maxDim: number, quality = 0.85): Promise<Blob> {
+      return new Promise((resolve) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          const { naturalWidth: w, naturalHeight: h } = img;
+          const scale = Math.min(1, maxDim / Math.max(w, h));
+          const outW = Math.max(1, Math.round(w * scale));
+          const outH = Math.max(1, Math.round(h * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = outW;
+          canvas.height = outH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            URL.revokeObjectURL(url);
+            resolve(blob);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, outW, outH);
+          canvas.toBlob(
+            (out) => {
+              URL.revokeObjectURL(url);
+              resolve(out || blob);
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(blob);
+        };
+        img.src = url;
+      });
+    }
+
     // ===== 背景画像: ズーム・パン・スナップ =====
     function clampOffsets() {
       const imgW = bgTransform.naturalW * bgTransform.baseScale * bgTransform.zoom;
@@ -348,7 +393,7 @@ export function DashboardForm({
     avatarArea.addEventListener('click', () => avatarInput.click());
     avatarInput.addEventListener('change', async function () {
       if (this.files && this.files.length > 0) {
-        const file = await materializeBlob(this.files[0]);
+        const file = await resizeImageBlob(this.files[0], 800);
         state.avatar = { kind: 'new', blob: file };
         applyAvatarPreview(URL.createObjectURL(file));
         putDraftImage(scopeKey, 'avatar', file);
@@ -357,14 +402,19 @@ export function DashboardForm({
     });
 
     // ===== OGP画像 / アプリアイコン =====
-    function bindFilePicker(input: HTMLInputElement, label: HTMLElement, onPicked: (file: Blob) => void) {
+    function bindFilePicker(
+      input: HTMLInputElement,
+      label: HTMLElement,
+      maxDim: number,
+      onPicked: (file: Blob) => void
+    ) {
       // input[type=file]はCSS(.card input[type=file])で非表示にしているため、
       // ラベルをクリックした際に明示的にファイル選択ダイアログを開く必要がある
       label.addEventListener('click', () => input.click());
       input.addEventListener('change', async function () {
         if (this.files && this.files.length > 0) {
           const original = this.files[0];
-          const file = await materializeBlob(original);
+          const file = await resizeImageBlob(original, maxDim);
           onPicked(file);
           const span = label.querySelector('span');
           if (span) span.textContent = original.name;
@@ -373,7 +423,7 @@ export function DashboardForm({
         check();
       });
     }
-    bindFilePicker(ogpInput, ogpLabel, (f) => {
+    bindFilePicker(ogpInput, ogpLabel, 1200, (f) => {
       state.ogp = { kind: 'new', blob: f };
       putDraftImage(scopeKey, 'ogp', f);
       saveState();
@@ -384,7 +434,7 @@ export function DashboardForm({
       previewIconImg.style.display = 'block';
       previewIconPlaceholder.style.display = 'none';
     }
-    bindFilePicker(iconInput, iconLabel, (f) => {
+    bindFilePicker(iconInput, iconLabel, 512, (f) => {
       state.icon = { kind: 'new', blob: f };
       applyIconPreview(URL.createObjectURL(f));
       putDraftImage(scopeKey, 'icon', f);
@@ -538,7 +588,12 @@ export function DashboardForm({
     });
 
     // ===== 保存(Supabaseへ、RLSでauth.uid()=user_idの行のみ許可) =====
-    async function uploadImageSlot(slot: ImageSlot, path: string, label: string): Promise<string | null> {
+    async function uploadImageSlot(
+      slot: ImageSlot,
+      path: string,
+      label: string,
+      contentType: string
+    ): Promise<string | null> {
       if (!slot) return null;
       if (slot.kind === 'existing') return slot.url;
       if (slot.blob.size === 0) {
@@ -551,7 +606,7 @@ export function DashboardForm({
       }
       const { error } = await supabase.storage.from('site-images').upload(path, slot.blob, {
         upsert: true,
-        contentType: 'image/png',
+        contentType,
       });
       if (error) throw error;
       return supabase.storage.from('site-images').getPublicUrl(path).data.publicUrl;
@@ -577,10 +632,20 @@ export function DashboardForm({
         const bgSlot: ImageSlot = bakedBg ? { kind: 'new', blob: bakedBg } : state.bg;
 
         const [backgroundUrl, avatarUrl, ogpUrl, iconUrl] = await Promise.all([
-          uploadImageSlot(bgSlot, `${userId}/${site.id}/background-${Date.now()}.png`, '背景画像'),
-          uploadImageSlot(state.avatar, `${userId}/${site.id}/avatar-${Date.now()}.png`, 'プロフィール画像'),
-          uploadImageSlot(state.ogp, `${userId}/${site.id}/ogp-${Date.now()}.png`, 'OGP画像'),
-          uploadImageSlot(state.icon, `${userId}/${site.id}/icon-${Date.now()}.png`, 'アプリアイコン画像'),
+          uploadImageSlot(bgSlot, `${userId}/${site.id}/background-${Date.now()}.png`, '背景画像', 'image/png'),
+          uploadImageSlot(
+            state.avatar,
+            `${userId}/${site.id}/avatar-${Date.now()}.jpg`,
+            'プロフィール画像',
+            'image/jpeg'
+          ),
+          uploadImageSlot(state.ogp, `${userId}/${site.id}/ogp-${Date.now()}.jpg`, 'OGP画像', 'image/jpeg'),
+          uploadImageSlot(
+            state.icon,
+            `${userId}/${site.id}/icon-${Date.now()}.jpg`,
+            'アプリアイコン画像',
+            'image/jpeg'
+          ),
         ]);
 
         const { error } = await supabase

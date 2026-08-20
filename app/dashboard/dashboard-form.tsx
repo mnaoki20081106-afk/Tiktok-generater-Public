@@ -154,6 +154,23 @@ export function DashboardForm({
       }
     }
 
+    /**
+     * 選択直後にFile本体を読み込んで独立したBlobへコピーする。
+     * iOS SafariはiCloud上の写真を選択した場合など、選択直後のFileオブジェクトへの
+     * 参照を長時間(数十秒〜)経ってからアップロードで読み直すと中身が空になることがある
+     * (公開ボタンを押すまでの間に他の項目を編集しているとまさにこのケースに当たる)。
+     * 選択のタイミングで一度バイト列を読み切ってコピーしておくことで、
+     * 公開時にはこの独立したコピーをアップロードするため影響を受けない。
+     */
+    async function materializeBlob(file: Blob): Promise<Blob> {
+      try {
+        const buf = await file.arrayBuffer();
+        return new Blob([buf], { type: file.type || 'application/octet-stream' });
+      } catch {
+        return file;
+      }
+    }
+
     // ===== 背景画像: ズーム・パン・スナップ =====
     function clampOffsets() {
       const imgW = bgTransform.naturalW * bgTransform.baseScale * bgTransform.zoom;
@@ -250,8 +267,11 @@ export function DashboardForm({
       e.stopPropagation();
       bgInput.click();
     });
-    bgInput.addEventListener('change', function () {
-      if (this.files && this.files.length > 0) loadBackgroundFile(this.files[0]);
+    bgInput.addEventListener('change', async function () {
+      if (this.files && this.files.length > 0) {
+        const file = await materializeBlob(this.files[0]);
+        loadBackgroundFile(file);
+      }
     });
 
     let bgDrag: { startX: number; startY: number; offsetX: number; offsetY: number } | null = null;
@@ -326,9 +346,9 @@ export function DashboardForm({
       discImg.style.display = 'block';
     }
     avatarArea.addEventListener('click', () => avatarInput.click());
-    avatarInput.addEventListener('change', function () {
+    avatarInput.addEventListener('change', async function () {
       if (this.files && this.files.length > 0) {
-        const file = this.files[0];
+        const file = await materializeBlob(this.files[0]);
         state.avatar = { kind: 'new', blob: file };
         applyAvatarPreview(URL.createObjectURL(file));
         putDraftImage(scopeKey, 'avatar', file);
@@ -337,15 +357,17 @@ export function DashboardForm({
     });
 
     // ===== OGP画像 / アプリアイコン =====
-    function bindFilePicker(input: HTMLInputElement, label: HTMLElement, onPicked: (file: File) => void) {
+    function bindFilePicker(input: HTMLInputElement, label: HTMLElement, onPicked: (file: Blob) => void) {
       // input[type=file]はCSS(.card input[type=file])で非表示にしているため、
       // ラベルをクリックした際に明示的にファイル選択ダイアログを開く必要がある
       label.addEventListener('click', () => input.click());
-      input.addEventListener('change', function () {
+      input.addEventListener('change', async function () {
         if (this.files && this.files.length > 0) {
-          onPicked(this.files[0]);
+          const original = this.files[0];
+          const file = await materializeBlob(original);
+          onPicked(file);
           const span = label.querySelector('span');
-          if (span) span.textContent = this.files[0].name;
+          if (span) span.textContent = original.name;
           label.classList.add(styles.selected);
         }
         check();

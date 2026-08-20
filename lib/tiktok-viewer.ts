@@ -105,6 +105,7 @@ export function renderViewerHtml(d: ViewerData): string {
   const descHtml = renderDescription(description);
   const descJson = JSON.stringify(String(description || '')).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(slug || '')).replace(/</g, '\\u003c');
+  const pageUrl = esc(`${origin}/${slug}`);
   const pageIndicatorHtml = renderPageIndicator(showPageIndicator, pageIndicatorCount);
 
   return `<!DOCTYPE html>
@@ -114,7 +115,7 @@ export function renderViewerHtml(d: ViewerData): string {
 <meta property="og:title" content="${t}">
 <meta property="og:description" content="TikTokのアプリで全機能をお試しください">
 <meta property="og:image" content="${ogp}">
-<meta property="og:url" content="${origin}/">
+<meta property="og:url" content="${pageUrl}">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="${ogp}">

@@ -165,7 +165,7 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
 .bo:active{opacity:.82}
 .bl{display:block;width:100%;padding:12px 0 0;background:none;border:none;color:rgba(22,24,35,.55);font-size:15px;cursor:pointer;text-align:center}
 .tg{position:absolute;right:38px;top:28px;width:44px;height:44px;pointer-events:none;z-index:5}
-.tg-ripple{position:absolute;left:29px;top:31px;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#FA95A8;transform:scale(0);opacity:0;animation:tgRipple 5.5s cubic-bezier(.4,0,.2,1) infinite}
+.tg-ripple{position:absolute;left:5px;top:4px;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#FA95A8;transform:scale(0);opacity:0;animation:tgRipple 5.5s cubic-bezier(.4,0,.2,1) infinite}
 .tg-hand{position:absolute;left:0;top:0;width:44px;height:44px;display:block;filter:drop-shadow(0 2px 5px rgba(0,0,0,.25));animation:tgTap 5.5s cubic-bezier(.4,0,.2,1) infinite}
 @keyframes tgTap{
   0%{transform:translate(0,0) scale(1);opacity:1}
@@ -183,13 +183,13 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
 }
 @keyframes tgRipple{
   0%,2%{transform:scale(0);opacity:0}
-  4%{transform:scale(.4);opacity:.7}
+  4%{transform:scale(.4);opacity:1}
   11%{transform:scale(2.6);opacity:0}
   13%,15%{transform:scale(0);opacity:0}
-  17%{transform:scale(.4);opacity:.7}
+  17%{transform:scale(.4);opacity:1}
   24%{transform:scale(2.6);opacity:0}
   26%,28%{transform:scale(0);opacity:0}
-  30%{transform:scale(.4);opacity:.7}
+  30%{transform:scale(.4);opacity:1}
   37%{transform:scale(2.6);opacity:0}
   100%{transform:scale(0);opacity:0}
 }

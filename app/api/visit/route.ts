@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveCreatorUrlByFingerprint } from '@/lib/surprise';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +23,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ href: null });
   }
 
-  const supabase = await createClient();
+  // creator_device_id / creator_fingerprint はサプライズ抽選の判定にのみ使う非公開の値のため、
+  // 匿名ロール(anon)には公開していない。Service Roleクライアントで読み取る。
+  const supabase = createAdminClient();
   const { data: site } = await supabase.from('sites').select('*').eq('slug', slug).maybeSingle();
   if (!site) {
     return NextResponse.json({ href: null });

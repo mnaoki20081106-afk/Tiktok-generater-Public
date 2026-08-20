@@ -34,10 +34,33 @@ export interface Site {
   description: string | null;
   image_url: string | null;
   content_data: SiteContentData;
+  /** このサイトを作成した端末のdvid Cookie値。サプライズ抽選で作成者本人を除外するために使う */
+  creator_device_id: string | null;
   created_at: string;
 }
 
 export type SiteUpdate = Partial<Omit<Site, 'id' | 'user_id' | 'created_at'>>;
+
+/** ログイン中ユーザーが利用した端末の記録(サプライズ抽選で「同一アカウントの端末」を判定するために使う) */
+export interface KnownDevice {
+  [key: string]: unknown;
+  id: string;
+  user_id: string;
+  device_id: string;
+  created_at: string;
+}
+
+/** サプライズ抽選のグローバル設定(id=1固定のシングルトン行)。管理者のみが読み書きする */
+export interface SurpriseConfig {
+  [key: string]: unknown;
+  id: number;
+  enabled: boolean;
+  probability: number;
+  prize_url: string | null;
+  updated_at: string;
+}
+
+export type SurpriseConfigUpdate = Partial<Omit<SurpriseConfig, 'id'>>;
 
 /** Supabaseクライアントに渡すDBスキーマ型 */
 export interface Database {
@@ -47,6 +70,18 @@ export interface Database {
         Row: Site;
         Insert: Partial<Site> & { user_id: string; slug: string };
         Update: SiteUpdate;
+        Relationships: [];
+      };
+      known_devices: {
+        Row: KnownDevice;
+        Insert: Partial<KnownDevice> & { user_id: string; device_id: string };
+        Update: Partial<KnownDevice>;
+        Relationships: [];
+      };
+      surprise_config: {
+        Row: SurpriseConfig;
+        Insert: Partial<SurpriseConfig> & { id: number };
+        Update: SurpriseConfigUpdate;
         Relationships: [];
       };
     };

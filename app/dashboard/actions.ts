@@ -1,9 +1,11 @@
 'use server';
 
 import { randomUUID } from 'crypto';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { DEVICE_COOKIE } from '@/lib/device';
 
 function randomSlug() {
   return `site-${randomUUID().slice(0, 8)}`;
@@ -24,9 +26,19 @@ export async function createSite() {
     slug = randomSlug();
   }
 
+  const cookieStore = await cookies();
+  const creatorDeviceId = cookieStore.get(DEVICE_COOKIE)?.value ?? null;
+
   const { data, error } = await supabase
     .from('sites')
-    .insert({ user_id: user.id, slug, title: '', description: '', content_data: {} })
+    .insert({
+      user_id: user.id,
+      slug,
+      title: '',
+      description: '',
+      content_data: {},
+      creator_device_id: creatorDeviceId,
+    })
     .select('id')
     .single();
 

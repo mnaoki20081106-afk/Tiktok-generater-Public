@@ -174,3 +174,27 @@ drop policy if exists "users can view their own fingerprints" on public.known_fi
 create policy "users can view their own fingerprints"
   on public.known_fingerprints for select
   using (auth.uid() = user_id);
+
+-- 6) ページビュー記録(サイト作成者向けのPV/UU分析・管理者向けの利用状況に使う)
+--    公開ページ(/[slug])が閲覧されるたびに1行記録する。書き込みはService Roleクライアント
+--    (app/[slug]/route.ts)からのみ行うため、anon/authenticatedへの書き込みポリシーは追加しない。
+create table if not exists public.page_views (
+  id bigint generated always as identity primary key,
+  site_id uuid not null references public.sites (id) on delete cascade,
+  device_id text not null,
+  viewed_at timestamptz not null default now()
+);
+
+create index if not exists page_views_site_id_viewed_at_idx on public.page_views (site_id, viewed_at);
+create index if not exists page_views_site_id_device_id_idx on public.page_views (site_id, device_id);
+
+alter table public.page_views enable row level security;
+
+-- サイト所有者は自分のサイトの閲覧記録を直接読み取れる(PV/UU集計画面用)
+drop policy if exists "owners can view their own site page views" on public.page_views;
+create policy "owners can view their own site page views"
+  on public.page_views for select
+  using (exists (
+    select 1 from public.sites
+    where sites.id = page_views.site_id and sites.user_id = auth.uid()
+  ));

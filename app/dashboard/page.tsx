@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ExternalLink, Pencil, Settings } from 'lucide-react';
+import { BarChart3, ExternalLink, Pencil, Settings } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { LogoutButton } from '@/components/LogoutButton';
 import { isAdminEmail } from '@/lib/admin';
@@ -72,6 +72,13 @@ export default async function DashboardPage() {
                 >
                   <Pencil size={13} />
                   編集
+                </Link>
+                <Link
+                  href={`/dashboard/${site.id}/analytics`}
+                  className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50"
+                >
+                  <BarChart3 size={13} />
+                  解析
                 </Link>
                 <a
                   href={`/${site.slug}`}

@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
 import { DEVICE_COOKIE, DEVICE_COOKIE_MAX_AGE } from '@/lib/device';
@@ -32,6 +32,14 @@ export async function updateSession(request: NextRequest) {
   };
   applyDeviceCookie(supabaseResponse);
 
+  // setAllは1リクエスト中に複数回呼ばれることがある(セッションのrefreshとは別に
+  // 追加のCookie書き込みが走るケースがある)。そのたびにNextResponseを作り直すだけだと、
+  // 直前のsetAllで書き込んだCookieが新しいレスポンスに引き継がれず消えてしまい、
+  // ブラウザにリフレッシュ後のセッションCookieが渡らないままになる
+  // (=次回アクセス時に強制ログアウトされる)不具合があったため、
+  // これまでにsetAllされた全Cookieを毎回累積して再適用するようにする。
+  const allCookiesToSet: { name: string; value: string; options: CookieOptions }[] = [];
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -42,8 +50,9 @@ export async function updateSession(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          allCookiesToSet.push(...cookiesToSet);
           supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
+          allCookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
           applyDeviceCookie(supabaseResponse);

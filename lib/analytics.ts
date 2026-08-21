@@ -26,7 +26,8 @@ export async function recordPageView(
 }
 
 export interface DailyPoint {
-  date: string; // YYYY-MM-DD
+  /** 日単位集計なら YYYY-MM-DD、時間単位集計なら YYYY-MM-DDTHH */
+  date: string;
   pv: number;
 }
 
@@ -39,20 +40,39 @@ export interface AnalyticsSummary {
   daily: DailyPoint[];
 }
 
-function dateKey(iso: string): string {
-  return iso.slice(0, 10);
+type Row = { device_id: string; viewed_at: string };
+type Granularity = 'day' | 'hour';
+
+function truncateToUnit(d: Date, granularity: Granularity): Date {
+  const copy = new Date(d);
+  if (granularity === 'day') {
+    copy.setHours(0, 0, 0, 0);
+  } else {
+    copy.setMinutes(0, 0, 0);
+  }
+  return copy;
 }
 
-function buildDailySeries(rows: { viewed_at: string }[], days: number, now: Date): DailyPoint[] {
+function advance(d: Date, granularity: Granularity, amount: number): Date {
+  const copy = new Date(d);
+  if (granularity === 'day') copy.setDate(copy.getDate() + amount);
+  else copy.setHours(copy.getHours() + amount);
+  return copy;
+}
+
+function bucketKey(iso: string, granularity: Granularity): string {
+  return granularity === 'day' ? iso.slice(0, 10) : iso.slice(0, 13);
+}
+
+function buildSeries(rows: Row[], windowSize: number, now: Date, granularity: Granularity): DailyPoint[] {
   const counts = new Map<string, number>();
   for (const row of rows) {
-    counts.set(dateKey(row.viewed_at), (counts.get(dateKey(row.viewed_at)) ?? 0) + 1);
+    const key = bucketKey(row.viewed_at, granularity);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   const series: DailyPoint[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+  for (let i = windowSize - 1; i >= 0; i--) {
+    const key = bucketKey(advance(now, granularity, -i).toISOString(), granularity);
     series.push({ date: key, pv: counts.get(key) ?? 0 });
   }
   return series;
@@ -63,8 +83,50 @@ function changePercent(current: number, previous: number): number | null {
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }
 
+async function summarize(
+  rows: Row[],
+  windowSize: number,
+  granularity: Granularity
+): Promise<AnalyticsSummary> {
+  const now = new Date();
+  const currentStart = truncateToUnit(advance(now, granularity, -(windowSize - 1)), granularity);
+  const currentStartIso = currentStart.toISOString();
+
+  const currentRows = rows.filter((r) => r.viewed_at >= currentStartIso);
+  const previousRows = rows.filter((r) => r.viewed_at < currentStartIso);
+
+  const pv = currentRows.length;
+  const uu = new Set(currentRows.map((r) => r.device_id)).size;
+  const pvPrev = previousRows.length;
+  const uuPrev = new Set(previousRows.map((r) => r.device_id)).size;
+
+  return {
+    pv,
+    uu,
+    pvChangePercent: changePercent(pv, pvPrev),
+    uuChangePercent: changePercent(uu, uuPrev),
+    daily: buildSeries(currentRows, windowSize, now, granularity),
+  };
+}
+
+function windowStartIso(windowSize: number, granularity: Granularity): string {
+  const now = new Date();
+  const currentStart = truncateToUnit(advance(now, granularity, -(windowSize - 1)), granularity);
+  // 直前期間との比較のため、もう1期間分さかのぼった時点から取得する
+  return advance(currentStart, granularity, -windowSize).toISOString();
+}
+
+async function fetchSiteRows(client: SupabaseClient<Database>, siteId: string, sinceIso: string): Promise<Row[]> {
+  const { data } = await client
+    .from('page_views')
+    .select('device_id, viewed_at')
+    .eq('site_id', siteId)
+    .gte('viewed_at', sinceIso);
+  return data ?? [];
+}
+
 /**
- * 指定したサイトのPV/UUを集計する(過去days日と、その直前days日を比較して増減率を出す)。
+ * 指定したサイトのPV/UUを日単位で集計する(過去days日と、その直前days日を比較して増減率を出す)。
  * 呼び出し元(ページ所有者用は認証済みクライアント、管理者用はService Roleクライアント)で
  * アクセス制御を行うこと。
  */
@@ -73,72 +135,55 @@ export async function getSiteAnalytics(
   siteId: string,
   days: 7 | 30
 ): Promise<AnalyticsSummary> {
-  const now = new Date();
-  const currentStart = new Date(now);
-  currentStart.setDate(currentStart.getDate() - (days - 1));
-  currentStart.setHours(0, 0, 0, 0);
-  const previousStart = new Date(currentStart);
-  previousStart.setDate(previousStart.getDate() - days);
-
-  const { data } = await client
-    .from('page_views')
-    .select('device_id, viewed_at')
-    .eq('site_id', siteId)
-    .gte('viewed_at', previousStart.toISOString());
-
-  const rows = data ?? [];
-  const currentRows = rows.filter((r) => r.viewed_at >= currentStart.toISOString());
-  const previousRows = rows.filter((r) => r.viewed_at < currentStart.toISOString());
-
-  const pv = currentRows.length;
-  const uu = new Set(currentRows.map((r) => r.device_id)).size;
-  const pvPrev = previousRows.length;
-  const uuPrev = new Set(previousRows.map((r) => r.device_id)).size;
-
-  return {
-    pv,
-    uu,
-    pvChangePercent: changePercent(pv, pvPrev),
-    uuChangePercent: changePercent(uu, uuPrev),
-    daily: buildDailySeries(currentRows, days, now),
-  };
+  const rows = await fetchSiteRows(client, siteId, windowStartIso(days, 'day'));
+  return summarize(rows, days, 'day');
 }
 
-/** 管理者向け: 全サイト合算のPV/UUを集計する(Service Roleクライアント専用) */
-export async function getGlobalAnalytics(
-  admin: SupabaseClient<Database>,
-  days: 7 | 30
-): Promise<AnalyticsSummary & { siteCount: number; userCount: number }> {
-  const now = new Date();
-  const currentStart = new Date(now);
-  currentStart.setDate(currentStart.getDate() - (days - 1));
-  currentStart.setHours(0, 0, 0, 0);
-  const previousStart = new Date(currentStart);
-  previousStart.setDate(previousStart.getDate() - days);
+/**
+ * 指定したサイトのPV/UUを時間単位で集計する(短命なサイト向け。既定は過去24時間)。
+ */
+export async function getSiteAnalyticsHourly(
+  client: SupabaseClient<Database>,
+  siteId: string,
+  hours: number = 24
+): Promise<AnalyticsSummary> {
+  const rows = await fetchSiteRows(client, siteId, windowStartIso(hours, 'hour'));
+  return summarize(rows, hours, 'hour');
+}
 
-  const [{ data: viewRows }, { count: siteCount }, { data: userRows }] = await Promise.all([
-    admin.from('page_views').select('device_id, viewed_at').gte('viewed_at', previousStart.toISOString()),
+async function globalAnalytics(
+  admin: SupabaseClient<Database>,
+  windowSize: number,
+  granularity: Granularity
+): Promise<AnalyticsSummary & { siteCount: number; userCount: number }> {
+  const [viewRows, { count: siteCount }, { data: userRows }] = await Promise.all([
+    admin
+      .from('page_views')
+      .select('device_id, viewed_at')
+      .gte('viewed_at', windowStartIso(windowSize, granularity))
+      .then((r) => r.data ?? []),
     admin.from('sites').select('id', { count: 'exact', head: true }),
     admin.from('sites').select('user_id'),
   ]);
 
-  const rows = viewRows ?? [];
-  const currentRows = rows.filter((r) => r.viewed_at >= currentStart.toISOString());
-  const previousRows = rows.filter((r) => r.viewed_at < currentStart.toISOString());
-
-  const pv = currentRows.length;
-  const uu = new Set(currentRows.map((r) => r.device_id)).size;
-  const pvPrev = previousRows.length;
-  const uuPrev = new Set(previousRows.map((r) => r.device_id)).size;
+  const summary = await summarize(viewRows, windowSize, granularity);
   const userCount = new Set((userRows ?? []).map((r) => r.user_id)).size;
 
-  return {
-    pv,
-    uu,
-    pvChangePercent: changePercent(pv, pvPrev),
-    uuChangePercent: changePercent(uu, uuPrev),
-    daily: buildDailySeries(currentRows, days, now),
-    siteCount: siteCount ?? 0,
-    userCount,
-  };
+  return { ...summary, siteCount: siteCount ?? 0, userCount };
+}
+
+/** 管理者向け: 全サイト合算のPV/UUを日単位で集計する(Service Roleクライアント専用) */
+export async function getGlobalAnalytics(
+  admin: SupabaseClient<Database>,
+  days: 7 | 30
+): Promise<AnalyticsSummary & { siteCount: number; userCount: number }> {
+  return globalAnalytics(admin, days, 'day');
+}
+
+/** 管理者向け: 全サイト合算のPV/UUを時間単位で集計する(既定は過去24時間) */
+export async function getGlobalAnalyticsHourly(
+  admin: SupabaseClient<Database>,
+  hours: number = 24
+): Promise<AnalyticsSummary & { siteCount: number; userCount: number }> {
+  return globalAnalytics(admin, hours, 'hour');
 }

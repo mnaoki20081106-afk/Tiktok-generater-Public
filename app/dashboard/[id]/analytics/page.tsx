@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getSiteAnalytics } from '@/lib/analytics';
+import { getSiteAnalytics, getSiteAnalyticsHourly } from '@/lib/analytics';
 import { AnalyticsPanel } from '@/components/AnalyticsPanel';
 
 export default async function SiteAnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,7 +24,8 @@ export default async function SiteAnalyticsPage({ params }: { params: Promise<{ 
 
   if (!site) notFound();
 
-  const [summary7, summary30] = await Promise.all([
+  const [summary24h, summary7, summary30] = await Promise.all([
+    getSiteAnalyticsHourly(supabase, site.id, 24),
     getSiteAnalytics(supabase, site.id, 7),
     getSiteAnalytics(supabase, site.id, 30),
   ]);
@@ -40,7 +41,7 @@ export default async function SiteAnalyticsPage({ params }: { params: Promise<{ 
         <p className="text-sm text-slate-400">{site.title || '(無題)'} / {site.slug}</p>
       </div>
 
-      <AnalyticsPanel summary7={summary7} summary30={summary30} />
+      <AnalyticsPanel summary24h={summary24h} summary7={summary7} summary30={summary30} />
     </main>
   );
 }

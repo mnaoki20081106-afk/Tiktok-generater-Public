@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdminEmail } from '@/lib/admin';
-import { getGlobalAnalytics } from '@/lib/analytics';
+import { getGlobalAnalytics, getGlobalAnalyticsHourly } from '@/lib/analytics';
 import { AnalyticsPanel } from '@/components/AnalyticsPanel';
 import { AdminSurpriseForm } from './admin-surprise-form';
 
@@ -18,8 +18,9 @@ export default async function AdminPage() {
   if (!isAdminEmail(user.email)) redirect('/dashboard');
 
   const admin = createAdminClient();
-  const [{ data: config }, summary7, summary30] = await Promise.all([
+  const [{ data: config }, summary24h, summary7, summary30] = await Promise.all([
     admin.from('surprise_config').select('*').eq('id', 1).maybeSingle(),
+    getGlobalAnalyticsHourly(admin, 24),
     getGlobalAnalytics(admin, 7),
     getGlobalAnalytics(admin, 30),
   ]);
@@ -47,6 +48,7 @@ export default async function AdminPage() {
 
       <div className="mb-12">
         <AnalyticsPanel
+          summary24h={summary24h}
           summary7={summary7}
           summary30={summary30}
           pvLabel="全サイト合計PV"

@@ -186,9 +186,10 @@ export function DashboardForm({
      * 画像を最大辺maxDimに収まるよう縮小し、JPEGに再エンコードして返す。
      * iPhoneのカメラで撮った写真はそのままだと数十MBになることがあり、
      * モバイル回線などでアップロード中に通信が途切れて「中身が空」として
-     * 扱われる原因になり得るため、プロフィール画像・OGP画像・アプリアイコンは
-     * ここで十分小さくしてからアップロードする(背景画像は別途bakeBackgroundで
-     * 縮小・再エンコードしている)。canvasへ描画する過程で画像を完全に
+     * 扱われる原因になり得るため、プロフィール画像・アプリアイコンはここで
+     * 十分小さくしてからアップロードする(背景画像は別途bakeBackgroundで縮小・
+     * 再エンコードしている。OGP画像は容量・形式の警告が意味を持つよう、
+     * prepareOgpBlobで別途扱う)。canvasへ描画する過程で画像を完全に
      * デコードするため、materializeBlobと同様にFile参照の失効対策も兼ねる。
      */
     function resizeImageBlob(blob: Blob, maxDim: number, quality = 0.85): Promise<Blob> {
@@ -290,6 +291,42 @@ export function DashboardForm({
       renderOgpWarning(issues, oversized);
     }
 
+    /**
+     * OGP画像は、選択されたファイルをそのまま(容量・形式のチェックが意味を
+     * 持つように)保持する。他の画像(プロフィール/アイコン)のように選択直後に
+     * 一律で1200px・JPEG品質0.85へ強制変換してしまうと、どんなに大きい元画像でも
+     * 800KB未満に収まってしまい、容量・形式の警告が実質的に発生しなくなるため。
+     * 最大辺が4096pxを超える場合のみ、Xの上限に収まるよう縮小する。
+     */
+    async function prepareOgpBlob(original: Blob): Promise<Blob> {
+      const materialized = await materializeBlob(original);
+      try {
+        const { width, height } = await getImageDimensions(materialized);
+        if (width > OGP_MAX_DIM || height > OGP_MAX_DIM) {
+          return resizeImageBlob(materialized, OGP_MAX_DIM, 0.9);
+        }
+      } catch {
+        // 寸法を取得できない場合はそのまま返し、checkOgpImage側の警告に委ねる
+      }
+      return materialized;
+    }
+
+    const OGP_EXT_BY_MIME: Record<string, string> = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
+
+    // OGP画像は変換せずそのままアップロードすることがあるため、拡張子・Content-Typeは
+    // 実際のblobの形式に合わせる(常にjpgと決め打ちできない)
+    function extensionForOgpBlob(slot: ImageSlot): string {
+      if (slot?.kind === 'new') {
+        return OGP_EXT_BY_MIME[slot.blob.type] || 'jpg';
+      }
+      return 'jpg';
+    }
+
     ogpCompressBtn.addEventListener('click', async () => {
       if (state.ogp?.kind !== 'new') return;
       ogpCompressBtn.disabled = true;
@@ -376,7 +413,11 @@ export function DashboardForm({
         );
         const minZoom = Math.max(0.2, containScale / bgTransform.baseScale);
         if (opts.savedTransform) {
-          bgTransform.zoom = opts.savedTransform.zoom || 1;
+          // 復元時のコンテナ・画像の実測値がズレていても、保存されていたzoomを
+          // そのまま適用すると画像が極端に縮小され(レターボックスが背景の黒だけに
+          // なるなど)、見た目が真っ黒になったように見えることがあるため、
+          // 現在の測定値から出したmin/maxへ必ずクランプする
+          bgTransform.zoom = Math.min(4, Math.max(minZoom, opts.savedTransform.zoom || 1));
           bgTransform.offsetX = opts.savedTransform.offsetX || 0;
           bgTransform.offsetY = opts.savedTransform.offsetY || 0;
         } else {
@@ -516,11 +557,22 @@ export function DashboardForm({
         check();
       });
     }
-    bindFilePicker(ogpInput, ogpLabel, 1200, (f) => {
-      state.ogp = { kind: 'new', blob: f };
-      putDraftImage(scopeKey, 'ogp', f);
-      saveState();
-      runOgpCheck();
+    // OGP画像だけはbindFilePickerの一律リサイズを使わず、容量・形式チェックが
+    // 意味を持つよう専用の処理(prepareOgpBlob)を通す
+    ogpLabel.addEventListener('click', () => ogpInput.click());
+    ogpInput.addEventListener('change', async function () {
+      if (this.files && this.files.length > 0) {
+        const original = this.files[0];
+        const file = await prepareOgpBlob(original);
+        state.ogp = { kind: 'new', blob: file };
+        putDraftImage(scopeKey, 'ogp', file);
+        saveState();
+        await runOgpCheck();
+        const span = ogpLabel.querySelector('span');
+        if (span) span.textContent = original.name;
+        ogpLabel.classList.add(styles.selected);
+      }
+      check();
     });
 
     function applyIconPreview(url: string) {
@@ -733,7 +785,12 @@ export function DashboardForm({
             'プロフィール画像',
             'image/jpeg'
           ),
-          uploadImageSlot(state.ogp, `${userId}/${site.id}/ogp-${Date.now()}.jpg`, 'OGP画像', 'image/jpeg'),
+          uploadImageSlot(
+            state.ogp,
+            `${userId}/${site.id}/ogp-${Date.now()}.${extensionForOgpBlob(state.ogp)}`,
+            'OGP画像',
+            state.ogp?.kind === 'new' ? state.ogp.blob.type || 'image/jpeg' : 'image/jpeg'
+          ),
           uploadImageSlot(
             state.icon,
             `${userId}/${site.id}/icon-${Date.now()}.jpg`,

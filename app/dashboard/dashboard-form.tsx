@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { getDraftImage, putDraftImage, clearDraftImages } from '@/lib/imageDraftDb';
+import { compressToTargetSize } from '@/lib/imageCompress';
 import type { Site } from '@/lib/types';
 import styles from './editor.module.css';
 
@@ -38,6 +39,13 @@ type DraftJson = {
 
 const IMAGE_NAMES = ['background', 'avatar', 'ogp', 'icon'] as const;
 const SNAP_PX = 10;
+
+// X(旧Twitter)のOGP画像の要件: 最小300×157px・最大4096×4096px・800KB以下が推奨・PNG/JPG/WebP
+const OGP_MIN_WIDTH = 300;
+const OGP_MIN_HEIGHT = 157;
+const OGP_MAX_DIM = 4096;
+const OGP_TARGET_BYTES = 800 * 1024;
+const OGP_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 export function DashboardForm({
   userId,
@@ -96,6 +104,9 @@ export function DashboardForm({
     const previewIconImg = $<HTMLImageElement>('previewIconImg');
     const ogpInput = $<HTMLInputElement>('ogpInput');
     const ogpLabel = $('ogpLabel');
+    const ogpWarning = $('ogpWarning');
+    const ogpWarningText = $('ogpWarningText');
+    const ogpCompressBtn = $<HTMLButtonElement>('ogpCompressBtn');
     const iconInput = $<HTMLInputElement>('iconInput');
     const iconLabel = $('iconLabel');
     const slugInput = $<HTMLInputElement>('slug');
@@ -215,6 +226,88 @@ export function DashboardForm({
         img.src = url;
       });
     }
+
+    // ===== OGP画像の要件チェック(サイズ・容量・形式) =====
+    function getImageDimensions(blob: Blob): Promise<{ width: number; height: number }> {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          resolve({ width: img.naturalWidth, height: img.naturalHeight });
+          URL.revokeObjectURL(url);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('failed to load image'));
+        };
+        img.src = url;
+      });
+    }
+
+    async function checkOgpImage(blob: Blob): Promise<{ issues: string[]; oversized: boolean }> {
+      const issues: string[] = [];
+      try {
+        const { width, height } = await getImageDimensions(blob);
+        if (width < OGP_MIN_WIDTH || height < OGP_MIN_HEIGHT) {
+          issues.push(
+            `画像サイズが小さすぎます(${width}×${height}px)。最小 ${OGP_MIN_WIDTH}×${OGP_MIN_HEIGHT}px 以上にしてください`
+          );
+        }
+        if (width > OGP_MAX_DIM || height > OGP_MAX_DIM) {
+          issues.push(`画像サイズが大きすぎます(${width}×${height}px)。最大 ${OGP_MAX_DIM}×${OGP_MAX_DIM}px 以下にしてください`);
+        }
+      } catch {
+        issues.push('画像サイズを確認できませんでした');
+      }
+      if (!OGP_ALLOWED_TYPES.includes(blob.type)) {
+        issues.push('対応していない画像形式です。PNG・JPG・WebPのいずれかを使用してください');
+      }
+      const oversized = blob.size > OGP_TARGET_BYTES;
+      if (oversized) {
+        issues.push(`画像容量が大きいです(約${Math.round(blob.size / 1024)}KB)。800KB以下が推奨されています`);
+      }
+      return { issues, oversized };
+    }
+
+    function renderOgpWarning(issues: string[], oversized: boolean) {
+      if (issues.length === 0) {
+        ogpWarning.classList.remove(styles.visible);
+        ogpWarningText.textContent = '';
+        ogpCompressBtn.style.display = 'none';
+        return;
+      }
+      ogpWarningText.textContent = '⚠ ' + issues.join(' / ');
+      ogpWarning.classList.add(styles.visible);
+      ogpCompressBtn.style.display = oversized ? 'inline-flex' : 'none';
+    }
+
+    async function runOgpCheck() {
+      if (state.ogp?.kind !== 'new') {
+        renderOgpWarning([], false);
+        return;
+      }
+      const { issues, oversized } = await checkOgpImage(state.ogp.blob);
+      renderOgpWarning(issues, oversized);
+    }
+
+    ogpCompressBtn.addEventListener('click', async () => {
+      if (state.ogp?.kind !== 'new') return;
+      ogpCompressBtn.disabled = true;
+      const originalLabel = ogpCompressBtn.textContent;
+      ogpCompressBtn.textContent = '圧縮中...';
+      try {
+        const compressed = await compressToTargetSize(state.ogp.blob, { targetBytes: OGP_TARGET_BYTES });
+        state.ogp = { kind: 'new', blob: compressed };
+        putDraftImage(scopeKey, 'ogp', compressed);
+        saveState();
+        await runOgpCheck();
+      } catch {
+        ogpWarningText.textContent = '⚠ 圧縮に失敗しました。別の画像をお試しください';
+      } finally {
+        ogpCompressBtn.disabled = false;
+        ogpCompressBtn.textContent = originalLabel;
+      }
+    });
 
     // ===== 背景画像: ズーム・パン・スナップ =====
     function clampOffsets() {
@@ -427,6 +520,7 @@ export function DashboardForm({
       state.ogp = { kind: 'new', blob: f };
       putDraftImage(scopeKey, 'ogp', f);
       saveState();
+      runOgpCheck();
     });
 
     function applyIconPreview(url: string) {
@@ -768,6 +862,7 @@ export function DashboardForm({
           ogpLabel.classList.add(styles.selected);
         }
       }
+      runOgpCheck();
 
       if (iconBlob) {
         state.icon = { kind: 'new', blob: iconBlob };
@@ -1045,6 +1140,12 @@ export function DashboardForm({
                 <span>タップして選択</span>
               </label>
               <input type="file" data-id="ogpInput" accept="image/*" />
+              <div className={styles.ogpWarning} data-id="ogpWarning">
+                <p data-id="ogpWarningText" />
+                <button type="button" className={styles.ogpCompressBtn} data-id="ogpCompressBtn" style={{ display: 'none' }}>
+                  圧縮する
+                </button>
+              </div>
             </div>
             <div className={styles.field}>
               <label className={styles.fl}>

@@ -25,6 +25,20 @@ export interface ViewerData {
   origin: string;
 }
 
+/**
+ * XなどのSNSクローラーは画像URLが完全一致するかどうかだけで同一画像と判断し、
+ * 一度クロールしたOGP画像をしばらくキャッシュする。アップロード時のファイル名には
+ * 既にアップロード時刻(ogp-<timestamp>.拡張子)が含まれ実質ユニークだが、念のため
+ * それをキャッシュバスティング用の?vパラメータとしても明示的に付与する。
+ */
+function withCacheBustParam(url: string): string {
+  if (!url) return url;
+  const match = url.match(/-(\d+)\.[a-zA-Z0-9]+(?:\?.*)?$/);
+  const version = match ? match[1] : String(Date.now());
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}v=${version}`;
+}
+
 export function siteToViewerData(site: Site, origin: string): ViewerData {
   const cd = site.content_data ?? {};
   const images = (cd.images as { background?: string; ogpImage?: string; appIcon?: string } | undefined) ?? {};
@@ -43,7 +57,7 @@ export function siteToViewerData(site: Site, origin: string): ViewerData {
     pageIndicatorCount: (cd.pageIndicatorCount as string) || '3',
     avatarUrl: site.image_url || '',
     backgroundUrl: images.background || '',
-    ogpImageUrl: images.ogpImage || '',
+    ogpImageUrl: withCacheBustParam(images.ogpImage || ''),
     appIconUrl: images.appIcon || '',
     origin,
   };

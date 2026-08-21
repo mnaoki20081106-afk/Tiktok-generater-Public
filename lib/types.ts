@@ -73,6 +73,15 @@ export interface KnownFingerprint {
   created_at: string;
 }
 
+/** 公開ページの閲覧記録(PV/UU分析に使う) */
+export interface PageView {
+  [key: string]: unknown;
+  id: number;
+  site_id: string;
+  device_id: string;
+  viewed_at: string;
+}
+
 /** Supabaseクライアントに渡すDBスキーマ型 */
 export interface Database {
   public: {
@@ -99,6 +108,12 @@ export interface Database {
         Row: SurpriseConfig;
         Insert: Partial<SurpriseConfig> & { id: number };
         Update: SurpriseConfigUpdate;
+        Relationships: [];
+      };
+      page_views: {
+        Row: PageView;
+        Insert: Partial<PageView> & { site_id: string; device_id: string };
+        Update: Partial<PageView>;
         Relationships: [];
       };
     };

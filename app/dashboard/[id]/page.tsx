@@ -1,7 +1,7 @@
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, BarChart3 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { DashboardForm } from '../dashboard-form';
 
@@ -30,12 +30,21 @@ export default async function EditSitePage({ params }: { params: Promise<{ id: s
 
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
-      <div className="mb-6">
-        <Link href="/dashboard" className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-          <ArrowLeft size={14} />
-          マイサイト一覧に戻る
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <Link href="/dashboard" className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+            <ArrowLeft size={14} />
+            マイサイト一覧に戻る
+          </Link>
+          <h1 className="mt-2 text-xl font-semibold text-slate-900">サイトを編集</h1>
+        </div>
+        <Link
+          href={`/dashboard/${site.id}/analytics`}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-50"
+        >
+          <BarChart3 size={15} />
+          アクセス解析
         </Link>
-        <h1 className="mt-2 text-xl font-semibold text-slate-900">サイトを編集</h1>
       </div>
 
       <DashboardForm userId={user.id} site={site} siteUrlOrigin={siteUrlOrigin} />

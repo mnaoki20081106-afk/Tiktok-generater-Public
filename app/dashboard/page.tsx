@@ -59,13 +59,13 @@ export default async function DashboardPage() {
           {sites.map((site) => (
             <li
               key={site.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
+              className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-slate-900">{site.title || '(無題)'}</p>
                 <p className="truncate text-xs text-slate-400">/{site.slug}</p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                 <Link
                   href={`/dashboard/${site.id}`}
                   className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50"

@@ -24,6 +24,8 @@ export const MIN_BUSY_MS = 400; // 「抽出中...」を必ず目視できるよ
 export const DEFAULT_IOS_URL = 'https://apps.apple.com/jp/app/tiktok-lite/id6447160980';
 export const DEFAULT_ANDROID_URL = 'https://play.google.com/store/apps/details?id=com.zhiliaoapp.musically.go';
 export const DEFAULT_ONELINK_TEMPLATE = 'https://snssdk1180.onelink.me/BAuo';
+/** PC向け遷移先は用途がケースバイケースなので既定値は空(=af_web_dp を付けない)にしておく */
+export const DEFAULT_WEB_DP_URL = '';
 
 /** クッションページが遷移先を受け取るクエリキー。単独版と同じ `to`。 */
 export const CUSHION_PARAM = 'to';
@@ -42,6 +44,8 @@ export interface ExtractApiResponse {
 export interface BuildOptions {
   iosUrl: string;
   androidUrl: string;
+  /** PC(デスクトップ)から踏まれたときの遷移先。空なら af_web_dp を設定しない */
+  webDpUrl: string;
   emptyDp: boolean;
   retargeting: boolean;
   stripDeepLinks: boolean;
@@ -291,7 +295,22 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   }
 
   if (opts.iosUrl) params.set('af_ios_url', opts.iosUrl);
+
+  /* iPadOSのSafariは既定で「デスクトップ用サイトを要求」するため、UserAgentがmacOSと
+     見分けがつかず、AppsFlyer側がiOS端末として扱ってくれない。その結果 af_ios_url が
+     使われず、OneLinkの既定のWeb遷移先(サイトのトップページ)が開いてしまう。
+     af_ipad_url を iOS向け遷移先と同じ値で明示しておくと、iPadと判定された場合でも
+     同じストアページへ送れる。 */
+  if (opts.iosUrl) params.set('af_ipad_url', opts.iosUrl);
+
   if (opts.androidUrl) params.set('af_android_url', opts.androidUrl);
+
+  /* PC(デスクトップ)から踏まれた場合の遷移先。
+     af_web_dp は DEEPLINK_PARAMS にも入っているが、除去は上のループで既に済んでいるため、
+     ここで設定した値が最終的に残る(元のリンクに埋まっていた値は捨てられ、
+     利用者が指定した値だけが反映される、という意図どおりの順序)。 */
+  if (opts.webDpUrl) params.set('af_web_dp', opts.webDpUrl);
+
   if (opts.emptyDp) params.set('af_dp', '');
   if (opts.retargeting) params.set('is_retargeting', 'true');
 

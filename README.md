@@ -49,6 +49,9 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
 
 - **2モード**: 単独版と同じく1つのURLで分岐する。`?to=` なしならビルダー(生成フォーム)、`?to=<url>` 付きならクッションページ(1〜2秒の遅延後に遷移先へ飛ばす黒画面)。
 - **コアロジック**: Stealth APIへのFetch・URLオブジェクトの再構築・`DEEPLINK_PARAMS` によるサニタイズは `lib/link-generator.ts` に単独版のまま移植してある(コメント含めて挙動は不変)。UI(`link-generator-form.tsx`)は入力値の受け渡しと表示だけを担当する。
+- **端末ごとの遷移先**: `af_ios_url`(iOS) / `af_android_url`(Android) / `af_ipad_url`(iPad) / `af_web_dp`(PC) を付与する。
+  - `af_ipad_url` は `af_ios_url` と同じ値が自動でセットされる。iPadOSのSafariは既定で「デスクトップ用サイトを要求」するためUserAgentがmacOSと見分けがつかず、AppsFlyer側がiOS端末として扱ってくれない。指定が無いとOneLinkの既定のWeb遷移先(サイトのトップページ)が開いてしまうため。
+  - `af_web_dp` はPC(Windows/Mac)から踏まれたときの遷移先で、フォームの「af_web_dp(PC向け遷移先)」に任意のURL(キャンペーンLP等)を入力する。空欄なら付与しない。なお `af_web_dp` は `DEEPLINK_PARAMS` にも含まれるため、リンク元に埋まっていた値は一度除去され、入力した値だけが最終的に残る。
 - **クッションページのON/OFF**: フォームのチェックボックスで切り替える。切り替えているのは最終出力URLだけ(`resolveOutputUrl()`)で、サニタイズ処理には影響しない。
   - ON … `/tools/link-generator?to=<サニタイズ済みURL>` を出力する(従来どおり)。
   - OFF … サニタイズ処理を通過した直後の直接遷移先URLをそのまま出力する。

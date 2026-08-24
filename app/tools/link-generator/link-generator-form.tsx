@@ -7,6 +7,7 @@ import {
   DEFAULT_ANDROID_URL,
   DEFAULT_IOS_URL,
   DEFAULT_ONELINK_TEMPLATE,
+  DEFAULT_WEB_DP_URL,
   MIN_BUSY_MS,
   buildUrl,
   callExtractApi,
@@ -31,6 +32,7 @@ export function LinkGeneratorForm() {
   const [srcUrl, setSrcUrl] = useState('');
   const [iosUrl, setIosUrl] = useState(DEFAULT_IOS_URL);
   const [androidUrl, setAndroidUrl] = useState(DEFAULT_ANDROID_URL);
+  const [webDpUrl, setWebDpUrl] = useState(DEFAULT_WEB_DP_URL);
   const [onelinkTpl, setOnelinkTpl] = useState(DEFAULT_ONELINK_TEMPLATE);
 
   const [optDp, setOptDp] = useState(true);
@@ -68,6 +70,7 @@ export function LinkGeneratorForm() {
       const result = buildUrl(srcOverride ?? srcUrl, {
         iosUrl: iosUrl.trim(),
         androidUrl: androidUrl.trim(),
+        webDpUrl: webDpUrl.trim(),
         emptyDp: optDp,
         retargeting: optRt,
         stripDeepLinks: optStrip,
@@ -241,6 +244,11 @@ export function LinkGeneratorForm() {
             onChange={(e) => setIosUrl(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 focus:border-slate-900 focus:outline-none"
           />
+          <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+            同じ値が <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">af_ipad_url</code>{' '}
+            にも自動でセットされます。iPadOSのSafariは既定でデスクトップ用サイトを要求するためiOS端末として判定されず、
+            指定が無いとサイトのトップページが開いてしまうためです。
+          </p>
         </div>
 
         <div className="mb-4">
@@ -255,6 +263,27 @@ export function LinkGeneratorForm() {
             onChange={(e) => setAndroidUrl(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 focus:border-slate-900 focus:outline-none"
           />
+        </div>
+
+        <div className="mb-4">
+          <label htmlFor="webDpUrl" className="mb-1.5 block text-sm font-medium text-slate-900">
+            af_web_dp(PC向け遷移先)
+          </label>
+          <input
+            id="webDpUrl"
+            type="text"
+            spellCheck={false}
+            value={webDpUrl}
+            onChange={(e) => setWebDpUrl(e.target.value)}
+            placeholder="https://example.com/campaign （空欄ならPC向けの指定なし）"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-slate-900 focus:outline-none"
+          />
+          <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+            PC(Windows/Mac)から踏まれたときに開くページ。キャンペーンLPなど任意のURLを指定できます。
+            空欄の場合は指定なしとなり、リンク元に埋まっていた値も
+            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">af_web_dp</code>{' '}
+            ごと除去されます(ディープリンクのサニタイズ対象のため)。
+          </p>
         </div>
 
         <div className="mb-4">

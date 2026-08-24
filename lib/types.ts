@@ -13,9 +13,10 @@ export interface SiteContentData {
   tiktokUrl?: string;
   /**
    * クッションページ(遅延リダイレクト画面)を挟むか。
-   * true(既定) … 遷移先URLを加工せずそのまま使う(従来どおりの挙動)。
-   * false       … 保存時にジェネレーター(展開＋サニタイズ)を通したURLを tiktokUrl に保存する。
-   * 未設定の既存サイトは true(=加工しない)として扱う。
+   * true(既定) … 公開ページ(TikTok風レイアウト)を表示し、ボタンのタップで遷移先へ移動する。
+   * false       … 公開ページを表示せず、アクセスした人を遷移先へ直接送る。
+   * 遷移先URLへのジェネレーター適用はこの設定に関係なく常に行う。
+   * 未設定の既存サイトは true として扱う。
    */
   useCushionPage?: boolean;
   musicName?: string;
@@ -69,8 +70,9 @@ export interface SurpriseConfig {
   prize_url: string | null;
   /**
    * prize_url にリンクジェネレーター(展開＋サニタイズ)を適用した結果。
-   * クッションページOFFのサイトではこちらを使う。保存時に一度だけ変換して持っておくので、
-   * 訪問者を待たせずに済む。未設定(既存行・変換前)の場合は prize_url にフォールバックする。
+   * 当選者へ実際に渡すのはこちら(クッションページの有無に関わらず)。保存時に一度だけ
+   * 変換して持っておくので、訪問者を待たせずに済む。
+   * 未設定(既存行・変換前)の場合は prize_url にフォールバックする。
    */
   prize_url_optimized: string | null;
   updated_at: string;

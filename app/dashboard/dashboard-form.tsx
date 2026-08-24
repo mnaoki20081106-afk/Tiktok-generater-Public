@@ -601,8 +601,8 @@ export function DashboardForm({
        OFF … 保存時にジェネレーター(展開＋サニタイズ)を通したURLを保存する。 */
     function renderCushionHint() {
       cushionHint.textContent = cushionToggle.checked
-        ? '遷移先URLはそのまま保存されます。クッションページ経由のURLは、リンクジェネレーターで生成したものを貼り付けてください。'
-        : '公開ページは表示されず、アクセスした人は遷移先へ直接移動します。保存時に、入力した遷移先URLへ自動でリンクジェネレーターを適用します(短縮リンクは展開し、ディープリンク系パラメータを除去したURLに書き換えます)。';
+        ? 'ON: 公開ページ(TikTok風レイアウト)を表示し、ボタンのタップで遷移先へ移動します。'
+        : 'OFF: 公開ページは表示されず、アクセスした人は遷移先へ直接移動します。';
     }
 
     /* OFFのときは公開ページ自体を表示しないので、TikTok風ページの見た目に関わる入力は
@@ -753,7 +753,7 @@ export function DashboardForm({
       { test: () => !!state.ogp, label: 'OGP画像', el: () => ogpLabel },
       { test: () => !!state.icon, label: 'アプリアイコン画像', el: () => iconLabel, cushionOnly: true },
       { test: () => !!slugInput.value.trim(), label: '公開URL(slug)', el: () => slugInput },
-      { test: () => !!tiktokUrlInput.value.trim(), label: 'TikTokプロフィールURL', el: () => tiktokUrlInput },
+      { test: () => !!tiktokUrlInput.value.trim(), label: 'TikTok Liteの招待リンク', el: () => tiktokUrlInput },
       { test: () => !!ogpTitleInput.value.trim(), label: 'OGPタイトル', el: () => ogpTitleInput },
     ];
 
@@ -830,28 +830,30 @@ export function DashboardForm({
           throw new Error('公開URL(slug)は半角英小文字・数字・ハイフンのみ使用できます');
         }
 
-        /* クッションページOFFのときだけ、遷移先URLにジェネレーターを適用する。
+        /* 遷移先URLには必ずジェネレーター(展開＋サニタイズ)を適用する。
+           クッションページの有無は「公開ページを表示するかどうか」だけの話であり、
+           訪問者が最終的に踏むURLが未サニタイズでよい理由にはならないため、
+           ONでもOFFでも同じように最適化する。
+
            画像のアップロードより先に実行するのは、ここで失敗したら保存自体を中断するため
            (未サニタイズのURLが公開されるのを防ぐ)。失敗しても画像をアップロードし終えた後だと
            Storageに不要なファイルだけが残ってしまう。 */
         let destinationUrl = tiktokUrlInput.value.trim();
-        if (!cushionToggle.checked) {
-          setStatusMsg({ text: '遷移先URLを生成中... (数十秒かかる場合があります)' });
-          try {
-            const built = await generateDestinationUrl(destinationUrl);
-            destinationUrl = built.url;
-            // 生成結果を入力欄にも反映して、何が保存されるのかを見えるようにする
-            tiktokUrlInput.value = destinationUrl;
-            saveState();
-          } catch (e) {
-            throw new Error(
-              '遷移先URLの生成に失敗したため保存を中断しました。' +
-                (e instanceof Error ? e.message : String(e)) +
-                '\nそのままのURLで公開する場合は「クッションページを挟む」をONにしてください。'
-            );
-          }
-          setStatusMsg({ text: '保存中... しばらくお待ちください' });
+        setStatusMsg({ text: '遷移先URLを生成中... (数十秒かかる場合があります)' });
+        try {
+          const built = await generateDestinationUrl(destinationUrl);
+          destinationUrl = built.url;
+          // 生成結果を入力欄にも反映して、何が保存されるのかを見えるようにする
+          tiktokUrlInput.value = destinationUrl;
+          saveState();
+        } catch (e) {
+          throw new Error(
+            '遷移先URLの生成に失敗したため保存を中断しました。' +
+              (e instanceof Error ? e.message : String(e)) +
+              '\n入力したURLが TikTok Lite の招待リンク(https://lite.tiktok.com/t/... )かどうか確認してください。'
+          );
         }
+        setStatusMsg({ text: '保存中... しばらくお待ちください' });
 
         const bakedBg = await bakeBackground();
         const bgSlot: ImageSlot = bakedBg ? { kind: 'new', blob: bakedBg } : state.bg;
@@ -1267,8 +1269,12 @@ export function DashboardForm({
               </div>
             </div>
             <div className={styles.field}>
-              <label className={styles.fl}>TikTokプロフィールURL(ボタンの遷移先)</label>
-              <input type="url" data-id="tiktokUrl" placeholder="https://www.tiktok.com/@username" />
+              <label className={styles.fl}>TikTok Liteの招待リンク(ボタンの遷移先)</label>
+              <input type="url" data-id="tiktokUrl" placeholder="https://lite.tiktok.com/t/..." />
+              <div className={styles.hint}>
+                保存時に必ずリンクジェネレーターを通します(短縮リンクを展開し、ディープリンク系パラメータを除去)。
+                招待リンク以外のURLは変換できないため保存できません。
+              </div>
               <div className={styles.checkRow}>
                 <input type="checkbox" data-id="cushionToggle" id="cushionToggle" />
                 <label htmlFor="cushionToggle">クッションページを挟む</label>

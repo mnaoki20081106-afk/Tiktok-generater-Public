@@ -6,7 +6,6 @@ import {
   BTN_LABEL,
   DEFAULT_ANDROID_URL,
   DEFAULT_IOS_URL,
-  DEFAULT_ONELINK_TEMPLATE,
   DEFAULT_WEB_DP_URL,
   MIN_BUSY_MS,
   buildUrl,
@@ -33,11 +32,9 @@ export function LinkGeneratorForm() {
   const [iosUrl, setIosUrl] = useState(DEFAULT_IOS_URL);
   const [androidUrl, setAndroidUrl] = useState(DEFAULT_ANDROID_URL);
   const [webDpUrl, setWebDpUrl] = useState(DEFAULT_WEB_DP_URL);
-  const [onelinkTpl, setOnelinkTpl] = useState(DEFAULT_ONELINK_TEMPLATE);
 
   const [optDp, setOptDp] = useState(true);
   const [optStrip, setOptStrip] = useState(true);
-  const [optRt, setOptRt] = useState(true);
   // 新機能: クッションページ(遅延リダイレクト画面)を挟むかどうか
   const [useCushion, setUseCushion] = useState(true);
 
@@ -72,9 +69,7 @@ export function LinkGeneratorForm() {
         androidUrl: androidUrl.trim(),
         webDpUrl: webDpUrl.trim(),
         emptyDp: optDp,
-        retargeting: optRt,
         stripDeepLinks: optStrip,
-        onelinkTemplate: onelinkTpl.trim(),
       });
 
       setBuilt(result);
@@ -286,24 +281,11 @@ export function LinkGeneratorForm() {
           </p>
         </div>
 
-        <div className="mb-4">
-          <label htmlFor="onelinkTpl" className="mb-1.5 block text-sm font-medium text-slate-900">
-            OneLink テンプレート(ドメイン補正用)
-          </label>
-          <input
-            id="onelinkTpl"
-            type="text"
-            spellCheck={false}
-            value={onelinkTpl}
-            onChange={(e) => setOnelinkTpl(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 focus:border-slate-900 focus:outline-none"
-          />
-          <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-            抽出結果が <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">lite.tiktok.com</code>{' '}
-            などの短縮ドメインだった場合、このURLのドメイン＋パスに差し替えます。手動で取得できた正しい OneLink
-            を入れてください。
-          </p>
-        </div>
+        {/* 「OneLink テンプレート」欄は廃止した。抽出結果がOneLinkでなかった場合に
+            ドメイン＋パスを差し替えるフォールバック用だったが、OneLinkのパス
+            (テンプレートID/ショートリンクID)はアトリビューション設定そのもので、
+            差し替えると pid や u_code の紐付けを失った不完全なリンクになる。
+            現在は差し替えずエラーで止める。 */}
 
         <div className="mb-4 flex flex-col gap-2.5">
           <Check checked={optDp} onChange={setOptDp}>
@@ -315,10 +297,11 @@ export function LinkGeneratorForm() {
             <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">deep_link_value</code> /{' '}
             <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">fallback_url</code> 等)を削除
           </Check>
-          <Check checked={optRt} onChange={setOptRt}>
-            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">is_retargeting=true</code> を設定
-          </Check>
         </div>
+
+        {/* is_retargeting のチェックボックスは廃止した。付与するとAppsFlyerがクリックを
+            リターゲティング(再エンゲージメント)として記録し、新規インストール前提の
+            招待報酬が付かなくなる恐れがあるため。buildUrl() 側で常に除去している。 */}
 
         {/* ===== 新機能: クッションページの ON / OFF ===== */}
         <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -376,16 +359,8 @@ export function LinkGeneratorForm() {
           </pre>
           <p className="mt-2 text-xs text-slate-500">リンクを直接タップしてもコピーできます。</p>
 
-          {/* 何を除去・補正したかを見せる。通常版が開いてしまう原因追跡に必要。 */}
+          {/* 何を除去したかを見せる。通常版が開いてしまう原因追跡に必要。 */}
           <div className="mt-2">
-            {built.notes.map((n, i) => (
-              <p
-                key={i}
-                className={`text-xs leading-relaxed ${n.indexOf('警告') === 0 ? 'text-red-600' : 'text-slate-500'}`}
-              >
-                {n}
-              </p>
-            ))}
             <p className="text-xs leading-relaxed text-slate-500">
               {built.removed.length
                 ? '除去したディープリンク系パラメータ: ' + built.removed.join(', ')

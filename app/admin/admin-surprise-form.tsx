@@ -56,14 +56,14 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
         />
         <span className="text-xs leading-relaxed text-slate-400">
           保存時にリンクジェネレーターを通し、最適化したURLも一緒に保存します(短縮リンクは展開し、ディープリンク系パラメータを除去します)。
-          クッションページを挟まないサイトでは最適化版が、挟むサイトでは入力したURLがそのまま当たりとして使われます。
+          当選した訪問者には、クッションページの有無に関わらずこの最適化版が使われます。
           Stealth APIの起動待ちで保存に数十秒かかることがあります。
         </span>
       </label>
 
       {optimized && (
         <div className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <span className="text-xs font-medium text-slate-900">最適化済みの当たりURL(クッションページなしのサイト用)</span>
+          <span className="text-xs font-medium text-slate-900">最適化済みの当たりURL(実際に当選者へ渡されるURL)</span>
           <code className="break-all font-mono text-xs text-slate-600">{optimized}</code>
         </div>
       )}

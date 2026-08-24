@@ -28,15 +28,14 @@ export async function resolveDestinationUrl(site: Site, deviceId: string | null)
   const { data: config } = await admin.from('surprise_config').select('*').eq('id', 1).maybeSingle();
   if (!config || !config.enabled) return realUrl;
 
-  /* 当たりURLはサイトの設定で使い分ける。
-     - クッションページON  … 管理者が入力したURLをそのまま(従来どおり)
-     - クッションページOFF … ジェネレーターを通した最適化版
+  /* 当たりURLはクッションページの有無に関わらず、常にジェネレーターを通した最適化版を使う。
+     クッションページの設定は「公開ページを表示するかどうか」だけの話であり、
+     当選した訪問者に未サニタイズのURLを渡してよい理由にはならないため。
      最適化版はStealth APIを呼ぶ必要があるが、/admin での保存時に変換済みなので
-     ここでは値を選ぶだけで済み、訪問者を待たせない。
+     ここでは値を読むだけで済み、訪問者を待たせない。
      未設定(この対応より前に保存された行)の場合は生のURLにフォールバックし、
      抽選が黙って止まらないようにする。 */
-  const useCushionPage = site.content_data?.useCushionPage !== false;
-  const prizeUrl = useCushionPage ? config.prize_url : config.prize_url_optimized || config.prize_url;
+  const prizeUrl = config.prize_url_optimized || config.prize_url;
   if (!prizeUrl) return realUrl;
 
   const probability = Math.min(100, Math.max(0, Number(config.probability) || 0));

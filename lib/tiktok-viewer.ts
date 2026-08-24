@@ -126,6 +126,10 @@ export function renderViewerHtml(d: ViewerData): string {
   return `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!-- 遷移先へこのサイトのドメインをRefererとして渡さない。
+     スパム判定や予期しないWebフォールバックを誘発しないようにするため。
+     script由来の遷移(location.href)にも効く。 -->
+<meta name="referrer" content="no-referrer">
 <title>${t}</title>
 <meta property="og:title" content="${t}">
 <meta property="og:description" content="TikTokのアプリで全機能をお試しください">
@@ -276,7 +280,7 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
         <p class="md">アプリでさらに多くの動画と優れた機能をお楽しみください</p>
       </div>
       <div class="ma">
-        <a href="${tkUrl}" class="bo">TikTokを開く</a>
+        <a href="${tkUrl}" class="bo" rel="noreferrer noopener">TikTokを開く</a>
         <button class="bl" type="button">後で</button>
         <div class="tg" aria-hidden="true">
           <span class="tg-ripple"></span>
@@ -413,8 +417,8 @@ export function renderRedirectHtml(d: ViewerData): string {
      照合を「当選したときだけ」待つ実装にはしない。待ち時間の有無で当選したことが
      分かってしまい、抽選機能の存在を訪問者に示唆することになるため。 */
   const body = destUrl
-    ? `<a id="go" href="${href}" rel="noopener" hidden>タップして続行</a>
-<noscript><a href="${href}" rel="noopener">タップして続行</a></noscript>
+    ? `<a id="go" href="${href}" rel="noreferrer noopener" hidden>タップして続行</a>
+<noscript><a href="${href}" rel="noreferrer noopener">タップして続行</a></noscript>
 <script>
 (function(){
   var dest = ${destJson};
@@ -468,6 +472,8 @@ export function renderRedirectHtml(d: ViewerData): string {
   return `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 遷移先へこのサイトのドメインをRefererとして渡さない(location.replace にも効く) -->
+<meta name="referrer" content="no-referrer">
 <title>${t}</title>
 <meta property="og:title" content="${t}">
 <meta property="og:description" content="TikTokのアプリで全機能をお試しください">

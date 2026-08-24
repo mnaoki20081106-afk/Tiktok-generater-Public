@@ -53,7 +53,12 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
   - `af_ipad_url` は `af_ios_url` と同じ値が自動でセットされる。iPadOSのSafariは既定で「デスクトップ用サイトを要求」するためUserAgentがmacOSと見分けがつかず、AppsFlyer側がiOS端末として扱ってくれない。指定が無いとOneLinkの既定のWeb遷移先(サイトのトップページ)が開いてしまうため。
   - `af_web_dp` はPC(Windows/Mac)から踏まれたときの遷移先で、フォームの「af_web_dp(PC向け遷移先)」に任意のURL(キャンペーンLP等)を入力する。空欄なら付与しない。なお `af_web_dp` は `DEEPLINK_PARAMS` にも含まれるため、リンク元に埋まっていた値は一度除去され、入力した値だけが最終的に残る。
 - **抽出結果がOneLinkでなければエラーで止める**: 以前は「OneLink テンプレート」欄の値でドメイン＋パスを差し替えるフォールバックを持っていたが、廃止した(`assertOneLink()`)。実物の招待リンクは `https://snssdk1180.onelink.me/BAuo/999140ec` のように「テンプレートID + ショートリンクID」の2セグメント構成で、後半はシェアごとに異なる。さらにこのリンクのクエリには `pid` も `c` も無く、AppsFlyer側(ショートリンク)がサーバー側に保持していると考えられる。つまりテンプレートへの差し替えは「他人のリンクに別のショートリンクを当てる」処理であり、アトリビューション設定ごと失った不完全なリンクを生む。黙って壊れたリンクを配るより、生成を止めて作り直させるほうが安全。
-  - OneLinkのパスは一切書き換えない(実物のURLで `/BAuo/999140ec` が保持されることを検証済み)。
+  - パスに**ショートリンクID**が付いている場合(`/BAuo/999140ec`)は、それを外してロングリンク化する(`toLongLink()`)。ショートリンク側はAppsFlyerのサーバーに設定を持ち、その設定がクエリより優先されると `af_ios_url` / `af_dp` が無視されて通常版TikTokのWebページが開いてしまうため。テンプレートID(`/BAuo`)は残す。
+  - ロングリンク化するとショートリンク側の `pid` も失われる。AppsFlyerは `pid` の無いクリックを原則アトリビュートしないため、`pid` が無い場合に限り同じ値を指す `media_source` / `inc_pid` から補完する。`u_code` / `share_page_data` はクエリ側にあるので影響を受けない。
+- **中間ページ描画パラメータの除去**: `__status_bar` / `_pia_` / `_svg` / `enable_canvas` / `enable_canvas_optimize` / `hide_nav_bar` / `should_full_screen` を `INTERSTITIAL_PARAMS` として除去する。招待LPの表示制御にしか使われず、アトリビューションにも紹介元の特定にも関与しない。
+- **フォールバック先は削除せず明示的に上書きする**: `fallback_url` / `af_ios_fallback` / `af_android_fallback` / `af_web_dp` は、除去したうえでLite版のストアURLを入れ直す。削除するだけだとOneLinkテンプレート側(AppsFlyerのサーバー設定)の既定値が発動し、通常版TikTokのWebページへ落ちてしまうため。`af_web_dp` は「PC向け遷移先」欄が入力されていればそちらを優先する。
+  - これらのキーは除去対象と非対象が混在するため、いったん全部消してから決まった順に入れ直して並び順を固定している(同じURLを再保存したときに文字列が一致するようにするため)。
+- **Refererの匿名化**: 遷移先へこのサイトのドメインをRefererとして渡さない。クッションページ・公開ページ(ON/OFF両方)の `<head>` に `<meta name="referrer" content="no-referrer">` を入れ、リンクにも `rel="noreferrer noopener"` を付けている。metaタグは `location.replace()` による遷移にも効く。
 - **`is_retargeting` は付与せず、必ず除去する**: AppsFlyerはこれが `true` だとクリックを「リターゲティング(再エンゲージメント)」として記録する。招待報酬は「新規インストール＋初回起動」で発火するのが前提なので、リターゲティング扱いになると発火条件を外れて報酬が付かない恐れがある。TikTok Liteの招待リンクにはそもそも `is_retargeting` が入っていないため、付与していたのはこちら側だった。
   - うっかりONにする事故を防ぐため、フォームのチェックボックスと `BuildOptions.retargeting` ごと廃止した。
   - 除去は `stripDeepLinks` のON/OFFに関係なく常に実行する。この対応より前に生成した(`is_retargeting=true` が焼き付いた)URLを再保存したときに確実に落とすため。

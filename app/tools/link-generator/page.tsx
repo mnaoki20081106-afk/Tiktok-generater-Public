@@ -40,6 +40,10 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
       description: CUSHION_OG_DESCRIPTION,
       // 中継URLそのものは検索結果に載せない
       robots: { index: false, follow: false },
+      /* 遷移先へこのサイトのドメインをRefererとして渡さない。
+         スパム判定や予期しないWebフォールバックを誘発しないようにするため。
+         location.replace() による遷移にも効く。 */
+      referrer: 'no-referrer',
       openGraph: {
         type: 'website',
         siteName: 'ProfileHub',

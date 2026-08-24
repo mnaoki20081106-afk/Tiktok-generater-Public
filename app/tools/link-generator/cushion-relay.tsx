@@ -40,8 +40,9 @@ export function CushionRelay({ to }: { to: string | null }) {
       )}
       {to && showFallback && (
         <a
+          id="go"
           href={to}
-          rel="noopener"
+          rel="noreferrer noopener"
           className="break-all px-6 py-6 text-center text-sm text-[#8ab4f8] underline"
         >
           タップして続行

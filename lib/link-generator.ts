@@ -230,6 +230,20 @@ export const DEEPLINK_PARAMS = [
   'incentive_redirect',
 ];
 
+/* TikTokのWebView描画用パラメータ。招待LPの表示制御にしか使われず、
+   AppsFlyerのアトリビューションにも紹介元の特定にも関与しない。
+   中間ページ(「TikTok-Global Video Community」等)の描画を誘発しうるため、
+   最終リンクには残さない。実物の招待リンクには7つとも含まれていることを確認済み。 */
+export const INTERSTITIAL_PARAMS = [
+  '__status_bar',
+  '_pia_',
+  '_svg',
+  'enable_canvas',
+  'enable_canvas_optimize',
+  'hide_nav_bar',
+  'should_full_screen',
+];
+
 export const ONELINK_RE = /(^|\.)onelink\.me$/i;
 
 /**
@@ -260,13 +274,46 @@ export function assertOneLink(url: URL): URL {
   );
 }
 
+/**
+ * ショートリンクIDをパスから外し、ロングリンクに戻す。
+ * `/BAuo/999140ec` → `/BAuo`
+ *
+ * AppsFlyerのOneLinkは `/<テンプレートID>/<ショートリンクID>` の2セグメント構成で、
+ * ショートリンク側はサーバー(AppsFlyer管理画面)に設定を持つ。その設定がクエリより
+ * 優先されると、こちらが付けた af_ios_url / af_dp が無視される。ロングリンク化すると
+ * サーバー設定を経由せず、クエリパラメータだけで挙動が決まる。
+ *
+ * ただしショートリンクが持っていた設定(pid 等)も同時に失われる。実物の招待リンクは
+ * クエリに pid を持っておらず、AppsFlyerは pid の無いクリックを原則アトリビュートしない。
+ * そこで pid が無い場合に限り、同じ値を指す media_source / inc_pid から補完する。
+ * u_code・share_page_data などのトラッキング情報はクエリ側にあるため影響を受けない。
+ */
+export function toLongLink(url: URL): URL {
+  const segments = url.pathname.split('/').filter(Boolean);
+  if (segments.length > 1) {
+    url.pathname = '/' + segments[0];
+  }
+
+  // ショートリンク側が持っていたはずの pid を、同義のキーから補完する
+  const params = url.searchParams;
+  if (!params.has('pid')) {
+    const mediaSource = params.get('media_source') || params.get('inc_pid');
+    if (mediaSource) params.set('pid', mediaSource);
+  }
+
+  return url;
+}
+
 export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   let url = parseHttpUrl(rawUrl);
   if (!url) throw new Error('トラッキング URL が不正です。');
 
-  /* OneLink でなければここで止まる。パス(テンプレートID/ショートリンクID)は
-     アトリビューション設定そのものなので、以降も一切書き換えない。 */
+  // OneLink でなければここで止まる
   url = assertOneLink(url);
+
+  /* ショートリンクIDを外してロングリンク化する。
+     サーバー側の設定より、こちらが付けたクエリパラメータを優先させるため。 */
+  url = toLongLink(url);
 
   const params = url.searchParams;
 
@@ -274,7 +321,7 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   // af_dp の空文字より優先され、通常版が直接起動してしまう。
   const removed: string[] = [];
   if (opts.stripDeepLinks) {
-    DEEPLINK_PARAMS.forEach((k) => {
+    [...DEEPLINK_PARAMS, ...INTERSTITIAL_PARAMS].forEach((k) => {
       if (params.has(k)) {
         removed.push(k);
         params.delete(k);
@@ -282,24 +329,54 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
     });
   }
 
-  if (opts.iosUrl) params.set('af_ios_url', opts.iosUrl);
+  /* ===== 遷移先とフォールバック先を明示する =====
+     フォールバック系は「削除するだけ」にしない。削除するとOneLinkテンプレート側
+     (AppsFlyerのサーバー設定)の既定値が発動し、通常版TikTokのWebページへ落ちてしまう。
+     上の除去ループで元の値を落としたうえで、ここでLite版のストアURLを明示的に入れ直す。
 
-  /* iPadOSのSafariは既定で「デスクトップ用サイトを要求」するため、UserAgentがmacOSと
-     見分けがつかず、AppsFlyer側がiOS端末として扱ってくれない。その結果 af_ios_url が
-     使われず、OneLinkの既定のWeb遷移先(サイトのトップページ)が開いてしまう。
-     af_ipad_url を iOS向け遷移先と同じ値で明示しておくと、iPadと判定された場合でも
-     同じストアページへ送れる。 */
-  if (opts.iosUrl) params.set('af_ipad_url', opts.iosUrl);
+     いずれも「除去 → 設定」の順序が前提。DEEPLINK_PARAMS に含まれるキーでも、
+     ここで設定した値が最終的に残る。 */
 
-  if (opts.androidUrl) params.set('af_android_url', opts.androidUrl);
+  const managed: Array<[string, string]> = [];
+
+  if (opts.iosUrl) {
+    managed.push(['af_ios_url', opts.iosUrl]);
+
+    /* iPadOSのSafariは既定で「デスクトップ用サイトを要求」するため、UserAgentがmacOSと
+       見分けがつかず、AppsFlyer側がiOS端末として扱ってくれない。その結果 af_ios_url が
+       使われず、OneLinkの既定のWeb遷移先(サイトのトップページ)が開いてしまう。
+       af_ipad_url を iOS向け遷移先と同じ値で明示しておくと、iPadと判定された場合でも
+       同じストアページへ送れる。 */
+    managed.push(['af_ipad_url', opts.iosUrl]);
+
+    managed.push(['af_ios_fallback', opts.iosUrl]);
+  }
+
+  if (opts.androidUrl) {
+    managed.push(['af_android_url', opts.androidUrl]);
+    managed.push(['af_android_fallback', opts.androidUrl]);
+  }
+
+  /* 端末を判定できなかった場合の汎用フォールバック。
+     iOS向けを既定にしている(Android端末がここに落ちるとApp Storeへ飛ぶことになるが、
+     端末別の af_android_url / af_android_fallback が先に効くため通常は到達しない)。 */
+  const genericFallback = opts.iosUrl || opts.androidUrl;
+  if (genericFallback) managed.push(['fallback_url', genericFallback]);
 
   /* PC(デスクトップ)から踏まれた場合の遷移先。
-     af_web_dp は DEEPLINK_PARAMS にも入っているが、除去は上のループで既に済んでいるため、
-     ここで設定した値が最終的に残る(元のリンクに埋まっていた値は捨てられ、
-     利用者が指定した値だけが反映される、という意図どおりの順序)。 */
-  if (opts.webDpUrl) params.set('af_web_dp', opts.webDpUrl);
+     利用者が「af_web_dp(PC向け遷移先)」を入力していればそれを使い、
+     空欄ならストアURLで埋める(空のままだとテンプレート側の既定値が発動するため)。 */
+  const webDp = opts.webDpUrl || opts.iosUrl || opts.androidUrl;
+  if (webDp) managed.push(['af_web_dp', webDp]);
 
-  if (opts.emptyDp) params.set('af_dp', '');
+  if (opts.emptyDp) managed.push(['af_dp', '']);
+
+  /* いったん全部消してから決まった順に入れ直す。
+     これらのキーは DEEPLINK_PARAMS に含まれるもの(af_web_dp 等)と含まれないもの
+     (af_ios_url 等)が混在しており、消さずに set すると生成のたびに並び順が変わる。
+     同じURLを再保存したときに文字列が一致しなくなるため、順序を固定する。 */
+  managed.forEach(([k]) => params.delete(k));
+  managed.forEach(([k, v]) => params.set(k, v));
 
   /* is_retargeting は付与せず、逆に必ず除去する。
      AppsFlyerはこれが true だとクリックを「リターゲティング(再エンゲージメント)」として

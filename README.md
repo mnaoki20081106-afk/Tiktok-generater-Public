@@ -40,7 +40,33 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
 | `/dashboard/[id]` | 個別サイトの編集(タップ編集UI) |
 | `/dashboard/[id]/analytics` | そのサイトのPV/UU・推移グラフ(サイト作成者本人のみ) |
 | `/[slug]` | 公開用ページ(TikTok風レイアウト)。存在しないslugは404 |
+| `/tools/link-generator` | リンクジェネレーター(招待リンクの展開・ディープリンクのサニタイズ)。`?to=` 付きで開くとクッションページとして動作する |
 | `/admin` | サプライズ抽選(当選確率・当たりURL)の管理画面。`ADMIN_EMAILS` のアカウントのみアクセス可 |
+
+### リンクジェネレーター (`/tools/link-generator`)
+
+単独で動いていたツール(`index.html` 1ファイル + Cloud Run上のStealth API)をこのアプリへ取り込んだもの。
+
+- **2モード**: 単独版と同じく1つのURLで分岐する。`?to=` なしならビルダー(生成フォーム)、`?to=<url>` 付きならクッションページ(1〜2秒の遅延後に遷移先へ飛ばす黒画面)。
+- **コアロジック**: Stealth APIへのFetch・URLオブジェクトの再構築・`DEEPLINK_PARAMS` によるサニタイズは `lib/link-generator.ts` に単独版のまま移植してある(コメント含めて挙動は不変)。UI(`link-generator-form.tsx`)は入力値の受け渡しと表示だけを担当する。
+- **端末ごとの遷移先**: `af_ios_url`(iOS) / `af_android_url`(Android) / `af_ipad_url`(iPad) / `af_web_dp`(PC) を付与する。
+  - `af_ipad_url` は `af_ios_url` と同じ値が自動でセットされる。iPadOSのSafariは既定で「デスクトップ用サイトを要求」するためUserAgentがmacOSと見分けがつかず、AppsFlyer側がiOS端末として扱ってくれない。指定が無いとOneLinkの既定のWeb遷移先(サイトのトップページ)が開いてしまうため。
+  - `af_web_dp` はPC(Windows/Mac)から踏まれたときの遷移先で、フォームの「af_web_dp(PC向け遷移先)」に任意のURL(キャンペーンLP等)を入力する。空欄なら付与しない。なお `af_web_dp` は `DEEPLINK_PARAMS` にも含まれるため、リンク元に埋まっていた値は一度除去され、入力した値だけが最終的に残る。
+- **クッションページのON/OFF**: フォームのチェックボックスで切り替える。切り替えているのは最終出力URLだけ(`resolveOutputUrl()`)で、サニタイズ処理には影響しない。
+  - ON … `/tools/link-generator?to=<サニタイズ済みURL>` を出力する(従来どおり)。
+  - OFF … サニタイズ処理を通過した直後の直接遷移先URLをそのまま出力する。
+- **OGP**: クッションページのURLをSNS/メッセージアプリでシェアしたときのカード表示は、`page.tsx` の `generateMetadata`(`og:title` / `og:description`)と `opengraph-image.tsx`(1200×630のカード画像を動的生成)で出力する。分岐をサーバー側で行っているのは、JSを実行しないクローラーにもメタタグを見せるため。文言はページ冒頭の `CUSHION_OG_TITLE` / `CUSHION_OG_DESCRIPTION` で変更できる。
+- **必要な環境変数**: `NEXT_PUBLIC_SITE_URL`(og:imageを絶対URLに展開するための本番ドメイン)、`NEXT_PUBLIC_STEALTH_API_HOST`(Stealth APIのURL。未設定なら既定のCloud RunサービスURL)。どちらも `.env.local.example` に記載してある。
+
+| ファイル | 役割 |
+| --- | --- |
+| `lib/link-generator.ts` | 抽出・サニタイズのコアロジック(単独版からの移植)+ 出力URLの出し分け |
+| `lib/clipboard.ts` | コピー処理(iOS Safari向けのフォールバック付き) |
+| `app/tools/tools-shell.tsx` | `/tools/*` 共通のヘッダー・フッター |
+| `app/tools/link-generator/page.tsx` | ルーティング・モード分岐・OGPメタタグ |
+| `app/tools/link-generator/link-generator-form.tsx` | ビルダー画面(フォーム・結果表示) |
+| `app/tools/link-generator/cushion-relay.tsx` | クッションページ(遅延リダイレクト画面) |
+| `app/tools/link-generator/opengraph-image.tsx` | シェア時のカード画像 |
 
 ### サプライズ抽選機能
 

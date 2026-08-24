@@ -275,9 +275,8 @@ export function LinkGeneratorForm() {
           />
           <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
             PC(Windows/Mac)から踏まれたときに開くページ。キャンペーンLPなど任意のURLを指定できます。
-            空欄の場合は指定なしとなり、リンク元に埋まっていた値も
-            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">af_web_dp</code>{' '}
-            ごと除去されます(ディープリンクのサニタイズ対象のため)。
+            空欄の場合は iOS向け遷移先(App Store)が使われます。空のままにするとOneLinkテンプレート側の
+            既定値(通常版TikTokのWebページ)が発動してしまうため、必ず何かで埋めます。
           </p>
         </div>
 
@@ -293,9 +292,9 @@ export function LinkGeneratorForm() {
             を空文字で設定(通常版の起動ブロック)
           </Check>
           <Check checked={optStrip} onChange={setOptStrip}>
-            ディープリンク系パラメータ(
+            ディープリンク系・中間ページ描画系パラメータ(
             <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">deep_link_value</code> /{' '}
-            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">fallback_url</code> 等)を削除
+            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">enable_canvas</code> 等)を削除
           </Check>
         </div>
 

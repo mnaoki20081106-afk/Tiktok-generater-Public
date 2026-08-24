@@ -63,7 +63,16 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
 - **Refererの匿名化**: 遷移先へこのサイトのドメインをRefererとして渡さない。クッションページ・公開ページ(ON/OFF両方)の `<head>` に `<meta name="referrer" content="no-referrer">` を入れ、リンクにも `rel="noreferrer noopener"` を付けている。metaタグは `location.replace()` による遷移にも効く。
 - **TikTok Lite の OneLink に載せ替える**: 招待リンクが載っている `snssdk1180.onelink.me` は**通常版TikTok**のOneLinkドメインで、iOSのUniversal Link / AndroidのApp Link として通常版アプリに関連付けられている。通常版がインストールされた端末では、**OSがWebページを読み込む前にURLを横取りして通常版を起動する**。`af_dp` などのクエリパラメータは評価すらされないため、パラメータ側では防ぎようがない。ホストとパスを Lite 側の `snssdk473824.onelink.me/4P4E` へ載せ替えることでのみ解決する。
   - `4P4E` は TikTok自身が Lite の紹介キャンペーンで使っているOneLinkで、`pid` / `c` も招待リンクと同じ(`coin_referral_onelink_scan_code_support_mentor` / `UG_Referral_JP`)であることを実物のLPで確認済み。
-  - 載せ替え時は `af_dp` に Lite のカスタムスキーム `snssdk473824://` を入れる。Liteがインストール済みならLiteが開き、未インストールなら `af_ios_url` / `af_android_url` のストアへ落ちる。
+  - 載せ替え時は `af_dp` に **TikTok自身と同じ形のディープリンク**を入れる。
+
+    ```
+    af_dp = snssdk473824://roma_redirect/?params_url=<招待LPのURL + 識別子>
+    ```
+
+    単なるスキーム(`snssdk473824://`)だけだと**アプリが起動するだけで「誰の紹介か」がアプリに伝わらない**(実機でLiteは開くが招待トラッキングが消える、という不具合が実際に起きた)。TikTok自身は `params_url` のクエリに `u_code` / `share_page_data` などの識別子を載せてアプリへ渡しており(実物のLPのHTMLで確認)、同じ構造で組み立てる。`params_url` が指す招待LPのURLは `INVITE_LP_URL` に定数として切り出してある(キャンペーンが変わるとパスも変わりうるため)。
+  - `params_url` に載せるのはサニタイズ後に残った識別子だけ。`af_ios_url` などAppsFlyer用のキーはアプリに不要なので、管理下のキーを削除してから組み立てる(生成済みURLを再度通したときに入れ子で取り込まれるのも防ぐ)。
+  - `is_retargeting` の除去も `af_dp` の組み立て前に行う。後回しにすると既存URLに焼き付いていた値が `params_url` 経由でアプリまで渡ってしまう。
+  - Liteがインストール済みなら `af_dp` でLiteが開き、未インストールなら `af_ios_url` / `af_android_url` のストアへ落ちる。
   - クエリ(`u_code` / `share_page_data` / `media_source` / `pid` 等)はすべてそのまま引き継ぐ。
   - フォームのチェックボックスでOFFにすると従来どおり元のドメインのまま生成し、`af_dp` は空文字(通常版の起動ブロック)になる。挙動を比較したいときに使う。
 - **`is_retargeting` は付与せず、必ず除去する**: AppsFlyerはこれが `true` だとクリックを「リターゲティング(再エンゲージメント)」として記録する。招待報酬は「新規インストール＋初回起動」で発火するのが前提なので、リターゲティング扱いになると発火条件を外れて報酬が付かない恐れがある。TikTok Liteの招待リンクにはそもそも `is_retargeting` が入っていないため、付与していたのはこちら側だった。

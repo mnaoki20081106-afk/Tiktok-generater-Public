@@ -384,10 +384,15 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
  * リダイレクトしてしまうとSNSのクローラーまで遷移先へ飛んでしまい、
  * サイトに設定したOGPタイトル・OGP画像ではなく遷移先のカードが表示されてしまうため。
  * クローラーはJSを実行しないので、OGPタグを含むHTMLを返したうえで
- * location.replace() で飛ばすことで、カード表示と即時遷移を両立させる。
+ * location.replace() で飛ばすことで、カード表示と自動遷移を両立させる。
  *
  * meta http-equiv="refresh" を使わないのも同じ理由(追従するクローラーがいるため)。
- * JSが無効な環境では、画面中央の手動リンクが避難口になる。
+ * JSが無効な環境では <noscript> の手動リンクが避難口になる。
+ *
+ * 遷移の直前にフィンガープリント照合(/api/visit)の結果を待つ。サプライズ抽選で
+ * 当たりURLが選ばれていても、作成者本人・同一アカウントの端末なら本来のURLへ
+ * 差し替えるため(自作自演での不正取得を防ぐ)。照合が終わり次第すぐ遷移し、
+ * 遅くとも WAIT_MS で打ち切る。
  */
 export function renderRedirectHtml(d: ViewerData): string {
   const dest = parseHttpUrl(d.tiktokUrl);
@@ -398,14 +403,64 @@ export function renderRedirectHtml(d: ViewerData): string {
   const pageUrl = esc(`${d.origin}/${d.slug}`);
   const href = esc(destUrl);
   const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
+  const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
 
+  /* 遷移前にフィンガープリント照合(/api/visit)の結果を待つ。
+     サプライズ抽選で当たりURLが選ばれていても、作成者本人・同一アカウントの端末なら
+     本来のURLへ差し替えるため(dvid Cookieが削除されていた場合の保険)。
+     TikTok風ページ版と違ってタップを挟まないので、照合が終わるまでの数百ミリ秒だけ待つ。
+
+     照合を「当選したときだけ」待つ実装にはしない。待ち時間の有無で当選したことが
+     分かってしまい、抽選機能の存在を訪問者に示唆することになるため。 */
   const body = destUrl
-    ? `<a id="go" href="${href}" rel="noopener">タップして続行</a>
+    ? `<a id="go" href="${href}" rel="noopener" hidden>タップして続行</a>
+<noscript><a href="${href}" rel="noopener">タップして続行</a></noscript>
 <script>
 (function(){
   var dest = ${destJson};
-  // 戻るボタンでこのページに戻ってこないよう replace を使う
-  try { window.location.replace(dest); } catch (e) { window.location.href = dest; }
+  var slug = ${slugJson};
+  var WAIT_MS = 1500;   // 照合の最大待ち時間。これを過ぎたら諦めて遷移する
+  var REVEAL_MS = 3000; // 自動遷移が働かなかった場合に手動リンクを出すまでの時間
+
+  var navigated = false;
+  function go(href) {
+    if (navigated) return;
+    navigated = true;
+    // 戻るボタンでこのページに戻ってこないよう replace を使う
+    try { window.location.replace(href); } catch (e) { window.location.href = href; }
+  }
+
+  var timer = setTimeout(function(){ go(dest); }, WAIT_MS);
+  function finish(href) { clearTimeout(timer); go(href); }
+
+  // 自動遷移が働かなかった場合の避難口。
+  // 遷移が成功していればページは既に離れているので表示されることはない。
+  setTimeout(function(){
+    var a = document.getElementById('go');
+    if (a) a.hidden = false;
+  }, WAIT_MS + REVEAL_MS);
+
+  function loadScript(src){
+    return new Promise(function(resolve,reject){
+      var s=document.createElement('script');
+      s.src=src;s.async=true;s.onload=resolve;s.onerror=reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  loadScript('/fp.js').then(function(){
+    if(!window.FingerprintJS) return null;
+    return window.FingerprintJS.load().then(function(agent){ return agent.get(); });
+  }).then(function(result){
+    if(!result) return null;
+    return fetch('/api/visit',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({slug:slug,fp:result.visitorId})
+    }).then(function(res){ return res.ok?res.json():null; });
+  }).then(function(data){
+    finish((data && data.href) || dest);
+  }).catch(function(){ finish(dest); });
 })();
 </script>`
     : '<p>リンクが設定されていません。</p>';

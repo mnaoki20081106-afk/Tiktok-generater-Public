@@ -115,6 +115,9 @@ export function DashboardForm({
     const tiktokUrlInput = $<HTMLInputElement>('tiktokUrl');
     const cushionToggle = $<HTMLInputElement>('cushionToggle');
     const cushionHint = $('cushionHint');
+    const previewCol = $('previewCol');
+    const previewNote = $('previewNote');
+    const iconField = $('iconField');
     const ogpTitleInput = $<HTMLInputElement>('ogpTitle');
     const deployBtn = $<HTMLButtonElement>('deployBtn');
     const missingWarning = $('missingWarning');
@@ -599,11 +602,33 @@ export function DashboardForm({
     function renderCushionHint() {
       cushionHint.textContent = cushionToggle.checked
         ? '遷移先URLはそのまま保存されます。クッションページ経由のURLは、リンクジェネレーターで生成したものを貼り付けてください。'
-        : '保存時に、入力した遷移先URLへ自動でリンクジェネレーターを適用します(短縮リンクは展開し、ディープリンク系パラメータを除去したURLに書き換えます)。';
+        : '公開ページは表示されず、アクセスした人は遷移先へ直接移動します。保存時に、入力した遷移先URLへ自動でリンクジェネレーターを適用します(短縮リンクは展開し、ディープリンク系パラメータを除去したURLに書き換えます)。';
     }
-    renderCushionHint();
-    cushionToggle.addEventListener('change', () => {
+
+    /* OFFのときは公開ページ自体を表示しないので、TikTok風ページの見た目に関わる入力は
+       使われなくなる。欄ごと消すと入力済みの内容が失われたように見えるため、
+       暗くして操作だけを止める(値・画像・下書きはそのまま保持する)。
+       pointer-events だけではキーボード操作で触れてしまうので disabled も併用する。 */
+    const previewInputs = [bgInput, avatarInput, iconInput, piToggle, piCount, floatToggle, descEdit];
+    const previewEditables = [usernameEl, musicNameEl, likeCountEl, commentCountEl, shareCountEl];
+
+    function applyCushionMode() {
+      const off = !cushionToggle.checked;
+      previewCol.classList.toggle(styles.previewDisabled, off);
+      iconField.classList.toggle(styles.fieldDisabled, off);
+      previewInputs.forEach((el) => {
+        el.disabled = off;
+      });
+      previewEditables.forEach((el) => {
+        el.contentEditable = off ? 'false' : 'true';
+      });
+      previewNote.classList.toggle(styles.visible, off);
       renderCushionHint();
+      check();
+    }
+
+    cushionToggle.addEventListener('change', () => {
+      applyCushionMode();
       saveState();
     });
 
@@ -718,24 +743,35 @@ export function DashboardForm({
     });
 
     // ===== 必須項目チェック =====
-    type RequiredField = { test: () => boolean; label: string; el: () => HTMLElement };
-    const REQUIRED_FIELDS: RequiredField[] = [
-      { test: () => !!state.bg, label: '背景画像', el: () => bgArea },
+    /* cushionOnly … クッションページを挟む(ON)ときだけ必須になる項目。
+       OFFのサイトは公開ページを表示せず遷移先へ直行するため、TikTok風ページの
+       見た目に使う背景画像・アプリアイコン画像は無くても公開できる。
+       OGPタイトル・OGP画像はシェア時のカード表示に使うので、OFFでも必須のまま。 */
+    type RequiredField = { test: () => boolean; label: string; el: () => HTMLElement; cushionOnly?: boolean };
+    const ALL_FIELDS: RequiredField[] = [
+      { test: () => !!state.bg, label: '背景画像', el: () => bgArea, cushionOnly: true },
       { test: () => !!state.ogp, label: 'OGP画像', el: () => ogpLabel },
-      { test: () => !!state.icon, label: 'アプリアイコン画像', el: () => iconLabel },
+      { test: () => !!state.icon, label: 'アプリアイコン画像', el: () => iconLabel, cushionOnly: true },
       { test: () => !!slugInput.value.trim(), label: '公開URL(slug)', el: () => slugInput },
       { test: () => !!tiktokUrlInput.value.trim(), label: 'TikTokプロフィールURL', el: () => tiktokUrlInput },
       { test: () => !!ogpTitleInput.value.trim(), label: 'OGPタイトル', el: () => ogpTitleInput },
     ];
 
+    function requiredFields() {
+      return ALL_FIELDS.filter((f) => !f.cushionOnly || cushionToggle.checked);
+    }
+
     function getMissingFields() {
-      return REQUIRED_FIELDS.filter((f) => !f.test());
+      return requiredFields().filter((f) => !f.test());
     }
 
     function check() {
       const missing = getMissingFields();
+      const required = requiredFields();
       deployBtn.disabled = missing.length > 0;
-      REQUIRED_FIELDS.forEach((f) => {
+      // 必須から外れた項目に未入力マークが残らないよう、一度すべて外してから付け直す
+      ALL_FIELDS.forEach((f) => f.el().classList.remove(styles.missing));
+      required.forEach((f) => {
         f.el().classList.toggle(styles.missing, !f.test());
       });
       if (missing.length > 0) {
@@ -908,7 +944,7 @@ export function DashboardForm({
       tiktokUrlInput.value = saved?.tiktokUrl || (cd.tiktokUrl as string) || '';
       // 未設定の既存サイトはON(=遷移先URLを加工しない)として扱い、従来の挙動を保つ
       cushionToggle.checked = saved ? saved.cushionToggle : cd.useCushionPage !== false;
-      renderCushionHint();
+      applyCushionMode();
       ogpTitleInput.value = saved?.ogpTitle || site.title || '';
       usernameEl.textContent = saved?.username || (cd.username as string) || 'username';
       descText = saved?.description ?? site.description ?? '';
@@ -996,7 +1032,10 @@ export function DashboardForm({
   return (
     <div ref={rootRef} className={styles.root}>
       <div className={styles.layout}>
-        <div className={styles.previewCol}>
+        <div className={styles.previewCol} data-id="previewCol">
+          <div className={styles.previewNote} data-id="previewNote">
+            「クッションページを挟む」がOFFのため、公開ページは表示されません。ここの設定は使われないので入力不要です(入力済みの内容はそのまま保存されます)。
+          </div>
           <div className={styles.phone}>
             <div className={styles.bg} data-id="bgArea">
               <div className={styles.bgEmpty} data-id="bgEmpty">
@@ -1256,7 +1295,7 @@ export function DashboardForm({
                 </button>
               </div>
             </div>
-            <div className={styles.field}>
+            <div className={styles.field} data-id="iconField">
               <label className={styles.fl}>
                 アプリアイコン画像{' '}
                 <span style={{ color: 'rgba(255,255,255,.3)', fontWeight: 400 }}>(誘導ダイアログ用)</span>

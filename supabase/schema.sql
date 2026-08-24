@@ -144,6 +144,12 @@ on conflict (id) do nothing;
 
 alter table public.surprise_config enable row level security;
 
+-- 当たりURLにリンクジェネレーター(展開＋サニタイズ)を適用した結果を保持する列。
+-- クッションページを挟まない(content_data.useCushionPage = false)サイトではこちらを使う。
+-- /admin での保存時に一度だけ変換して持っておくことで、訪問者にStealth APIの応答を
+-- 待たせずに済む。未設定(この列を追加する前に保存された行)の場合は prize_url を使う。
+alter table public.surprise_config add column if not exists prize_url_optimized text;
+
 -- 5-4) ブラウザフィンガープリント(FingerprintJS)による補助的な端末判定
 --    dvid Cookieが削除された場合でも、できるだけ作成者本人・同一アカウントの端末を
 --    正しく判定できるようにするための追加シグナル(Cookie判定を置き換えるものではなく、

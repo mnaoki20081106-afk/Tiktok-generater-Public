@@ -65,7 +65,14 @@ export interface SurpriseConfig {
   id: number;
   enabled: boolean;
   probability: number;
+  /** 管理者が入力した当たりURL。クッションページONのサイトではこの値をそのまま使う */
   prize_url: string | null;
+  /**
+   * prize_url にリンクジェネレーター(展開＋サニタイズ)を適用した結果。
+   * クッションページOFFのサイトではこちらを使う。保存時に一度だけ変換して持っておくので、
+   * 訪問者を待たせずに済む。未設定(既存行・変換前)の場合は prize_url にフォールバックする。
+   */
+  prize_url_optimized: string | null;
   updated_at: string;
 }
 

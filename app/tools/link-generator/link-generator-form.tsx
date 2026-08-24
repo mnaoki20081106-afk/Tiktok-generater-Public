@@ -37,7 +37,6 @@ export function LinkGeneratorForm() {
 
   const [optDp, setOptDp] = useState(true);
   const [optStrip, setOptStrip] = useState(true);
-  const [optRt, setOptRt] = useState(true);
   // 新機能: クッションページ(遅延リダイレクト画面)を挟むかどうか
   const [useCushion, setUseCushion] = useState(true);
 
@@ -72,7 +71,6 @@ export function LinkGeneratorForm() {
         androidUrl: androidUrl.trim(),
         webDpUrl: webDpUrl.trim(),
         emptyDp: optDp,
-        retargeting: optRt,
         stripDeepLinks: optStrip,
         onelinkTemplate: onelinkTpl.trim(),
       });
@@ -315,10 +313,11 @@ export function LinkGeneratorForm() {
             <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">deep_link_value</code> /{' '}
             <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">fallback_url</code> 等)を削除
           </Check>
-          <Check checked={optRt} onChange={setOptRt}>
-            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">is_retargeting=true</code> を設定
-          </Check>
         </div>
+
+        {/* is_retargeting のチェックボックスは廃止した。付与するとAppsFlyerがクリックを
+            リターゲティング(再エンゲージメント)として記録し、新規インストール前提の
+            招待報酬が付かなくなる恐れがあるため。buildUrl() 側で常に除去している。 */}
 
         {/* ===== 新機能: クッションページの ON / OFF ===== */}
         <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4">

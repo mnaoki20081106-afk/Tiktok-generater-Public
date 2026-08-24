@@ -47,7 +47,8 @@ export interface BuildOptions {
   /** PC(デスクトップ)から踏まれたときの遷移先。空なら af_web_dp を設定しない */
   webDpUrl: string;
   emptyDp: boolean;
-  retargeting: boolean;
+  /* is_retargeting はオプションごと廃止した。付与すると招待報酬が付かなくなる恐れがあり、
+     残しておくと「うっかりONにする」事故が起きるため(buildUrl は常に除去する)。 */
   stripDeepLinks: boolean;
   onelinkTemplate: string;
 }
@@ -312,7 +313,20 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   if (opts.webDpUrl) params.set('af_web_dp', opts.webDpUrl);
 
   if (opts.emptyDp) params.set('af_dp', '');
-  if (opts.retargeting) params.set('is_retargeting', 'true');
+
+  /* is_retargeting は付与せず、逆に必ず除去する。
+     AppsFlyerはこれが true だとクリックを「リターゲティング(再エンゲージメント)」として
+     記録する。招待報酬は「新規インストール＋初回起動」で発火するのが前提なので、
+     リターゲティング扱いになると発火条件を外れて報酬が付かない恐れがある。
+
+     TikTok Liteの招待リンクにはそもそも is_retargeting が入っていない。
+     削除しているのは、この対応より前に生成した(is_retargeting=true が焼き付いた)URLを
+     再保存したときに確実に落とすため。除去はディープリンクのサニタイズとは別の目的なので、
+     stripDeepLinks のON/OFFに関係なく常に実行する。 */
+  if (params.has('is_retargeting')) {
+    removed.push('is_retargeting');
+    params.delete('is_retargeting');
+  }
 
   return { url: url.toString(), removed, notes };
 }
@@ -348,7 +362,6 @@ export async function generateDestinationUrl(
     androidUrl: DEFAULT_ANDROID_URL,
     webDpUrl: DEFAULT_WEB_DP_URL,
     emptyDp: true,
-    retargeting: true,
     stripDeepLinks: true,
     onelinkTemplate: DEFAULT_ONELINK_TEMPLATE,
     ...overrides,

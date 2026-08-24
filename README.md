@@ -68,6 +68,20 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
 | `app/tools/link-generator/cushion-relay.tsx` | クッションページ(遅延リダイレクト画面) |
 | `app/tools/link-generator/opengraph-image.tsx` | シェア時のカード画像 |
 
+### サイト編集画面からの利用(クッションページの有無)
+
+サイト編集画面(`/dashboard/[id]`)の「TikTokプロフィールURL(ボタンの遷移先)」欄に、サイトごとの「クッションページを挟む」チェックボックスがある。設定は `content_data.useCushionPage` に保存する。
+
+| 設定 | 保存時の挙動 |
+| --- | --- |
+| **ON**(既定) | 遷移先URLを一切加工せずそのまま保存する。クッションページ経由にしたい場合は `/tools/link-generator` で生成したURLを貼り付ける運用。 |
+| **OFF** | 入力されたURLに `generateDestinationUrl()`(展開＋サニタイズ)を適用し、その結果を `content_data.tiktokUrl` に保存する。生成結果は入力欄にも反映され、何が公開されるか目視できる。 |
+
+- `useCushionPage` が未設定の既存サイトはONとして扱うため、これまでに作成されたサイトの挙動は変わらない。
+- OFFのときの処理は「入力がOneLink形式ならサニタイズのみ」「そうでなければStealth APIで展開してからサニタイズ」。同じURLを再保存しても結果は変わらない(冪等)。
+- 展開・サニタイズに失敗した場合(例: `https://www.tiktok.com/@username` のようにOneLinkへ展開できないURL)は**保存を中断**してエラーを表示する。未サニタイズのURLがそのまま公開されるのを防ぐため、画像のアップロードより前に実行している。
+- OGPタイトル(`sites.title`)・OGP画像(`content_data.images.ogpImage`)はこの処理の影響を受けず、従来どおり保存される。
+
 ### サプライズ抽選機能
 
 - 各サイトの `content_data.tiktokUrl` はサイト作成者が入力する本来の遷移先。`/admin` で設定した確率が有効な場合、公開ページの訪問者は代わりに運営指定の当たりURLへ遷移することがある。

@@ -11,6 +11,13 @@ export interface SiteContentData {
   theme?: string;
   username?: string;
   tiktokUrl?: string;
+  /**
+   * クッションページ(遅延リダイレクト画面)を挟むか。
+   * true(既定) … 遷移先URLを加工せずそのまま使う(従来どおりの挙動)。
+   * false       … 保存時にジェネレーター(展開＋サニタイズ)を通したURLを tiktokUrl に保存する。
+   * 未設定の既存サイトは true(=加工しない)として扱う。
+   */
+  useCushionPage?: boolean;
   musicName?: string;
   likeCount?: string;
   commentCount?: string;

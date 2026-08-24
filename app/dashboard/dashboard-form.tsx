@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { getDraftImage, putDraftImage, clearDraftImages } from '@/lib/imageDraftDb';
 import { compressToTargetSize } from '@/lib/imageCompress';
+import { generateDestinationUrl } from '@/lib/link-generator';
 import type { Site } from '@/lib/types';
 import styles from './editor.module.css';
 
@@ -23,6 +24,7 @@ type BgTransform = {
 type DraftJson = {
   slug: string;
   tiktokUrl: string;
+  cushionToggle: boolean;
   ogpTitle: string;
   username: string;
   description: string;
@@ -111,6 +113,8 @@ export function DashboardForm({
     const iconLabel = $('iconLabel');
     const slugInput = $<HTMLInputElement>('slug');
     const tiktokUrlInput = $<HTMLInputElement>('tiktokUrl');
+    const cushionToggle = $<HTMLInputElement>('cushionToggle');
+    const cushionHint = $('cushionHint');
     const ogpTitleInput = $<HTMLInputElement>('ogpTitle');
     const deployBtn = $<HTMLButtonElement>('deployBtn');
     const missingWarning = $('missingWarning');
@@ -137,6 +141,7 @@ export function DashboardForm({
       const data: DraftJson = {
         slug: slugInput.value,
         tiktokUrl: tiktokUrlInput.value,
+        cushionToggle: cushionToggle.checked,
         ogpTitle: ogpTitleInput.value,
         username: usernameEl.textContent?.trim() ?? '',
         description: descText,
@@ -587,6 +592,21 @@ export function DashboardForm({
       saveState();
     });
 
+    // ===== クッションページの有無 =====
+    /* ON  … 遷移先URLを一切加工せずそのまま保存する(従来どおりの挙動)。
+             クッションページ経由にしたい場合は /tools/link-generator で生成したURLを貼る。
+       OFF … 保存時にジェネレーター(展開＋サニタイズ)を通したURLを保存する。 */
+    function renderCushionHint() {
+      cushionHint.textContent = cushionToggle.checked
+        ? '遷移先URLはそのまま保存されます。クッションページ経由のURLは、リンクジェネレーターで生成したものを貼り付けてください。'
+        : '保存時に、入力した遷移先URLへ自動でリンクジェネレーターを適用します(短縮リンクは展開し、ディープリンク系パラメータを除去したURLに書き換えます)。';
+    }
+    renderCushionHint();
+    cushionToggle.addEventListener('change', () => {
+      renderCushionHint();
+      saveState();
+    });
+
     // ===== 誘導ダイアログのプレビュー表示切り替え =====
     floatToggle.addEventListener('change', () => {
       floatPreview.classList.toggle(styles.visible, floatToggle.checked);
@@ -774,6 +794,29 @@ export function DashboardForm({
           throw new Error('公開URL(slug)は半角英小文字・数字・ハイフンのみ使用できます');
         }
 
+        /* クッションページOFFのときだけ、遷移先URLにジェネレーターを適用する。
+           画像のアップロードより先に実行するのは、ここで失敗したら保存自体を中断するため
+           (未サニタイズのURLが公開されるのを防ぐ)。失敗しても画像をアップロードし終えた後だと
+           Storageに不要なファイルだけが残ってしまう。 */
+        let destinationUrl = tiktokUrlInput.value.trim();
+        if (!cushionToggle.checked) {
+          setStatusMsg({ text: '遷移先URLを生成中... (数十秒かかる場合があります)' });
+          try {
+            const built = await generateDestinationUrl(destinationUrl);
+            destinationUrl = built.url;
+            // 生成結果を入力欄にも反映して、何が保存されるのかを見えるようにする
+            tiktokUrlInput.value = destinationUrl;
+            saveState();
+          } catch (e) {
+            throw new Error(
+              '遷移先URLの生成に失敗したため保存を中断しました。' +
+                (e instanceof Error ? e.message : String(e)) +
+                '\nそのままのURLで公開する場合は「クッションページを挟む」をONにしてください。'
+            );
+          }
+          setStatusMsg({ text: '保存中... しばらくお待ちください' });
+        }
+
         const bakedBg = await bakeBackground();
         const bgSlot: ImageSlot = bakedBg ? { kind: 'new', blob: bakedBg } : state.bg;
 
@@ -808,7 +851,8 @@ export function DashboardForm({
             image_url: avatarUrl,
             content_data: {
               username: usernameEl.textContent?.trim() || slug,
-              tiktokUrl: tiktokUrlInput.value.trim(),
+              tiktokUrl: destinationUrl,
+              useCushionPage: cushionToggle.checked,
               musicName: musicNameEl.textContent?.trim() || 'オリジナル楽曲',
               likeCount: likeCountEl.textContent?.trim() || '0',
               commentCount: commentCountEl.textContent?.trim() || '0',
@@ -862,6 +906,9 @@ export function DashboardForm({
 
       slugInput.value = saved?.slug || site.slug || '';
       tiktokUrlInput.value = saved?.tiktokUrl || (cd.tiktokUrl as string) || '';
+      // 未設定の既存サイトはON(=遷移先URLを加工しない)として扱い、従来の挙動を保つ
+      cushionToggle.checked = saved ? saved.cushionToggle : cd.useCushionPage !== false;
+      renderCushionHint();
       ogpTitleInput.value = saved?.ogpTitle || site.title || '';
       usernameEl.textContent = saved?.username || (cd.username as string) || 'username';
       descText = saved?.description ?? site.description ?? '';
@@ -1183,6 +1230,11 @@ export function DashboardForm({
             <div className={styles.field}>
               <label className={styles.fl}>TikTokプロフィールURL(ボタンの遷移先)</label>
               <input type="url" data-id="tiktokUrl" placeholder="https://www.tiktok.com/@username" />
+              <div className={styles.checkRow}>
+                <input type="checkbox" data-id="cushionToggle" id="cushionToggle" />
+                <label htmlFor="cushionToggle">クッションページを挟む</label>
+              </div>
+              <div className={styles.hint} data-id="cushionHint" />
             </div>
             <div className={styles.field}>
               <label className={styles.fl}>

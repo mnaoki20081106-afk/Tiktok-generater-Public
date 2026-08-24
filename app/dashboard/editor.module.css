@@ -654,6 +654,8 @@
   color: rgba(255, 255, 255, .5);
   min-height: 18px;
   line-height: 1.6;
+  /* 生成失敗時のエラーは複数行になるため、改行をそのまま表示する */
+  white-space: pre-line;
 }
 .status.ok {
   color: #4ade80;
@@ -690,4 +692,23 @@
 }
 .info strong {
   color: rgba(255, 255, 255, .75);
+}
+
+/* 入力欄の下に置くチェックボックス1行(クッションページの有無など) */
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.checkRow input[type=checkbox] {
+  width: 16px;
+  height: 16px;
+  accent-color: #fe2c55;
+  flex: none;
+  cursor: pointer;
+}
+.checkRow label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, .7);
+  cursor: pointer;
 }

@@ -12,6 +12,7 @@ import {
   callExtractApi,
   diagnose,
   parseHttpUrl,
+  preferLiteUrl,
   resolveOutputUrl,
   type BuildResult,
   type NetworkLevelError,
@@ -103,10 +104,12 @@ export function LinkGeneratorForm() {
 
     try {
       const data = await callExtractApi(value);
-      setSrcUrl(data.trackingUrl);
+      // TikTok自身のLiteリンクが取れていればそちらを土台にする(wid 等を含むため)
+      const extracted = preferLiteUrl(data);
+      setSrcUrl(extracted);
       setExtractLabel('抽出成功！');
       setTimeout(restore, 1500);
-      runBuild(data.trackingUrl); // そのままリダイレクトURL生成へ
+      runBuild(extracted); // そのままリダイレクトURL生成へ
     } catch (e) {
       let msg = '抽出失敗: ' + (e instanceof Error ? e.message : String(e));
 

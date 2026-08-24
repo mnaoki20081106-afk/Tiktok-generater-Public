@@ -155,7 +155,22 @@ export interface NetworkLevelError extends Error {
 export interface ExtractApiResponse {
   success: boolean;
   trackingUrl: string;
+  /**
+   * TikTok自身が Lite 用に組み立てている OneLink(snssdk473824.onelink.me/4P4E)。
+   * 招待LPのレンダリング済みDOMにあり、`wid`(招待者の識別子) / `c`(キャンペーン) /
+   * `af_adset` と、`u_code` を含む af_dp を最初から持っている。
+   * これらは shareOptions.onelink(BAuo)のクエリには存在せず、こちらで再構築できない。
+   * Stealth API が返してくれる場合はそれをそのまま土台に使う(最も確実)。
+   */
+  liteUrl?: string;
   error?: string;
+}
+
+/** 抽出結果のうち、リンク生成の土台に使うURLを選ぶ。TikTok自身のLiteリンクを最優先。 */
+export function preferLiteUrl(data: ExtractApiResponse): string {
+  const lite = parseHttpUrl(data.liteUrl);
+  if (lite && ONELINK_RE.test(lite.hostname)) return lite.toString();
+  return data.trackingUrl;
 }
 
 export interface BuildOptions {
@@ -595,7 +610,18 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
      params_url にはサニタイズ「前」の元のクエリを載せる(buildLiteDeepLink 参照)。
      inc_target_url などはWeb遷移では邪魔だが、アプリ内では招待インセンティブの
      識別子として必要なため。 */
-  managed.push(['af_dp', opts.useLiteOneLink ? buildLiteDeepLink(recoverAppParams(source)) : '']);
+  /* 元のリンクが既に「中身の詰まった」Liteディープリンクを持っているなら、
+     こちらで組み立て直さずそのまま使う。TikTokが生成したものには wid など
+     こちらでは再現できない値が入っているため、触らないのが最も確実。
+     中身が空(u_code が無い)ものは、古い実装で作った不完全なものなので作り直す。 */
+  const sourceDeepLink = source.searchParams.get('af_dp') || '';
+  const keepSourceDeepLink =
+    sourceDeepLink.startsWith(LITE_DEEPLINK_BASE) && decodeURIComponent(sourceDeepLink).includes('u_code=');
+
+  managed.push([
+    'af_dp',
+    opts.useLiteOneLink ? (keepSourceDeepLink ? sourceDeepLink : buildLiteDeepLink(recoverAppParams(source))) : '',
+  ]);
 
   managed.forEach(([k, v]) => params.set(k, v));
 
@@ -630,7 +656,8 @@ export async function generateDestinationUrl(
   let source = input.toString();
   if (!ONELINK_RE.test(input.hostname)) {
     const data = await callExtractApi(source);
-    source = data.trackingUrl;
+    // TikTok自身のLiteリンクが取れていればそちらを土台にする(wid 等を含むため)
+    source = preferLiteUrl(data);
   }
 
   return buildUrl(source, {

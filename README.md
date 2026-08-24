@@ -78,6 +78,9 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
   - Liteがインストール済みなら `af_dp` でLiteが開き、未インストールなら `af_ios_url` / `af_android_url` のストアへ落ちる。
   - クエリ(`u_code` / `share_page_data` / `media_source` / `pid` 等)はすべてそのまま引き継ぐ。
   - フォームのチェックボックスでOFFにすると従来どおり元のドメインのまま生成し、`af_dp` は空文字(通常版の起動ブロック)になる。挙動を比較したいときに使う。
+- **TikTok自身のLiteリンクを最優先で使う**: Stealth API が `liteUrl`(TikTok が Lite 用に組み立てた `snssdk473824.onelink.me/4P4E`)を返す場合は、それを土台にする(`preferLiteUrl()`)。このリンクは `wid`(招待者の識別子) / `c`(キャンペーン) / `af_adset` と、`u_code` を含む `af_dp` を最初から持っている。**これらは `shareOptions.onelink`(BAuo)のクエリには存在せず、こちらで再構築できない。** 招待LPのレンダリング済みDOMにしか無く、`universal-data` 内の18件はすべて値が空のテンプレート。
+  - 土台が既に「中身の詰まった」Liteディープリンクを持っている場合、`af_dp` は作り直さずそのまま使う。TikTokが生成したものには再現できない値が入っているため。
+  - `liteUrl` が返ってこない場合は従来どおり `trackingUrl`(BAuo)から再構築するが、`wid` / `af_adset` が欠けるため招待が成立しない可能性がある(実機で確認)。**Stealth API 側(`server.js`)の対応が必要。**
 - **`is_retargeting` は付与せず、必ず除去する**: AppsFlyerはこれが `true` だとクリックを「リターゲティング(再エンゲージメント)」として記録する。招待報酬は「新規インストール＋初回起動」で発火するのが前提なので、リターゲティング扱いになると発火条件を外れて報酬が付かない恐れがある。TikTok Liteの招待リンクにはそもそも `is_retargeting` が入っていないため、付与していたのはこちら側だった。
   - うっかりONにする事故を防ぐため、フォームのチェックボックスと `BuildOptions.retargeting` ごと廃止した。
   - 除去は `stripDeepLinks` のON/OFFに関係なく常に実行する。この対応より前に生成した(`is_retargeting=true` が焼き付いた)URLを再保存したときに確実に落とすため。

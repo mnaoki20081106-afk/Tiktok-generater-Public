@@ -5,6 +5,7 @@
  * (lib/surprise.ts の resolveCreatorUrlByFingerprint / app/api/visit を参照)。
  */
 import type { Site } from '@/lib/types';
+import { parseHttpUrl } from '@/lib/link-generator';
 
 export interface ViewerData {
   title: string;
@@ -373,5 +374,60 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
   });
 })();
 </script>
+</body></html>`;
+}
+
+/**
+ * クッションページを挟まない(content_data.useCushionPage === false)サイト用のHTML。
+ *
+ * TikTok風ページは表示せず、遷移先へ直接送る。ただし単純な HTTP 302 にはしない。
+ * リダイレクトしてしまうとSNSのクローラーまで遷移先へ飛んでしまい、
+ * サイトに設定したOGPタイトル・OGP画像ではなく遷移先のカードが表示されてしまうため。
+ * クローラーはJSを実行しないので、OGPタグを含むHTMLを返したうえで
+ * location.replace() で飛ばすことで、カード表示と即時遷移を両立させる。
+ *
+ * meta http-equiv="refresh" を使わないのも同じ理由(追従するクローラーがいるため)。
+ * JSが無効な環境では、画面中央の手動リンクが避難口になる。
+ */
+export function renderRedirectHtml(d: ViewerData): string {
+  const dest = parseHttpUrl(d.tiktokUrl);
+  const destUrl = dest ? dest.toString() : '';
+
+  const t = esc(d.title);
+  const ogp = esc(d.ogpImageUrl);
+  const pageUrl = esc(`${d.origin}/${d.slug}`);
+  const href = esc(destUrl);
+  const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
+
+  const body = destUrl
+    ? `<a id="go" href="${href}" rel="noopener">タップして続行</a>
+<script>
+(function(){
+  var dest = ${destJson};
+  // 戻るボタンでこのページに戻ってこないよう replace を使う
+  try { window.location.replace(dest); } catch (e) { window.location.href = dest; }
+})();
+</script>`
+    : '<p>リンクが設定されていません。</p>';
+
+  return `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${t}</title>
+<meta property="og:title" content="${t}">
+<meta property="og:description" content="TikTokのアプリで全機能をお試しください">
+<meta property="og:image" content="${ogp}">
+<meta property="og:url" content="${pageUrl}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="${ogp}">
+<style>
+html,body{height:100%;margin:0;background:#000;}
+body{display:flex;align-items:center;justify-content:center;font-family:-apple-system,"Hiragino Sans",sans-serif;}
+a,p{color:#8ab4f8;font-size:13px;text-align:center;padding:24px;margin:0;word-break:break-all;}
+p{color:#b9b9b9;}
+</style>
+</head><body>
+${body}
 </body></html>`;
 }

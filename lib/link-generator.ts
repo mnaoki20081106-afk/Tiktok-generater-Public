@@ -23,7 +23,6 @@ export const MIN_BUSY_MS = 400; // 「抽出中...」を必ず目視できるよ
 /** フォームの初期値(単独版のvalue属性と同じ) */
 export const DEFAULT_IOS_URL = 'https://apps.apple.com/jp/app/tiktok-lite/id6447160980';
 export const DEFAULT_ANDROID_URL = 'https://play.google.com/store/apps/details?id=com.zhiliaoapp.musically.go';
-export const DEFAULT_ONELINK_TEMPLATE = 'https://snssdk1180.onelink.me/BAuo';
 /** PC向け遷移先は用途がケースバイケースなので既定値は空(=af_web_dp を付けない)にしておく */
 export const DEFAULT_WEB_DP_URL = '';
 
@@ -50,7 +49,6 @@ export interface BuildOptions {
   /* is_retargeting はオプションごと廃止した。付与すると招待報酬が付かなくなる恐れがあり、
      残しておくと「うっかりONにする」事故が起きるため(buildUrl は常に除去する)。 */
   stripDeepLinks: boolean;
-  onelinkTemplate: string;
 }
 
 export interface BuildResult {
@@ -58,8 +56,6 @@ export interface BuildResult {
   url: string;
   /** 除去したディープリンク系パラメータ名 */
   removed: string[];
-  /** ドメイン補正などの注意書き */
-  notes: string[];
 }
 
 export function parseHttpUrl(raw: unknown): URL | null {
@@ -236,50 +232,41 @@ export const DEEPLINK_PARAMS = [
 
 export const ONELINK_RE = /(^|\.)onelink\.me$/i;
 
-/* 抽出結果が OneLink でなかった場合にドメインを補正する。
-   lite.tiktok.com / vt.tiktok.com のような短縮ドメインは AppsFlyer のパラメータを
-   解釈しないため、後からいくら付与しても無視されてしまう。 */
-export function coerceToOneLink(url: URL, templateRaw: string, notes: string[]): URL {
+/**
+ * 抽出結果が AppsFlyer の OneLink であることを確認する。違えば例外を投げて生成を止める。
+ *
+ * 以前はテンプレート(`https://snssdk1180.onelink.me/BAuo` 等)のドメイン＋パスに
+ * 差し替えるフォールバックを持っていたが、廃止した。実物の招待リンクを解析したところ、
+ * OneLink は `https://snssdk1180.onelink.me/BAuo/999140ec` のように
+ * 「テンプレートID + ショートリンクID」の2セグメント構成で、後半はシェアごとに異なる。
+ * さらに、このリンクのクエリには `pid` も `c` も無く、AppsFlyer側(ショートリンク)が
+ * サーバー側に保持していると考えられる。
+ *
+ * つまりテンプレートへの差し替えは「他人のリンクに、別のショートリンクを当てる」処理であり、
+ * pid/c を含むアトリビューション設定ごと失った不完全なリンクを生んでしまう。
+ * 黙って壊れたリンクを配るより、生成を止めて作り直させるほうが安全。
+ */
+export function assertOneLink(url: URL): URL {
   if (ONELINK_RE.test(url.hostname)) return url;
 
-  const tpl = parseHttpUrl(templateRaw);
-  if (!tpl || !ONELINK_RE.test(tpl.hostname)) {
-    throw new Error(
-      '抽出URLのドメインが ' +
-        url.hostname +
-        ' で OneLink ではありません。' +
-        'この形式ではパラメータを付けても無視されるため、中継リンクが機能しません。' +
-        '「OneLink テンプレート」に *.onelink.me のURLを入力してください。'
-    );
-  }
-
-  const merged = new URL(tpl.origin + tpl.pathname);
-  tpl.searchParams.forEach((v, k) => {
-    merged.searchParams.set(k, v);
-  });
-
-  let carried = 0;
-  url.searchParams.forEach((v, k) => {
-    merged.searchParams.set(k, v);
-    carried++;
-  });
-
-  notes.push('ドメインを ' + url.hostname + ' → ' + merged.hostname + ' に補正しました。');
-  if (carried === 0) {
-    notes.push(
-      '警告: 元URLにクエリパラメータが1つもないため、招待コード等の識別情報を引き継げていません。' +
-        'このままだと誰の紹介か記録されない可能性があります。抽出をやり直してください。'
-    );
-  }
-  return merged;
+  throw new Error(
+    '抽出結果のドメインが ' +
+      url.hostname +
+      ' で、AppsFlyerのOneLink(*.onelink.me)ではありません。' +
+      'この形式ではパラメータが無視されるうえ、pid や u_code などの成果計測IDを引き継げないため、' +
+      '不完全なリンクを作らずに中断しました。' +
+      '「URLを抽出＆自動生成」からやり直してください。' +
+      'それでも直らない場合は、招待LPの構造が変わって抽出に失敗している可能性があります。'
+  );
 }
 
 export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   let url = parseHttpUrl(rawUrl);
   if (!url) throw new Error('トラッキング URL が不正です。');
 
-  const notes: string[] = [];
-  url = coerceToOneLink(url, opts.onelinkTemplate, notes);
+  /* OneLink でなければここで止まる。パス(テンプレートID/ショートリンクID)は
+     アトリビューション設定そのものなので、以降も一切書き換えない。 */
+  url = assertOneLink(url);
 
   const params = url.searchParams;
 
@@ -328,7 +315,7 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
     params.delete('is_retargeting');
   }
 
-  return { url: url.toString(), removed, notes };
+  return { url: url.toString(), removed };
 }
 
 /**
@@ -363,7 +350,6 @@ export async function generateDestinationUrl(
     webDpUrl: DEFAULT_WEB_DP_URL,
     emptyDp: true,
     stripDeepLinks: true,
-    onelinkTemplate: DEFAULT_ONELINK_TEMPLATE,
     ...overrides,
   });
 }

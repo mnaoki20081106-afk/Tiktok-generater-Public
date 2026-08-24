@@ -39,8 +39,30 @@ export const DEFAULT_WEB_DP_URL = '';
    UG_Referral_JP)であることを確認済み。 */
 export const LITE_ONELINK_ORIGIN = 'https://snssdk473824.onelink.me';
 export const LITE_ONELINK_PATH = '/4P4E';
-/** TikTok Lite のカスタムスキーム。インストール済みならこれでLiteが開く。 */
-export const LITE_APP_SCHEME = 'snssdk473824://';
+/* TikTok Lite を開くためのディープリンク。
+   単なるスキーム(snssdk473824://)だけではアプリが起動するだけで、
+   「誰の紹介か」がアプリに伝わらない。TikTok自身は af_dp を
+
+     snssdk473824://roma_redirect/?params_url=<招待LPのURL + 全パラメータ>
+
+   の形で組み立てており、params_url のクエリに u_code / share_page_data などの
+   識別子を載せてアプリへ渡している(実物のLPのHTMLで確認)。同じ構造で組み立てる。 */
+export const LITE_DEEPLINK_BASE = 'snssdk473824://roma_redirect/';
+
+/* params_url が指す招待LPのURL。実物のHTMLから採取したもの。
+   キャンペーンが変わるとパスも変わりうるため、定数として切り出しておく。 */
+export const INVITE_LP_URL = 'https://www.tiktok.com/ug/incentive/share/pro_scan_code';
+
+/**
+ * TikTok Lite 向けのディープリンク(af_dp の値)を組み立てる。
+ * サニタイズ後に残っている識別子を params_url に載せることで、
+ * アプリ起動後も紹介元が特定できる状態を保つ。
+ */
+export function buildLiteDeepLink(params: URLSearchParams): string {
+  const lp = new URL(INVITE_LP_URL);
+  params.forEach((v, k) => lp.searchParams.set(k, v));
+  return LITE_DEEPLINK_BASE + '?params_url=' + encodeURIComponent(lp.toString());
+}
 
 /** クッションページが遷移先を受け取るクエリキー。単独版と同じ `to`。 */
 export const CUSHION_PARAM = 'to';
@@ -418,6 +440,23 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
     });
   }
 
+  /* is_retargeting は付与せず、逆に必ず除去する。
+     AppsFlyerはこれが true だとクリックを「リターゲティング(再エンゲージメント)」として
+     記録する。招待報酬は「新規インストール＋初回起動」で発火するのが前提なので、
+     リターゲティング扱いになると発火条件を外れて報酬が付かない恐れがある。
+
+     TikTok Liteの招待リンクにはそもそも is_retargeting が入っていない。
+     削除しているのは、この対応より前に生成した(is_retargeting=true が焼き付いた)URLを
+     再保存したときに確実に落とすため。除去はディープリンクのサニタイズとは別の目的なので、
+     stripDeepLinks のON/OFFに関係なく常に実行する。
+
+     af_dp を組み立てる前に実行する。後回しにすると、既存URLに焼き付いていた値が
+     params_url の中へ取り込まれてアプリ側にまで渡ってしまうため。 */
+  if (params.has('is_retargeting')) {
+    removed.push('is_retargeting');
+    params.delete('is_retargeting');
+  }
+
   /* ===== 遷移先とフォールバック先を明示する =====
      フォールバック系は「削除するだけ」にしない。削除するとOneLinkテンプレート側
      (AppsFlyerのサーバー設定)の既定値が発動し、通常版TikTokのWebページへ落ちてしまう。
@@ -458,32 +497,26 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   const webDp = opts.webDpUrl || opts.iosUrl || opts.androidUrl;
   if (webDp) managed.push(['af_web_dp', webDp]);
 
-  /* af_dp はアプリを開くときのスキーム。
-     Lite の OneLink に載せ替えている場合は Lite のスキームを入れる
-     (インストール済みならLiteが開き、未インストールなら af_ios_url のストアへ落ちる)。
-     載せ替えない場合は空文字にして、通常版が開くのをブロックする。 */
-  managed.push(['af_dp', opts.useLiteOneLink ? LITE_APP_SCHEME : '']);
-
-  /* いったん全部消してから決まった順に入れ直す。
-     これらのキーは DEEPLINK_PARAMS に含まれるもの(af_web_dp 等)と含まれないもの
-     (af_ios_url 等)が混在しており、消さずに set すると生成のたびに並び順が変わる。
-     同じURLを再保存したときに文字列が一致しなくなるため、順序を固定する。 */
+  /* こちらが管理するキーは、いったん全部消してから決まった順に入れ直す。
+     - 並び順を固定するため。これらは DEEPLINK_PARAMS に含まれるもの(af_web_dp 等)と
+       含まれないもの(af_ios_url 等)が混在しており、消さずに set すると生成のたびに
+       順序が変わって、同じURLを再保存したときに文字列が一致しなくなる。
+     - af_dp を組み立てる前に消しておく必要もある。生成済みURLを再度通したときに、
+       前回の af_dp や af_ios_url が params_url の中へ入れ子で取り込まれてしまうため。 */
   managed.forEach(([k]) => params.delete(k));
+  params.delete('af_dp');
+
+  /* af_dp はアプリを開くときのディープリンク。
+     Lite の OneLink に載せ替えている場合は、TikTok自身と同じ形
+     (snssdk473824://roma_redirect/?params_url=<LPのURL+識別子>)で組み立てる。
+     スキームだけだとアプリが起動するだけで紹介元が伝わらない。
+     載せ替えない場合は空文字にして、通常版が開くのをブロックする。
+
+     この時点の params には識別子だけが残っている(管理下のキーは上で削除済み)ので、
+     アプリに必要な情報だけを params_url に載せられる。 */
+  managed.push(['af_dp', opts.useLiteOneLink ? buildLiteDeepLink(params) : '']);
+
   managed.forEach(([k, v]) => params.set(k, v));
-
-  /* is_retargeting は付与せず、逆に必ず除去する。
-     AppsFlyerはこれが true だとクリックを「リターゲティング(再エンゲージメント)」として
-     記録する。招待報酬は「新規インストール＋初回起動」で発火するのが前提なので、
-     リターゲティング扱いになると発火条件を外れて報酬が付かない恐れがある。
-
-     TikTok Liteの招待リンクにはそもそも is_retargeting が入っていない。
-     削除しているのは、この対応より前に生成した(is_retargeting=true が焼き付いた)URLを
-     再保存したときに確実に落とすため。除去はディープリンクのサニタイズとは別の目的なので、
-     stripDeepLinks のON/OFFに関係なく常に実行する。 */
-  if (params.has('is_retargeting')) {
-    removed.push('is_retargeting');
-    params.delete('is_retargeting');
-  }
 
   /* 成果計測パラメータが1つも欠けていないことを確認してから返す。
      ここで止めることで、未サニタイズどころか「誰の紹介か分からないURL」が

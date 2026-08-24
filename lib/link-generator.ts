@@ -317,6 +317,44 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   return { url: url.toString(), removed, notes };
 }
 
+/**
+ * 遷移先URLにジェネレーターを適用する(展開＋サニタイズ)。
+ *
+ * サイト編集画面(`app/dashboard/dashboard-form.tsx`)から、保存時に呼び出すための入口。
+ * ツール単体(`/tools/link-generator`)の「URLを抽出＆自動生成」と同じ処理を、
+ * 入力欄1つぶんの操作にまとめただけで、内部で呼んでいるのは
+ * `callExtractApi()` と `buildUrl()`(いずれも単独版からの移植)そのもの。
+ *
+ * - 入力が OneLink 形式なら、展開は不要なのでサニタイズだけ行う。
+ * - そうでなければ Stealth API で元のトラッキングURLへ展開してからサニタイズする。
+ *
+ * 展開・サニタイズのいずれかに失敗した場合は例外を投げる(呼び出し側で保存を中断する)。
+ */
+export async function generateDestinationUrl(
+  rawUrl: string,
+  overrides: Partial<BuildOptions> = {}
+): Promise<BuildResult> {
+  const input = parseHttpUrl(rawUrl);
+  if (!input) throw new Error('遷移先URLが不正です。http(s):// で始まるURLを入力してください。');
+
+  let source = input.toString();
+  if (!ONELINK_RE.test(input.hostname)) {
+    const data = await callExtractApi(source);
+    source = data.trackingUrl;
+  }
+
+  return buildUrl(source, {
+    iosUrl: DEFAULT_IOS_URL,
+    androidUrl: DEFAULT_ANDROID_URL,
+    webDpUrl: DEFAULT_WEB_DP_URL,
+    emptyDp: true,
+    retargeting: true,
+    stripDeepLinks: true,
+    onelinkTemplate: DEFAULT_ONELINK_TEMPLATE,
+    ...overrides,
+  });
+}
+
 /* ================== 最終出力の出し分け ==================
    サニタイズ処理そのものは buildUrl() が終えている。ここでやるのは
    「クッションページを挟むかどうか」による出力URLの差し替えだけ。 */

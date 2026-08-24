@@ -247,6 +247,36 @@ export const DEEPLINK_PARAMS = [
   'incentive_redirect',
 ];
 
+/* 成果計測に必要なパラメータ。実物の招待LPの universal-data
+   (app_context.query の全36キー)を分類して同定したもの。
+   紹介元の特定・アトリビューションに関わるため、絶対に落とさない。
+   buildUrl の最後に assertTrackingPreserved() で欠損が無いことを検証する。 */
+export const TRACKING_PARAMS = [
+  'u_code',            // 招待コード本体
+  'share_page_data',   // 暗号化された共有データ(496文字)
+  'share_app_id',      // 473824 = TikTok Lite
+  'share_link_id',
+  'media_source',      // AppsFlyer の pid と同義
+  'inc_pid',
+  'gd_label',
+  'utm_source',
+  'utm_campaign',
+  'ug_launch_category',
+  'share_time',
+  'sharer_biz',
+  'share_position',
+  'share_region',
+  'share_scene',
+  'share_type',
+  'share_enter_from',
+  'sharer_os',
+  'aid',
+  'region',
+  '_d',
+  // ロングリンク化のときに media_source から補完する。AppsFlyer の正準キー
+  'pid',
+];
+
 /* TikTokのWebView描画用パラメータ。招待LPの表示制御にしか使われず、
    AppsFlyerのアトリビューションにも紹介元の特定にも関与しない。
    中間ページ(「TikTok-Global Video Community」等)の描画を誘発しうるため、
@@ -259,6 +289,11 @@ export const INTERSTITIAL_PARAMS = [
   'enable_canvas_optimize',
   'hide_nav_bar',
   'should_full_screen',
+  /* 招待LPのOGPカードを描画するための文言・画像。LPの表示にしか使われず、
+     アトリビューションには関与しない。og_image は133文字と長くURLを膨らませる。 */
+  'og_desc_text',
+  'og_image',
+  'og_title_text',
 ];
 
 export const ONELINK_RE = /(^|\.)onelink\.me$/i;
@@ -321,9 +356,36 @@ export function toLongLink(url: URL): URL {
   return url;
 }
 
+/**
+ * 成果計測パラメータが1つも欠けていないことを検証する。
+ *
+ * サニタイズは削除リスト方式なので、リストを編集したときに計測用のキーを
+ * 巻き込んでも気づけない。「100%保護」を願望ではなく保証にするため、
+ * 生成の最後に入力と出力を突き合わせて、失われていれば例外で止める。
+ * (値の一致まで見る。空文字への上書きなども検出する)
+ */
+export function assertTrackingPreserved(before: URL, after: URL): void {
+  const lost: string[] = [];
+  for (const key of TRACKING_PARAMS) {
+    const original = before.searchParams.get(key);
+    if (original === null) continue; // 元から無いものは対象外
+    if (after.searchParams.get(key) !== original) lost.push(key);
+  }
+  if (lost.length > 0) {
+    throw new Error(
+      '成果計測パラメータが失われました: ' +
+        lost.join(', ') +
+        '。このまま公開すると誰の紹介か記録されないため、生成を中断しました。'
+    );
+  }
+}
+
 export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   let url = parseHttpUrl(rawUrl);
   if (!url) throw new Error('トラッキング URL が不正です。');
+
+  // 検証用に入力時点のパラメータを控えておく(以降 url は書き換わる)
+  const source = new URL(url.toString());
 
   // OneLink でなければここで止まる
   url = assertOneLink(url);
@@ -422,6 +484,11 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
     removed.push('is_retargeting');
     params.delete('is_retargeting');
   }
+
+  /* 成果計測パラメータが1つも欠けていないことを確認してから返す。
+     ここで止めることで、未サニタイズどころか「誰の紹介か分からないURL」が
+     世に出るのを防ぐ。 */
+  assertTrackingPreserved(source, url);
 
   return { url: url.toString(), removed };
 }

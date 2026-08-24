@@ -70,7 +70,10 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
     ```
 
     単なるスキーム(`snssdk473824://`)だけだと**アプリが起動するだけで「誰の紹介か」がアプリに伝わらない**(実機でLiteは開くが招待トラッキングが消える、という不具合が実際に起きた)。TikTok自身は `params_url` のクエリに `u_code` / `share_page_data` などの識別子を載せてアプリへ渡しており(実物のLPのHTMLで確認)、同じ構造で組み立てる。`params_url` が指す招待LPのURLは `INVITE_LP_URL` に定数として切り出してある(キャンペーンが変わるとパスも変わりうるため)。
-  - `params_url` に載せるのはサニタイズ後に残った識別子だけ。`af_ios_url` などAppsFlyer用のキーはアプリに不要なので、管理下のキーを削除してから組み立てる(生成済みURLを再度通したときに入れ子で取り込まれるのも防ぐ)。
+  - **`params_url` にはサニタイズ「前」の元のクエリを載せる。** サニタイズ(`DEEPLINK_PARAMS` / `INTERSTITIAL_PARAMS` の除去)はOneLink側のWeb遷移を止めるためのもので、アプリ内へ渡すペイロードとは文脈が違う。実物のHTMLでは TikTok自身が `inc_target_url`(`aweme://roma_redirect/...`) / `is_inc_roma` / `incentive_redirect` を含む66件すべてをアプリへ渡しており、これらは招待インセンティブの識別子そのもの。ここで削ると「Liteは開くが誰の紹介か分からない」状態になる(実機で発生した)。
+  - 除くのは `is_retargeting`(TikTokも渡していない)と、こちらが足したAppsFlyer用のキー(`MANAGED_PARAMS`)だけ。
+  - TikTok自身が必ず付けているアプリ内コンテナの設定値(`spark_page` / `use_spark` / `bdhm_bid` / `needlaunchlog` / `ug_medium` / `disable_ttnet_proxy` / `use_mutable_context`)を `LITE_DEEPLINK_CONTEXT` として再現する。招待LPのクエリには含まれず、リンク生成側で付けている固定値。
+  - **再保存しても削れない**: 生成済みURLをもう一度通すとき、OneLink側のクエリは既にサニタイズ済みで `inc_*` が落ちている。そのまま作り直すと再保存のたびにアプリ用のデータが削れるため、`recoverAppParams()` で前回の `af_dp` の `params_url` から元のクエリを復元し、現在のクエリを上書きで重ねる(5回再保存してもキー構成・URL長が変わらないことを検証済み)。
   - `is_retargeting` の除去も `af_dp` の組み立て前に行う。後回しにすると既存URLに焼き付いていた値が `params_url` 経由でアプリまで渡ってしまう。
   - Liteがインストール済みなら `af_dp` でLiteが開き、未インストールなら `af_ios_url` / `af_android_url` のストアへ落ちる。
   - クエリ(`u_code` / `share_page_data` / `media_source` / `pid` 等)はすべてそのまま引き継ぐ。

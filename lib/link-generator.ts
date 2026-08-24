@@ -53,14 +53,94 @@ export const LITE_DEEPLINK_BASE = 'snssdk473824://roma_redirect/';
    キャンペーンが変わるとパスも変わりうるため、定数として切り出しておく。 */
 export const INVITE_LP_URL = 'https://www.tiktok.com/ug/incentive/share/pro_scan_code';
 
+/* こちらが管理するAppsFlyer用のキー。OneLinkのWeb遷移を制御するためのもので、
+   アプリ内へ渡す params_url には載せない。 */
+export const MANAGED_PARAMS = [
+  'af_ios_url',
+  'af_ipad_url',
+  'af_ios_fallback',
+  'af_android_url',
+  'af_android_fallback',
+  'fallback_url',
+  'af_web_dp',
+  'af_dp',
+];
+
+/* TikTok自身が params_url に必ず載せている、アプリ内コンテナの設定値。
+   招待LPのクエリには含まれず、リンク生成側で付けている固定値なので、
+   実物のHTMLの af_dp から採取してそのまま再現する。
+   これが無いとアプリ側でインセンティブ用のページが開かない可能性がある。 */
+export const LITE_DEEPLINK_CONTEXT: Record<string, string> = {
+  spark_page: 'scan_code',
+  use_spark: '1',
+  bdhm_bid: 'incentive_campaign_hybrid',
+  needlaunchlog: '1',
+  ug_medium: 'fe_component',
+  disable_ttnet_proxy: '0',
+  use_mutable_context: '1',
+};
+
+/**
+ * アプリへ渡すパラメータの元ネタを取り出す。
+ *
+ * 生成済みのURLをもう一度通すとき(サイトの再保存など)、OneLink側のクエリは
+ * 既にサニタイズ済みで inc_target_url / is_inc_roma などが落ちている。
+ * そのまま params_url を作り直すと、再保存のたびにアプリ用のデータが削れて
+ * 「Liteは開くが誰の紹介か分からない」状態に戻ってしまう。
+ *
+ * 前回の af_dp の params_url には元のクエリが丸ごと残っているので、そちらを土台にし、
+ * 現在のクエリを上書きで重ねる。初回生成(af_dp が無い)ならクエリをそのまま使う。
+ */
+export function recoverAppParams(source: URL): URLSearchParams {
+  const afdp = source.searchParams.get('af_dp') || '';
+  const marker = '?params_url=';
+  const at = afdp.indexOf(marker);
+  if (at < 0) return source.searchParams;
+
+  try {
+    const previous = new URL(decodeURIComponent(afdp.slice(at + marker.length)));
+    const merged = previous.searchParams;
+    source.searchParams.forEach((v, k) => {
+      if (k === 'af_dp') return;
+      merged.set(k, v);
+    });
+    return merged;
+  } catch {
+    return source.searchParams;
+  }
+}
+
 /**
  * TikTok Lite 向けのディープリンク(af_dp の値)を組み立てる。
- * サニタイズ後に残っている識別子を params_url に載せることで、
- * アプリ起動後も紹介元が特定できる状態を保つ。
+ *
+ * params_url に載せるのは「サニタイズ前」の元のクエリ。
+ * サニタイズ(DEEPLINK_PARAMS / INTERSTITIAL_PARAMS の除去)はOneLink側の
+ * Web遷移を制御するためのもので、アプリ内へ渡すペイロードとは文脈が違う。
+ * 実物のHTMLでは TikTok自身が inc_target_url / is_inc_roma / incentive_redirect も
+ * 含めて66件すべてをアプリへ渡しており、これらは招待インセンティブの識別子そのもの。
+ * ここで削ると「Liteは開くが誰の紹介か分からない」状態になる。
+ *
+ * 除くのは is_retargeting(TikTokも渡していない)と、こちらが足したAppsFlyer用のキーだけ。
  */
-export function buildLiteDeepLink(params: URLSearchParams): string {
+export function buildLiteDeepLink(sourceParams: URLSearchParams): string {
   const lp = new URL(INVITE_LP_URL);
-  params.forEach((v, k) => lp.searchParams.set(k, v));
+
+  sourceParams.forEach((v, k) => {
+    if (k === 'is_retargeting') return;
+    if (MANAGED_PARAMS.includes(k)) return;
+    lp.searchParams.set(k, v);
+  });
+
+  // ロングリンク化と同じ規則で pid を補完する
+  if (!lp.searchParams.has('pid')) {
+    const mediaSource = lp.searchParams.get('media_source') || lp.searchParams.get('inc_pid');
+    if (mediaSource) lp.searchParams.set('pid', mediaSource);
+  }
+
+  for (const [k, v] of Object.entries(LITE_DEEPLINK_CONTEXT)) {
+    if (!lp.searchParams.has(k)) lp.searchParams.set(k, v);
+  }
+
   return LITE_DEEPLINK_BASE + '?params_url=' + encodeURIComponent(lp.toString());
 }
 
@@ -512,9 +592,10 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
      スキームだけだとアプリが起動するだけで紹介元が伝わらない。
      載せ替えない場合は空文字にして、通常版が開くのをブロックする。
 
-     この時点の params には識別子だけが残っている(管理下のキーは上で削除済み)ので、
-     アプリに必要な情報だけを params_url に載せられる。 */
-  managed.push(['af_dp', opts.useLiteOneLink ? buildLiteDeepLink(params) : '']);
+     params_url にはサニタイズ「前」の元のクエリを載せる(buildLiteDeepLink 参照)。
+     inc_target_url などはWeb遷移では邪魔だが、アプリ内では招待インセンティブの
+     識別子として必要なため。 */
+  managed.push(['af_dp', opts.useLiteOneLink ? buildLiteDeepLink(recoverAppParams(source)) : '']);
 
   managed.forEach(([k, v]) => params.set(k, v));
 

@@ -397,6 +397,11 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
  * 当たりURLが選ばれていても、作成者本人・同一アカウントの端末なら本来のURLへ
  * 差し替えるため(自作自演での不正取得を防ぐ)。照合が終わり次第すぐ遷移し、
  * 遅くとも WAIT_MS で打ち切る。
+ *
+ * 手動リンク(「タップして続行」)は出さない。以前は自動遷移が働かなかった場合の
+ * 避難口として4.5秒後に表示していたが、遷移自体は始まっているのに遷移先(OneLink)の
+ * 応答が遅いだけのケースでも出てしまっていた。代わりに遷移手段を重ねてかけ、
+ * タップ無しで確実に飛ばす。JSが無効な環境向けの <noscript> だけ残している。
  */
 export function renderRedirectHtml(d: ViewerData): string {
   const dest = parseHttpUrl(d.tiktokUrl);
@@ -417,32 +422,38 @@ export function renderRedirectHtml(d: ViewerData): string {
      照合を「当選したときだけ」待つ実装にはしない。待ち時間の有無で当選したことが
      分かってしまい、抽選機能の存在を訪問者に示唆することになるため。 */
   const body = destUrl
-    ? `<a id="go" href="${href}" rel="noreferrer noopener" hidden>タップして続行</a>
-<noscript><a href="${href}" rel="noreferrer noopener">タップして続行</a></noscript>
+    ? `<noscript><a href="${href}" rel="noreferrer noopener">続行</a></noscript>
 <script>
 (function(){
   var dest = ${destJson};
   var slug = ${slugJson};
   var WAIT_MS = 1500;   // 照合の最大待ち時間。これを過ぎたら諦めて遷移する
-  var REVEAL_MS = 3000; // 自動遷移が働かなかった場合に手動リンクを出すまでの時間
 
+  var RETRY_MS = 6000;  // 遷移が始まらなかったときに、もう一度だけ試すまでの時間
+
+  // 手動リンクは出さない。タップ無しで飛ばす。
   var navigated = false;
   function go(href) {
     if (navigated) return;
     navigated = true;
-    // 戻るボタンでこのページに戻ってこないよう replace を使う
-    try { window.location.replace(href); } catch (e) { window.location.href = href; }
+
+    /* 遷移手段を重ねがけしない。location.replace が「効いていないのではなく
+       遷移先の応答が遅いだけ」のときに別の遷移をかけると、進行中の遷移を中断して
+       かえって到達が遅れるため。まず1回だけ投げる。 */
+    try { window.location.replace(href); } catch (e) {}
+
+    /* 本当に何も起きなかった場合の保険。ページ離脱が始まったら取り消すので、
+       遅いだけの遷移を中断してしまうことはない。 */
+    var retry = setTimeout(function () {
+      try { window.location.href = href; } catch (e) {}
+    }, RETRY_MS);
+    function cancelRetry() { clearTimeout(retry); }
+    window.addEventListener('pagehide', cancelRetry);
+    window.addEventListener('beforeunload', cancelRetry);
   }
 
   var timer = setTimeout(function(){ go(dest); }, WAIT_MS);
   function finish(href) { clearTimeout(timer); go(href); }
-
-  // 自動遷移が働かなかった場合の避難口。
-  // 遷移が成功していればページは既に離れているので表示されることはない。
-  setTimeout(function(){
-    var a = document.getElementById('go');
-    if (a) a.hidden = false;
-  }, WAIT_MS + REVEAL_MS);
 
   function loadScript(src){
     return new Promise(function(resolve,reject){

@@ -33,7 +33,7 @@ export function LinkGeneratorForm() {
   const [androidUrl, setAndroidUrl] = useState(DEFAULT_ANDROID_URL);
   const [webDpUrl, setWebDpUrl] = useState(DEFAULT_WEB_DP_URL);
 
-  const [optDp, setOptDp] = useState(true);
+  const [optLite, setOptLite] = useState(true);
   const [optStrip, setOptStrip] = useState(true);
   // 新機能: クッションページ(遅延リダイレクト画面)を挟むかどうか
   const [useCushion, setUseCushion] = useState(true);
@@ -68,7 +68,7 @@ export function LinkGeneratorForm() {
         iosUrl: iosUrl.trim(),
         androidUrl: androidUrl.trim(),
         webDpUrl: webDpUrl.trim(),
-        emptyDp: optDp,
+        useLiteOneLink: optLite,
         stripDeepLinks: optStrip,
       });
 
@@ -287,9 +287,17 @@ export function LinkGeneratorForm() {
             現在は差し替えずエラーで止める。 */}
 
         <div className="mb-4 flex flex-col gap-2.5">
-          <Check checked={optDp} onChange={setOptDp}>
-            <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">af_dp</code>{' '}
-            を空文字で設定(通常版の起動ブロック)
+          <Check checked={optLite} onChange={setOptLite}>
+            <span className="font-medium text-slate-900">TikTok Lite の OneLink に載せ替える</span>
+            <span className="mt-1 block text-xs leading-relaxed text-slate-500">
+              招待リンクのドメイン(
+              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">snssdk1180.onelink.me</code>
+              )は通常版TikTokのUniversal Linkとして登録されているため、通常版がインストール済みの端末では
+              OSがURLを横取りして通常版を起動してしまいます。Lite側のドメイン(
+              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">snssdk473824.onelink.me</code>
+              )へ載せ替えると、Liteがインストール済みならLiteが開き、未インストールならLiteのストアへ遷移します。
+              トラッキング用のパラメータはすべて引き継ぎます。
+            </span>
           </Check>
           <Check checked={optStrip} onChange={setOptStrip}>
             ディープリンク系・中間ページ描画系パラメータ(

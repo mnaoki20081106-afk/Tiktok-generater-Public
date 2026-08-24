@@ -26,6 +26,22 @@ export const DEFAULT_ANDROID_URL = 'https://play.google.com/store/apps/details?i
 /** PC向け遷移先は用途がケースバイケースなので既定値は空(=af_web_dp を付けない)にしておく */
 export const DEFAULT_WEB_DP_URL = '';
 
+/* TikTok Lite の OneLink とカスタムスキーム。実物の招待LPのHTMLから確認したもの。
+
+   招待リンクが載っている snssdk1180.onelink.me は「通常版TikTok」のOneLinkドメインで、
+   iOSのUniversal Link / AndroidのApp Link として通常版アプリに関連付けられている。
+   通常版がインストールされた端末では、OSがWebページを読み込む前にURLを横取りして
+   通常版を起動してしまう。af_dp などのクエリパラメータは評価すらされないため、
+   パラメータ側では防ぎようがない。ホストごとLite側へ載せ替えるしかない。
+
+   4P4E は TikTok自身が Lite の紹介キャンペーンで使っているOneLinkで、
+   pid/c も招待リンクと同じ(coin_referral_onelink_scan_code_support_mentor /
+   UG_Referral_JP)であることを確認済み。 */
+export const LITE_ONELINK_ORIGIN = 'https://snssdk473824.onelink.me';
+export const LITE_ONELINK_PATH = '/4P4E';
+/** TikTok Lite のカスタムスキーム。インストール済みならこれでLiteが開く。 */
+export const LITE_APP_SCHEME = 'snssdk473824://';
+
 /** クッションページが遷移先を受け取るクエリキー。単独版と同じ `to`。 */
 export const CUSHION_PARAM = 'to';
 
@@ -45,7 +61,8 @@ export interface BuildOptions {
   androidUrl: string;
   /** PC(デスクトップ)から踏まれたときの遷移先。空なら af_web_dp を設定しない */
   webDpUrl: string;
-  emptyDp: boolean;
+  /** ホストを TikTok Lite の OneLink に載せ替えるか。通常版が開くのを防ぐ唯一の手段 */
+  useLiteOneLink: boolean;
   /* is_retargeting はオプションごと廃止した。付与すると招待報酬が付かなくなる恐れがあり、
      残しておくと「うっかりONにする」事故が起きるため(buildUrl は常に除去する)。 */
   stripDeepLinks: boolean;
@@ -315,6 +332,16 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
      サーバー側の設定より、こちらが付けたクエリパラメータを優先させるため。 */
   url = toLongLink(url);
 
+  /* 通常版TikTokのOneLinkドメインは、そのアプリのUniversal Link/App Linkとして
+     登録されている。通常版がインストールされた端末ではOSがURLを横取りして通常版を
+     起動してしまうため、ホストとパスをLite側のOneLinkへ載せ替える。
+     クエリ(u_code / share_page_data / media_source 等)はそのまま引き継ぐ。 */
+  if (opts.useLiteOneLink && url.origin !== LITE_ONELINK_ORIGIN) {
+    const lite = new URL(LITE_ONELINK_ORIGIN + LITE_ONELINK_PATH);
+    url.searchParams.forEach((v, k) => lite.searchParams.set(k, v));
+    url = lite;
+  }
+
   const params = url.searchParams;
 
   // ディープリンク系を除去する。これをしないと deep_link_value 等が
@@ -369,7 +396,11 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   const webDp = opts.webDpUrl || opts.iosUrl || opts.androidUrl;
   if (webDp) managed.push(['af_web_dp', webDp]);
 
-  if (opts.emptyDp) managed.push(['af_dp', '']);
+  /* af_dp はアプリを開くときのスキーム。
+     Lite の OneLink に載せ替えている場合は Lite のスキームを入れる
+     (インストール済みならLiteが開き、未インストールなら af_ios_url のストアへ落ちる)。
+     載せ替えない場合は空文字にして、通常版が開くのをブロックする。 */
+  managed.push(['af_dp', opts.useLiteOneLink ? LITE_APP_SCHEME : '']);
 
   /* いったん全部消してから決まった順に入れ直す。
      これらのキーは DEEPLINK_PARAMS に含まれるもの(af_web_dp 等)と含まれないもの
@@ -425,7 +456,7 @@ export async function generateDestinationUrl(
     iosUrl: DEFAULT_IOS_URL,
     androidUrl: DEFAULT_ANDROID_URL,
     webDpUrl: DEFAULT_WEB_DP_URL,
-    emptyDp: true,
+    useLiteOneLink: true,
     stripDeepLinks: true,
     ...overrides,
   });

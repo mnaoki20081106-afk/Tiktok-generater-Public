@@ -53,6 +53,75 @@ export const LITE_DEEPLINK_BASE = 'snssdk473824://roma_redirect/';
    キャンペーンが変わるとパスも変わりうるため、定数として切り出しておく。 */
 export const INVITE_LP_URL = 'https://www.tiktok.com/ug/incentive/share/pro_scan_code';
 
+/* ===================== 実測で判明した、公式リンクの実体 =====================
+
+   公式の招待リンク `https://lite.tiktok.com/t/XXXXXXXX/` を iOS Safari の
+   アドレスバーに貼って展開すると、着地するのは onelink.me ではなく招待LPそのものだった。
+
+     https://www.tiktok.com/ug/incentive/share/pro_scan_code?...&u_code=...
+
+   このURLには af_dp / af_ios_url / af_force_deeplink / wid / pid といった
+   AppsFlyer用のキーが1つも無い。代わりに入っているのが次の3つで、
+   これが「アプリを開く／ストアへ送る」を決めている仕組みそのものだった。
+
+     inc_target_url = aweme://roma_redirect/?spark_page=scan_code
+     incentive_redirect = 1
+     is_inc_roma = 1
+
+   つまり分岐を担っているのは AppsFlyer ではなく LP 側のJSである。
+   universal-data から拾える onelink(BAuo)は、LPが内部に持っている
+   「他人に共有するための」リンクであって、公式リンクの実体ではなかった。
+
+   ここを取り違えていたために、次が同時に起きていた。
+     - 通常版TikTokのOneLink(BAuo)を土台にしてしまい、Universal Linkで通常版が起動する
+     - 4P4Eへ載せ替えても wid / c はショートリンク側のサーバー設定にあるため再現できない
+     - LPがアプリを開くための仕掛けである inc_target_url / incentive_redirect /
+       is_inc_roma を、DEEPLINK_PARAMS として削除していた
+   「onelink.me で止まり『TikTok Liteを開く』ボタンが出る」症状の原因はこれ。
+
+   対策は「組み立て直さない」こと。TikTok自身が配っているURLと同じものを遷移先にする。
+   こちらが手を入れるのは次の2点だけに絞る。
+     1. WebView描画用パラメータ(INTERSTITIAL_PARAMS)を落とす
+     2. inc_target_url のスキームを通常版(aweme://)から Lite(snssdk473824://)へ差し替える
+   ========================================================================== */
+export const INVITE_LP_HOST_RE = /(^|\.)tiktok\.com$/i;
+export const INVITE_LP_PATH_RE = /^\/ug\//i;
+
+/**
+ * 招待LPのURL(＝公式の招待リンクが実際に着地する形)かどうか。
+ *
+ * ホストとパスだけでは `www.tiktok.com/@user` のような通常のページと区別できないため、
+ * 招待の宛先そのものである `u_code` があることまで確認する。
+ */
+export function isInviteLpUrl(url: URL): boolean {
+  return (
+    INVITE_LP_HOST_RE.test(url.hostname) &&
+    INVITE_LP_PATH_RE.test(url.pathname) &&
+    url.searchParams.has('u_code')
+  );
+}
+
+/* LPの inc_target_url が指しているのは通常版TikTokのスキーム(aweme://)。
+   通常版がインストールされた端末ではそちらが起動してしまう。
+   「誰の招待か」はLPのクエリ(u_code / share_page_data)が運んでいて
+   inc_target_url のクエリには乗っていないので、スキーム部分だけを差し替えれば
+   招待情報を保ったまま Lite を開かせられる。 */
+export const LITE_SCHEME = 'snssdk473824://';
+export const REGULAR_TIKTOK_SCHEMES = ['aweme://', 'snssdk1180://'];
+
+/** カスタムスキームが通常版TikTokを指していれば、Lite のスキームへ差し替える */
+export function toLiteScheme(deepLink: string): string {
+  const lower = deepLink.toLowerCase();
+  for (const scheme of REGULAR_TIKTOK_SCHEMES) {
+    if (lower.startsWith(scheme)) return LITE_SCHEME + deepLink.slice(scheme.length);
+  }
+  return deepLink;
+}
+
+/* LPがアプリを開くために使うキー。削ると「アプリに飛ばずLPで止まる」ため絶対に残す。
+   inc_target_url だけはスキームをLiteへ差し替えるが、キー自体は必ず残る。 */
+export const INCENTIVE_PARAMS = ['inc_target_url', 'incentive_redirect', 'is_inc_roma'];
+
 /* こちらが管理するAppsFlyer用のキー。OneLinkのWeb遷移を制御するためのもので、
    アプリ内へ渡す params_url には載せない。 */
 export const MANAGED_PARAMS = [
@@ -128,7 +197,8 @@ export function buildLiteDeepLink(sourceParams: URLSearchParams): string {
   sourceParams.forEach((v, k) => {
     if (k === 'is_retargeting') return;
     if (MANAGED_PARAMS.includes(k)) return;
-    lp.searchParams.set(k, v);
+    // アプリ内で開く先も通常版ではなくLiteに向ける(キーは残す)
+    lp.searchParams.set(k, k === 'inc_target_url' ? toLiteScheme(v) : v);
   });
 
   // ロングリンク化と同じ規則で pid を補完する
@@ -156,6 +226,12 @@ export interface ExtractApiResponse {
   success: boolean;
   trackingUrl: string;
   /**
+   * 短縮リンクが実際に着地した招待LPのURL(Stealth API が返してくれる場合)。
+   * 公式リンクの実体そのものなので、取れているならこれが最優先。
+   * API側が未対応でも `expandShortUrl()` が同じものを取りに行くので必須ではない。
+   */
+  lpUrl?: string;
+  /**
    * TikTok自身が Lite 用に組み立てている OneLink(snssdk473824.onelink.me/4P4E)。
    * 招待LPのレンダリング済みDOMにあり、`wid`(招待者の識別子) / `c`(キャンペーン) /
    * `af_adset` と、`u_code` を含む af_dp を最初から持っている。
@@ -166,10 +242,21 @@ export interface ExtractApiResponse {
   error?: string;
 }
 
-/** 抽出結果のうち、リンク生成の土台に使うURLを選ぶ。TikTok自身のLiteリンクを最優先。 */
-export function preferLiteUrl(data: ExtractApiResponse): string {
+/**
+ * 抽出結果のうち、リンク生成の土台に使うURLを選ぶ。
+ *
+ * 優先順位は「公式リンクの実体にどれだけ近いか」で決める。
+ *  1. lpUrl    … 短縮リンクが着地した招待LPそのもの。公式リンクと同一
+ *  2. liteUrl  … TikTok自身が組み立てた Lite のOneLink(wid などを持つ)
+ *  3. trackingUrl … LPが内部に持っている共有用OneLink(通常版のBAuo。最後の手段)
+ */
+export function preferSourceUrl(data: ExtractApiResponse): string {
+  const lp = parseHttpUrl(data.lpUrl);
+  if (lp && isInviteLpUrl(lp)) return lp.toString();
+
   const lite = parseHttpUrl(data.liteUrl);
   if (lite && ONELINK_RE.test(lite.hostname)) return lite.toString();
+
   return data.trackingUrl;
 }
 
@@ -190,6 +277,12 @@ export interface BuildResult {
   url: string;
   /** 除去したディープリンク系パラメータ名 */
   removed: string[];
+  /**
+   * どちらの経路で作ったか。
+   * - `lp`      … 招待LPのURLをそのまま使う(推奨。公式リンクと同じ実体)
+   * - `onelink` … AppsFlyerのOneLinkを組み立て直す(LPのURLが取れなかった場合の従来経路)
+   */
+  mode: 'lp' | 'onelink';
 }
 
 export function parseHttpUrl(raw: unknown): URL | null {
@@ -270,6 +363,102 @@ export async function callExtractApi(shortUrl: string): Promise<ExtractApiRespon
   if (!data.success) throw new Error(data.error || 'APIが success:false を返しました。');
   if (!data.trackingUrl) throw new Error('APIの応答に trackingUrl が含まれていません。');
   return data;
+}
+
+/* ================== 短縮リンクの展開 ==================
+
+   公式の招待リンク `https://lite.tiktok.com/t/XXXX/` は、ただのリダイレクトで
+   招待LPへ着地する(実測)。JSの実行もDOMの解析も要らないので、Puppeteer(Stealth API)を
+   経由せずここで展開できる。Stealth API は universal-data から
+   「共有用のOneLink」を取り出す実装のため、公式リンクの実体である
+   LPのURLは返してくれない。この関数がそれを直接取りに行く。 */
+
+/** 展開時に名乗るUA。端末別に遷移先が変わるため、iOSのSafariとして問い合わせる。 */
+export const IOS_USER_AGENT =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+
+export const EXPAND_TIMEOUT_MS = 15000;
+export const EXPAND_MAX_HOPS = 10;
+export const EXPAND_ENDPOINT = '/api/expand';
+
+/* 展開を許可するホスト。任意のURLを取りに行かせない(SSRF対策)。
+   ブラウザから /api/expand 経由でも呼ばれるため、サーバー側でも同じ判定を通す。 */
+export const EXPANDABLE_HOST_RE = /(^|\.)(tiktok\.com|tiktokv\.com|onelink\.me)$/i;
+
+export function isExpandableUrl(url: URL): boolean {
+  return url.protocol === 'https:' && EXPANDABLE_HOST_RE.test(url.hostname);
+}
+
+/**
+ * リダイレクトを自前で追って、最終的なURLを返す(サーバー専用)。
+ *
+ * `redirect: 'follow'` に任せず1ホップずつ追うのは、
+ *  - 許可ホストの外へ出る手前で止めるため
+ *  - 着地先が招待LP(1.5MB近いHTML)でも本文を読まずに済ませるため
+ * の2点による。
+ */
+export async function followRedirects(raw: string): Promise<string> {
+  let current = parseHttpUrl(raw);
+  if (!current) throw new Error('URLが不正です。');
+  if (!isExpandableUrl(current)) throw new Error('展開の対象外のドメインです: ' + current.hostname);
+
+  for (let hop = 0; hop < EXPAND_MAX_HOPS; hop++) {
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), EXPAND_TIMEOUT_MS) : null;
+
+    let res: Response;
+    try {
+      res = await fetch(current.toString(), {
+        method: 'GET',
+        redirect: 'manual',
+        headers: { 'user-agent': IOS_USER_AGENT, accept: 'text/html,application/xhtml+xml' },
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+
+    if (res.status < 300 || res.status >= 400) {
+      // 着地。巨大なHTMLを読み込まずに捨てる
+      await res.body?.cancel().catch(() => {});
+      return current.toString();
+    }
+
+    const location = res.headers.get('location');
+    await res.body?.cancel().catch(() => {});
+    if (!location) return current.toString();
+
+    const next = parseHttpUrl(new URL(location, current).toString());
+    // 許可ホストの外(App Store など)へ出るなら、その手前を答えとする
+    if (!next || !isExpandableUrl(next)) return current.toString();
+    current = next;
+  }
+
+  return current.toString();
+}
+
+/**
+ * 短縮リンクを展開する。ブラウザからは同一オリジンの `/api/expand` を経由する
+ * (クロスオリジンのリダイレクトはブラウザからは追えないため)。
+ * 失敗しても例外は投げず null を返す。呼び出し側は従来の抽出経路へフォールバックする。
+ */
+export async function expandShortUrl(raw: string): Promise<string | null> {
+  const input = parseHttpUrl(raw);
+  if (!input || !isExpandableUrl(input)) return null;
+
+  try {
+    if (typeof window === 'undefined') return await followRedirects(input.toString());
+
+    const res = await fetch(EXPAND_ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: input.toString() }),
+    });
+    const data = (await res.json().catch(() => null)) as { url?: unknown } | null;
+    return typeof data?.url === 'string' ? data.url : null;
+  } catch {
+    return null;
+  }
 }
 
 /* ネットワーク層で落ちたときに、原因を自動で切り分ける。
@@ -357,11 +546,11 @@ export const DEEPLINK_PARAMS = [
   'redirect_url',
   'af_ios_fallback',
   'af_android_fallback',
-  // 過去のインセンティブ系キャンペーンの残骸。
-  // 残っていると aweme:// 等のカスタムスキームへ勝手に飛ばされる。
-  'inc_target_url',
-  'is_inc_roma',
-  'incentive_redirect',
+  /* かつては inc_target_url / is_inc_roma / incentive_redirect もここに入れて削除していた。
+     「残っていると aweme:// へ勝手に飛ばされる」という理由だったが、実測(Run A)で
+     これらが“LPがアプリを開くための仕掛け”そのものだと判明したため削除をやめた。
+     飛び先が通常版になる問題は、キーを消すのではなく toLiteScheme() で
+     スキームだけをLiteへ差し替えることで解決する(INCENTIVE_PARAMS 参照)。 */
 ];
 
 /* 成果計測に必要なパラメータ。実物の招待LPの universal-data
@@ -497,12 +686,81 @@ export function assertTrackingPreserved(before: URL, after: URL): void {
   }
 }
 
+/**
+ * LPがアプリを開くためのキーが残っていることを検証する。
+ *
+ * 値までは見ない。inc_target_url はスキームを差し替えるため値が変わるのが正常で、
+ * ここで守りたいのは「キーごと消えていないこと」だから。
+ */
+export function assertIncentivePreserved(before: URL, after: URL): void {
+  const lost = INCENTIVE_PARAMS.filter((k) => before.searchParams.has(k) && !after.searchParams.has(k));
+  if (lost.length > 0) {
+    throw new Error(
+      'アプリを開くためのパラメータが失われました: ' +
+        lost.join(', ') +
+        '。このままだとLPで止まってアプリに遷移しないため、生成を中断しました。'
+    );
+  }
+}
+
+/**
+ * 招待LPのURLをそのまま遷移先にする(推奨経路)。
+ *
+ * 公式の招待リンクが実際に着地するURLと同じものを配るので、
+ * u_code / share_page_data / media_source / inc_pid などの計測値は定義上そのまま残る。
+ * OneLinkを組み立て直さないので、こちらでは再現できない wid / c の欠落も起こらない。
+ *
+ * 触るのは次の3点だけ。
+ *  1. WebView描画用パラメータ(INTERSTITIAL_PARAMS)を落とす … 表示制御専用で計測に無関係
+ *  2. inc_target_url のスキームを Lite へ差し替える … 通常版TikTokの起動を防ぐ
+ *  3. 過去の実装が焼き付けた af_* を落とす … LP側では意味を持たず、URLを膨らませるだけ
+ */
+export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
+  const url = new URL(source.toString());
+  const params = url.searchParams;
+  const removed: string[] = [];
+
+  const drop = (keys: string[]) => {
+    keys.forEach((k) => {
+      if (params.has(k)) {
+        removed.push(k);
+        params.delete(k);
+      }
+    });
+  };
+
+  if (opts.stripDeepLinks) drop(INTERSTITIAL_PARAMS);
+
+  /* 生成済みURLを再度通したときのために、こちらが付けたAppsFlyer用のキーも落とす。
+     LPはこれらを解釈しないので、残っていても無駄に長くなるだけ。
+     is_retargeting も同様に、過去のURLに焼き付いていれば必ず落とす。 */
+  drop([...MANAGED_PARAMS, 'is_retargeting']);
+
+  /* 通常版TikTokのスキームをLiteへ差し替える。キー自体は必ず残す。 */
+  if (opts.useLiteOneLink) {
+    const target = params.get('inc_target_url');
+    if (target) {
+      const lite = toLiteScheme(target);
+      if (lite !== target) params.set('inc_target_url', lite);
+    }
+  }
+
+  assertTrackingPreserved(source, url);
+  assertIncentivePreserved(source, url);
+
+  return { url: url.toString(), removed, mode: 'lp' };
+}
+
 export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   let url = parseHttpUrl(rawUrl);
   if (!url) throw new Error('トラッキング URL が不正です。');
 
   // 検証用に入力時点のパラメータを控えておく(以降 url は書き換わる)
   const source = new URL(url.toString());
+
+  /* 招待LPのURLなら、OneLinkを組み立て直さずそのまま遷移先にする。
+     公式リンクが着地するのはこの形だと実測で確認済み(ファイル冒頭のコメント参照)。 */
+  if (isInviteLpUrl(url)) return buildLpUrl(source, opts);
 
   // OneLink でなければここで止まる
   url = assertOneLink(url);
@@ -551,6 +809,11 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
     removed.push('is_retargeting');
     params.delete('is_retargeting');
   }
+
+  /* inc_target_url は削除せず、スキームだけをLiteへ差し替える。
+     削除すると「アプリを開く仕掛け」ごと失われるため(INCENTIVE_PARAMS のコメント参照)。 */
+  const incTarget = params.get('inc_target_url');
+  if (opts.useLiteOneLink && incTarget) params.set('inc_target_url', toLiteScheme(incTarget));
 
   /* ===== 遷移先とフォールバック先を明示する =====
      フォールバック系は「削除するだけ」にしない。削除するとOneLinkテンプレート側
@@ -630,7 +893,7 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
      世に出るのを防ぐ。 */
   assertTrackingPreserved(source, url);
 
-  return { url: url.toString(), removed };
+  return { url: url.toString(), removed, mode: 'onelink' };
 }
 
 /**
@@ -641,8 +904,11 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
  * 入力欄1つぶんの操作にまとめただけで、内部で呼んでいるのは
  * `callExtractApi()` と `buildUrl()`(いずれも単独版からの移植)そのもの。
  *
- * - 入力が OneLink 形式なら、展開は不要なのでサニタイズだけ行う。
- * - そうでなければ Stealth API で元のトラッキングURLへ展開してからサニタイズする。
+ * 土台にするURLは、公式リンクの実体にどれだけ近いかで決める。
+ *  1. 入力がすでに招待LPのURLなら、展開せずそのまま使う
+ *  2. 短縮リンクなら自前でリダイレクトを追って展開する(公式リンクは招待LPへ着地する)
+ *  3. 入力が OneLink 形式なら、展開は不要なのでサニタイズだけ行う
+ *  4. どれにも当てはまらなければ Stealth API で抽出する(従来経路)
  *
  * 展開・サニタイズのいずれかに失敗した場合は例外を投げる(呼び出し側で保存を中断する)。
  */
@@ -654,10 +920,17 @@ export async function generateDestinationUrl(
   if (!input) throw new Error('遷移先URLが不正です。http(s):// で始まるURLを入力してください。');
 
   let source = input.toString();
-  if (!ONELINK_RE.test(input.hostname)) {
-    const data = await callExtractApi(source);
-    // TikTok自身のLiteリンクが取れていればそちらを土台にする(wid 等を含むため)
-    source = preferLiteUrl(data);
+
+  if (!isInviteLpUrl(input) && !ONELINK_RE.test(input.hostname)) {
+    // まずリダイレクトを追うだけで済ませる。公式リンクはこれで招待LPに着地する。
+    const expanded = parseHttpUrl(await expandShortUrl(source));
+
+    if (expanded && (isInviteLpUrl(expanded) || ONELINK_RE.test(expanded.hostname))) {
+      source = expanded.toString();
+    } else {
+      // 展開できなかった(JS経由の遷移など)場合だけ Stealth API に頼る
+      source = preferSourceUrl(await callExtractApi(source));
+    }
   }
 
   return buildUrl(source, {

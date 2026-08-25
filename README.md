@@ -49,10 +49,67 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
 
 - **2モード**: 単独版と同じく1つのURLで分岐する。`?to=` なしならビルダー(生成フォーム)、`?to=<url>` 付きならクッションページ(1〜2秒の遅延後に遷移先へ飛ばす黒画面)。
 - **コアロジック**: Stealth APIへのFetch・URLオブジェクトの再構築・`DEEPLINK_PARAMS` によるサニタイズは `lib/link-generator.ts` に単独版のまま移植してある(コメント含めて挙動は不変)。UI(`link-generator-form.tsx`)は入力値の受け渡しと表示だけを担当する。
+
+#### 生成方式は2つ。既定は「招待LP直結」
+
+実機での実測により、**公式の招待リンクの実体は OneLink ではなく招待LPそのもの**だと判明した。
+`https://lite.tiktok.com/t/XXXXXXXX/` を iOS Safari のアドレスバーで展開すると、着地するのは
+
+```
+https://www.tiktok.com/ug/incentive/share/pro_scan_code?...&u_code=...
+```
+
+で、`af_dp` / `af_ios_url` / `af_force_deeplink` / `wid` / `pid` といった **AppsFlyer用のキーは1つも無い**。
+代わりに入っているのが次の3つで、これが「アプリを開く／ストアへ送る」を決めている仕組みそのものだった。
+
+```
+inc_target_url     = aweme://roma_redirect/?spark_page=scan_code
+incentive_redirect = 1
+is_inc_roma        = 1
+```
+
+つまり分岐を担っているのは AppsFlyer ではなく **LP側のJS**。
+`universal-data` から拾える OneLink(`BAuo`)は、LPが内部に持っている「他人に共有するための」リンクであって、
+公式リンクの実体ではなかった。ここを取り違えていたために、次が同時に起きていた。
+
+- 通常版TikTokのOneLink(`BAuo`)を土台にしてしまい、Universal Linkで通常版が起動する
+- `4P4E` へ載せ替えても `wid` / `c` はショートリンク側のサーバー設定にあるため再現できない
+- LPがアプリを開くための仕掛けである `inc_target_url` / `incentive_redirect` / `is_inc_roma` を、
+  `DEEPLINK_PARAMS` として削除していた
+
+「`onelink.me` で止まり『TikTok Liteを開く』ボタンが出る」症状の原因はこれ。
+対策は **組み立て直さないこと**。TikTok自身が配っているURLと同じものを遷移先にする(`buildLpUrl()`)。
+
+| 方式 | 条件 | 何をするか |
+|---|---|---|
+| **`lp`(既定・推奨)** | 土台が招待LPのURL(`isInviteLpUrl()`) | 描画用パラメータ(`INTERSTITIAL_PARAMS`)を落とし、`inc_target_url` のスキームを Lite へ差し替えるだけ。それ以外は一切触らない |
+| `onelink`(フォールバック) | 土台がOneLinkのURL | 従来どおり `4P4E` へ載せ替えて `af_dp` を組み立てる |
+
+`BuildResult.mode` にどちらで生成したかが入り、結果画面にも表示される。
+
+- **スキームは消さずに差し替える**: `inc_target_url` が指す `aweme://` は**通常版TikTok**のスキームで、
+  通常版がインストール済みの端末ではそちらが起動する。ただしキーごと削除すると
+  「アプリを開く仕掛け」自体が失われてLPで止まる。そこで `toLiteScheme()` でスキーム部分だけを
+  `snssdk473824://` に差し替える。「誰の招待か」は LP のクエリ(`u_code` / `share_page_data`)が
+  運んでいて `inc_target_url` のクエリには乗っていないため、差し替えても招待情報は保たれる。
+  この差し替えは OneLink 方式の `af_dp`(`params_url`)側にも同じように適用する。
+  `INCENTIVE_PARAMS` の3キーが消えていないことは `assertIncentivePreserved()` で検証する。
+- **短縮リンクは自前で展開する**(`followRedirects()` / `app/api/expand/route.ts`): 公式の招待リンクは
+  ただのリダイレクトで招待LPへ着地するので、Puppeteer(Stealth API)を経由する必要がない。
+  Stealth API は `universal-data` から「共有用のOneLink」を取り出す実装のため、公式リンクの実体である
+  LPのURLは返してくれない。ブラウザからはクロスオリジンのリダイレクトを追えないので、
+  同一オリジンの `/api/expand` を挟む。
+  - リダイレクトは `redirect: 'manual'` で1ホップずつ追う。許可ホストの外(App Store等)へ出る手前で止め、
+    着地先が1.5MB近い招待LPでも本文を読まずに済ませるため。最大10ホップ。
+  - 取りに行けるのは `tiktok.com` / `tiktokv.com` / `onelink.me` のみ(`EXPANDABLE_HOST_RE`)。
+    任意のURLを取得させないため(SSRF対策)。返すのは最終URLだけで、本文は返さない。
+  - 展開に失敗した場合(JS経由の遷移など)だけ、従来どおり Stealth API へフォールバックする。
+以下は **`onelink` 方式(フォールバック)のときの挙動**。`lp` 方式では `af_*` を一切付与しないため適用されない。
+
 - **端末ごとの遷移先**: `af_ios_url`(iOS) / `af_android_url`(Android) / `af_ipad_url`(iPad) / `af_web_dp`(PC) を付与する。
   - `af_ipad_url` は `af_ios_url` と同じ値が自動でセットされる。iPadOSのSafariは既定で「デスクトップ用サイトを要求」するためUserAgentがmacOSと見分けがつかず、AppsFlyer側がiOS端末として扱ってくれない。指定が無いとOneLinkの既定のWeb遷移先(サイトのトップページ)が開いてしまうため。
   - `af_web_dp` はPC(Windows/Mac)から踏まれたときの遷移先で、フォームの「af_web_dp(PC向け遷移先)」に任意のURL(キャンペーンLP等)を入力する。空欄なら付与しない。なお `af_web_dp` は `DEEPLINK_PARAMS` にも含まれるため、リンク元に埋まっていた値は一度除去され、入力した値だけが最終的に残る。
-- **抽出結果がOneLinkでなければエラーで止める**: 以前は「OneLink テンプレート」欄の値でドメイン＋パスを差し替えるフォールバックを持っていたが、廃止した(`assertOneLink()`)。実物の招待リンクは `https://snssdk1180.onelink.me/BAuo/999140ec` のように「テンプレートID + ショートリンクID」の2セグメント構成で、後半はシェアごとに異なる。さらにこのリンクのクエリには `pid` も `c` も無く、AppsFlyer側(ショートリンク)がサーバー側に保持していると考えられる。つまりテンプレートへの差し替えは「他人のリンクに別のショートリンクを当てる」処理であり、アトリビューション設定ごと失った不完全なリンクを生む。黙って壊れたリンクを配るより、生成を止めて作り直させるほうが安全。
+- **抽出結果が招待LPでもOneLinkでもなければエラーで止める**(招待LPのURLはこの判定に到達せず、そのまま `lp` 方式で処理される): 以前は「OneLink テンプレート」欄の値でドメイン＋パスを差し替えるフォールバックを持っていたが、廃止した(`assertOneLink()`)。実物の招待リンクは `https://snssdk1180.onelink.me/BAuo/999140ec` のように「テンプレートID + ショートリンクID」の2セグメント構成で、後半はシェアごとに異なる。さらにこのリンクのクエリには `pid` も `c` も無く、AppsFlyer側(ショートリンク)がサーバー側に保持していると考えられる。つまりテンプレートへの差し替えは「他人のリンクに別のショートリンクを当てる」処理であり、アトリビューション設定ごと失った不完全なリンクを生む。黙って壊れたリンクを配るより、生成を止めて作り直させるほうが安全。
   - パスに**ショートリンクID**が付いている場合(`/BAuo/999140ec`)は、それを外してロングリンク化する(`toLongLink()`)。ショートリンク側はAppsFlyerのサーバーに設定を持ち、その設定がクエリより優先されると `af_ios_url` / `af_dp` が無視されて通常版TikTokのWebページが開いてしまうため。テンプレートID(`/BAuo`)は残す。
   - ロングリンク化するとショートリンク側の `pid` も失われる。AppsFlyerは `pid` の無いクリックを原則アトリビュートしないため、`pid` が無い場合に限り同じ値を指す `media_source` / `inc_pid` から補完する。`u_code` / `share_page_data` はクエリ側にあるので影響を受けない。
 - **成果計測パラメータの完全保護**: 実物の招待LPの `universal-data`(`app_context.query` の全36キー)を分類して同定した20件を `TRACKING_PARAMS` として定義し、生成の最後に `assertTrackingPreserved()` で入力と出力を突き合わせる。1つでも欠けていれば例外で止める。サニタイズは削除リスト方式なので、リストを編集したときに計測用のキーを巻き込んでも気づけない。「100%保護」を願望ではなく保証にするための仕組み。
@@ -70,7 +127,7 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
     ```
 
     単なるスキーム(`snssdk473824://`)だけだと**アプリが起動するだけで「誰の紹介か」がアプリに伝わらない**(実機でLiteは開くが招待トラッキングが消える、という不具合が実際に起きた)。TikTok自身は `params_url` のクエリに `u_code` / `share_page_data` などの識別子を載せてアプリへ渡しており(実物のLPのHTMLで確認)、同じ構造で組み立てる。`params_url` が指す招待LPのURLは `INVITE_LP_URL` に定数として切り出してある(キャンペーンが変わるとパスも変わりうるため)。
-  - **`params_url` にはサニタイズ「前」の元のクエリを載せる。** サニタイズ(`DEEPLINK_PARAMS` / `INTERSTITIAL_PARAMS` の除去)はOneLink側のWeb遷移を止めるためのもので、アプリ内へ渡すペイロードとは文脈が違う。実物のHTMLでは TikTok自身が `inc_target_url`(`aweme://roma_redirect/...`) / `is_inc_roma` / `incentive_redirect` を含む66件すべてをアプリへ渡しており、これらは招待インセンティブの識別子そのもの。ここで削ると「Liteは開くが誰の紹介か分からない」状態になる(実機で発生した)。
+  - **`params_url` にはサニタイズ「前」の元のクエリを載せる。** サニタイズ(`DEEPLINK_PARAMS` / `INTERSTITIAL_PARAMS` の除去)はOneLink側のWeb遷移を止めるためのもので、アプリ内へ渡すペイロードとは文脈が違う。実物のHTMLでは TikTok自身が `inc_target_url` / `is_inc_roma` / `incentive_redirect` を含む66件すべてをアプリへ渡しており、これらは招待インセンティブの識別子そのもの。ここで削ると「Liteは開くが誰の紹介か分からない」状態になる(実機で発生した)。`inc_target_url` だけは `aweme://` → `snssdk473824://` にスキームを差し替えて載せる(アプリ内でも通常版を開かせないため)。
   - 除くのは `is_retargeting`(TikTokも渡していない)と、こちらが足したAppsFlyer用のキー(`MANAGED_PARAMS`)だけ。
   - TikTok自身が必ず付けているアプリ内コンテナの設定値(`spark_page` / `use_spark` / `bdhm_bid` / `needlaunchlog` / `ug_medium` / `disable_ttnet_proxy` / `use_mutable_context`)を `LITE_DEEPLINK_CONTEXT` として再現する。招待LPのクエリには含まれず、リンク生成側で付けている固定値。
   - **再保存しても削れない**: 生成済みURLをもう一度通すとき、OneLink側のクエリは既にサニタイズ済みで `inc_*` が落ちている。そのまま作り直すと再保存のたびにアプリ用のデータが削れるため、`recoverAppParams()` で前回の `af_dp` の `params_url` から元のクエリを復元し、現在のクエリを上書きで重ねる(5回再保存してもキー構成・URL長が変わらないことを検証済み)。
@@ -78,7 +135,7 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
   - Liteがインストール済みなら `af_dp` でLiteが開き、未インストールなら `af_ios_url` / `af_android_url` のストアへ落ちる。
   - クエリ(`u_code` / `share_page_data` / `media_source` / `pid` 等)はすべてそのまま引き継ぐ。
   - フォームのチェックボックスでOFFにすると従来どおり元のドメインのまま生成し、`af_dp` は空文字(通常版の起動ブロック)になる。挙動を比較したいときに使う。
-- **TikTok自身のLiteリンクを最優先で使う**: Stealth API が `liteUrl`(TikTok が Lite 用に組み立てた `snssdk473824.onelink.me/4P4E`)を返す場合は、それを土台にする(`preferLiteUrl()`)。このリンクは `wid`(招待者の識別子) / `c`(キャンペーン) / `af_adset` と、`u_code` を含む `af_dp` を最初から持っている。**これらは `shareOptions.onelink`(BAuo)のクエリには存在せず、こちらで再構築できない。** 招待LPのレンダリング済みDOMにしか無く、`universal-data` 内の18件はすべて値が空のテンプレート。
+- **土台に使うURLの優先順位**(`preferSourceUrl()`): `lpUrl`(招待LPの実体。最優先) → `liteUrl` → `trackingUrl`。`/api/expand` で展開できた場合はAPIを呼ばずにLPのURLを直接使う。Stealth API が `liteUrl`(TikTok が Lite 用に組み立てた `snssdk473824.onelink.me/4P4E`)を返す場合は、それを土台にする。このリンクは `wid`(招待者の識別子) / `c`(キャンペーン) / `af_adset` と、`u_code` を含む `af_dp` を最初から持っている。**これらは `shareOptions.onelink`(BAuo)のクエリには存在せず、こちらで再構築できない。** 招待LPのレンダリング済みDOMにしか無く、`universal-data` 内の18件はすべて値が空のテンプレート。
   - 土台が既に「中身の詰まった」Liteディープリンクを持っている場合、`af_dp` は作り直さずそのまま使う。TikTokが生成したものには再現できない値が入っているため。
   - `liteUrl` が返ってこない場合は従来どおり `trackingUrl`(BAuo)から再構築するが、`wid` / `af_adset` が欠けるため招待が成立しない可能性がある(実機で確認)。**Stealth API 側(`server.js`)の対応が必要。**
 - **`is_retargeting` は付与せず、必ず除去する**: AppsFlyerはこれが `true` だとクリックを「リターゲティング(再エンゲージメント)」として記録する。招待報酬は「新規インストール＋初回起動」で発火するのが前提なので、リターゲティング扱いになると発火条件を外れて報酬が付かない恐れがある。TikTok Liteの招待リンクにはそもそも `is_retargeting` が入っていないため、付与していたのはこちら側だった。

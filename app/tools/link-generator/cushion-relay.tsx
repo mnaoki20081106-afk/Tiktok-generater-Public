@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { ERROR_TEXT, ERROR_TEXT_ID, IAB_SCREEN_ID, liteLaunchOptions, startLiteLaunch } from '@/lib/lite-launch';
+import { lpToPrefetch } from '@/lib/link-generator';
 import styles from './cushion-relay.module.css';
 
 /**
@@ -22,7 +23,9 @@ export function CushionRelay({ to }: { to: string | null }) {
     /* タップを待つ画面はどの環境でもすぐ出す。遅らせると、その間のタップが
        <a> に届かず取りこぼしになる(画面は hidden のままなので)。
        通常のブラウザで誰もタップしなかった場合の自動遷移は startLiteLaunch 側が持つ。 */
-    startLiteLaunch(liteLaunchOptions(to));
+    /* 遷移先がラッパー(hideLp で生成した形)なら、その中の招待LPを裏で踏む。
+       LP直結なら lpToPrefetch は undefined を返し、何も踏まない。 */
+    startLiteLaunch(liteLaunchOptions(to, lpToPrefetch(to)));
   }, [to]);
 
   return (
@@ -38,7 +41,8 @@ export function CushionRelay({ to }: { to: string | null }) {
               利用者のタップで Universal Link を発火させる。 */}
           {/* href は最初から入れておき、JSからは書き換えない。target="_top" を付けるのは、
               アプリ内ブラウザ(WKWebView)から最上位のコンテキストで辿らせるため。 */}
-          {/* href はアプリを直接開くカスタムスキーム。トラッキングが成立するのはこの経路だけ。 */}
+          {/* href は招待LPのHTTPS URL(既定)か、hideLp で生成した場合はラッパー。
+              後者のときは startLiteLaunch が読み込み時に裏で招待LPを踏む。 */}
           <a
             id={IAB_SCREEN_ID}
             href={to}

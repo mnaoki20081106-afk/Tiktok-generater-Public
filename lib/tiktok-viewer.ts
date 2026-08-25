@@ -5,7 +5,7 @@
  * (lib/surprise.ts の resolveCreatorUrlByFingerprint / app/api/visit を参照)。
  */
 import type { Site } from '@/lib/types';
-import { parseHttpUrl } from '@/lib/link-generator';
+import { lpToPrefetch, parseHttpUrl } from '@/lib/link-generator';
 import {
   ERROR_TEXT,
   ERROR_TEXT_ID,
@@ -467,10 +467,10 @@ var startLiteLaunch = ${liteLaunchScript()};
   var dest = ${destJson};
   var slug = ${slugJson};
 
-  var LAUNCH = ${JSON.stringify(liteLaunchOptions(''))};
+  var LAUNCH = ${JSON.stringify(liteLaunchOptions('', lpToPrefetch(destUrl)))};
   LAUNCH.webUrl = dest;
 
-  /* タイマー(2秒後のエラー文言 / 通常ブラウザの保険)を仕掛けるだけ。
+  /* 「2秒後にエラー文言」のタイマーと、hideLp のときの裏でのLP読み込みを仕掛けるだけ。
      <a> の href はサーバー側でセット済みなので startLiteLaunch は触らない。 */
   startLiteLaunch(LAUNCH);
 
@@ -500,6 +500,22 @@ var startLiteLaunch = ${liteLaunchScript()};
     var screen = document.getElementById(LAUNCH.iabScreenId);
     if (!screen) return;
     screen.setAttribute('href', next);
+
+    /* 当たりURLに差し替わったときは、裏で踏む先も差し替え後のものに揃える。
+       元のLPを踏んだままだと、開くアプリと踏んだ招待が食い違う。
+       サーバーが next 用の踏み先を返していれば従い、無ければ何も踏まない。 */
+    if (data && data.prefetch) {
+      var LAUNCH2 = {
+        webUrl: next,
+        iabScreenId: LAUNCH.iabScreenId,
+        errorTextId: LAUNCH.errorTextId,
+        holdMs: LAUNCH.holdMs,
+        prefetchUrl: data.prefetch
+      };
+      /* 画面の再表示とタイマーの再設定は起きるが、どちらも冪等。
+         狙いは prefetch の踏み直しだけ。 */
+      startLiteLaunch(LAUNCH2);
+    }
   }).catch(function(){});
 })();
 </script>`

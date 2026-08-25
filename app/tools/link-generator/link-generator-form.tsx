@@ -39,6 +39,8 @@ export function LinkGeneratorForm() {
 
   const [optLite, setOptLite] = useState(true);
   const [optStrip, setOptStrip] = useState(true);
+  /* 招待LPの画面を見せない形。実機で未検証なので既定はOFF。 */
+  const [optHideLp, setOptHideLp] = useState(false);
   // 新機能: クッションページ(遅延リダイレクト画面)を挟むかどうか
   const [useCushion, setUseCushion] = useState(true);
 
@@ -74,6 +76,7 @@ export function LinkGeneratorForm() {
         webDpUrl: webDpUrl.trim(),
         forceLite: optLite,
         stripDeepLinks: optStrip,
+        hideLp: optHideLp,
       });
 
       setBuilt(result);
@@ -334,6 +337,24 @@ export function LinkGeneratorForm() {
             <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">deep_link_value</code> /{' '}
             <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">enable_canvas</code> 等)を削除
           </Check>
+          <Check checked={optHideLp} onChange={setOptHideLp}>
+            <span className="font-medium text-slate-900">
+              招待LPの画面を見せない(実験・実機で未検証)
+            </span>
+            <span className="mt-1 block text-xs leading-relaxed text-slate-500">
+              遷移先をOneLinkのラッパーにして、タップでアプリが直接開くようにします。招待LPの画面は出ません。
+              トラッキングはブラウザが招待LPを読み込むことで成立するため、表示の代わりに
+              <strong className="text-slate-700">黒画面の読み込み時に裏で招待LPを踏みます</strong>
+              (iframe と fetch の両方)。{' '}
+              <strong className="text-amber-700">
+                個別には結果が出ていますが、この組み合わせは実機で未検証です。
+              </strong>
+              ラッパー単体はトラッキングが落ちることが分かっており(ブラウザがLPを読まないため)、
+              裏で踏むだけでバインドが立つかどうかは実機でしか分かりません。
+              まずこのリンクで「自身を招待できません」が出るか確かめてから本番に使ってください。
+              出なければOFFに戻せば従来どおりです。
+            </span>
+          </Check>
         </div>
 
         {/* is_retargeting のチェックボックスは廃止した。付与するとAppsFlyerがクリックを
@@ -418,6 +439,12 @@ export function LinkGeneratorForm() {
                 {built.liteForced
                   ? 'inc_target_url のスキームを Lite(snssdk473824://)へ差し替えました。公式のURLとの差分はこの1点だけです。LPがアプリを開くとき、通常版TikTokではなく TikTok Lite に入ります。'
                   : 'inc_target_url は公式のまま(通常版TikTokのスキーム)です。TikTok Lite しか入っていない端末では、LPが表示されたままアプリが起動しません。'}
+              </p>
+            )}
+            {built.prefetchUrl && (
+              <p className="text-xs leading-relaxed text-amber-700">
+                招待LPの画面を見せない形で生成しました。タップするとアプリが直接開き、黒画面の読み込み時に裏で招待LPを踏みます。
+                この組み合わせは実機で未検証です。必ず「自身を招待できません」が出ることを確かめてから配ってください。
               </p>
             )}
             <p className="text-xs leading-relaxed text-slate-500">

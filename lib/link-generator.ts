@@ -447,6 +447,95 @@ export function buildLiteDeepLink(sourceParams: URLSearchParams, lpBase: string 
 }
 
 /**
+ * 招待LPのURLを、TikTok自身が使っている OneLink のラッパーで包む。
+ *
+ *   https://snssdk473824.onelink.me/4P4E?domain_source=tiktok&af_dp=<Liteのディープリンク>
+ *
+ * 形は実物の招待LPのHTMLにある18個の wrapper の `url_fallback` と同じ
+ * (`lib/__fixtures__/invite-lp.json` の採取元)。`{{schema}}` に当たるところへ
+ * `buildLiteDeepLink()` の出力を入れる。
+ *
+ * ## これは単体では使わない
+ *
+ * ラッパー単体は**実機でトラッキングが落ちることが確認済み**。アプリは起動し、
+ * 招待ページのUIまで描画されるのに、バインドだけが起きない。
+ * ブラウザがLPを読み込まないためで、af_dp の中身を3通り作り直しても変わらなかった。
+ *
+ * 使うのは「裏でLPを踏んでから、これでアプリを開く」という組み合わせのときだけ
+ * (`hideLp`)。ラッパーを href に置く理由は2つ:
+ *
+ *  1. **https なのでXのアプリ内ブラウザがタップを通す。**
+ *     カスタムスキームを直接 href に入れると、WKWebView が `<a>` のタップでも
+ *     黙って破棄する(実機で確認済み)。
+ *  2. **LPの画面が出ない。** Universal Link でアプリが直接起動するため、
+ *     利用者は招待LPを見ない。
+ */
+export function buildLiteWrapperUrl(lp: URL): string {
+  const wrapper = new URL(LITE_ONELINK_ORIGIN + LITE_ONELINK_PATH);
+  wrapper.searchParams.set('domain_source', WRAPPER_DOMAIN_SOURCE);
+  wrapper.searchParams.set('af_dp', liteSchemeForLp(lp));
+  return wrapper.toString();
+}
+
+/**
+ * 招待LPのURLから、TikTok自身の `url_schemes` と**同じ構造**のディープリンクを作る。
+ *
+ *   snssdk473824://roma_redirect/?params_url=<招待LPのURLをそのままエンコード>&spark_page=<値>
+ *
+ * ## `buildLiteDeepLink()` との違い(重要)
+ *
+ * `buildLiteDeepLink()` は `spark_page` などのコンテキストを **`params_url` の中**へ入れる。
+ * 実物のLPのHTMLを見ると、TikTokは**外側(`params_url` の兄弟)**に置いていた。
+ *
+ *   params_url=<LPの36キーそのまま>&spark_page={{url}}
+ *
+ * こちらの構造には実利もある。`params_url` が招待LPのURLと**1バイト一致**するので、
+ * ラッパーから元のLPのURLを**完全に復元できる**(`lpToPrefetch()`)。
+ * `hideLp` では「ラッパーでアプリを開き、裏では復元したLPを踏む」ので、
+ * 復元したものが踏むべきURLと違うと**開くアプリと踏んだ招待が食い違う**。
+ * 中へ入れる形だとキーが増えて一致しなくなるため、この構造でなければならない。
+ *
+ * `buildLiteDeepLink()` は OneLink再構築(フォールバック)経路がそのまま使い続ける。
+ * あちらは実機の履歴があるので触らない。
+ */
+export function liteSchemeForLp(lp: URL): string {
+  const scheme = LITE_DEEPLINK_BASE + '?params_url=' + encodeURIComponent(lp.toString());
+  const sparkPage = sparkPageOf(lp);
+  return sparkPage ? scheme + '&spark_page=' + encodeURIComponent(sparkPage) : scheme;
+}
+
+/**
+ * `spark_page` に入れる値を、招待LP自身から読む。
+ *
+ * TikTokのテンプレートでは `&spark_page={{url}}` というプレースホルダだが、
+ * 埋まる値は招待LPが `inc_target_url` として持っているもの
+ * (`aweme://roma_redirect/?spark_page=scan_code`)の `spark_page` と同じ。
+ * **推測で埋めるのではなく、LP自身が持っている答えを使う。**
+ */
+export function sparkPageOf(lp: URL): string | null {
+  const target = lp.searchParams.get('inc_target_url');
+  if (!target) return null;
+  const at = target.indexOf('?');
+  if (at < 0) return null;
+  return new URLSearchParams(target.slice(at + 1)).get('spark_page');
+}
+
+/**
+ * 遷移先が「LPの画面を見せない」形(`hideLp` で生成したラッパー)なら、
+ * 黒画面の裏で踏むべき招待LPのURLを返す。そうでなければ undefined
+ * (＝LP直結なので、裏で踏む必要がない)。
+ *
+ * ラッパーの `af_dp` の `params_url` に招待LPのURLが丸ごと入っているので、
+ * **保存済みのURLからでも取り出せる**。DBは遷移先を1本持つだけでよく、
+ * スキーマを増やさずに済む。
+ */
+export function lpToPrefetch(destUrl: string): string | undefined {
+  const url = parseHttpUrl(destUrl);
+  if (!url || !isLiteWrapperUrl(url)) return undefined;
+  return wrapperPayloadUrl(destUrl)?.toString();
+}
+
+/**
  * 遷移先URLから、アプリを直接開くためのディープリンクを作る(マージ#35 と同一)。
  *
  * 作れない場合は null を返す。呼び出し側はWeb遷移だけを行う。
@@ -530,6 +619,25 @@ export interface BuildOptions {
   /* is_retargeting はオプションごと廃止した。付与すると招待報酬が付かなくなる恐れがあり、
      残しておくと「うっかりONにする」事故が起きるため(buildUrl は常に除去する)。 */
   stripDeepLinks: boolean;
+  /**
+   * 招待LPの**画面を見せずに**アプリを開くか(既定 false)。
+   *
+   * true にすると遷移先が OneLink のラッパーになり、タップでアプリが直接起動する。
+   * 招待LPのURLはラッパーの中(`af_dp` の `params_url`)に入ったまま運ばれるので、
+   * 表示側(`lib/lite-launch.ts`)が黒画面の読み込み時に**裏でLPを踏む**。
+   *
+   * **これは実機で未検証の組み合わせ。** 個別には結果が出ている。
+   *
+   *   ラッパー単体          … アプリは開く / トラッキング×(ブラウザがLPを読まない)
+   *   LP直結                … トラッキング○ / LPの画面が出る
+   *   ラッパー + 裏でLP     … ← これ。未検証
+   *
+   * 裏で踏むのが成立するかは、TikTokのバインドが
+   * 「LPのHTMLを取得した時点」で立つのか「LPのJSが走ってAPIを叩いた時点」で立つのかによる。
+   * 前者ならiframe/fetchのどちらでも通り、後者ならiframeが通ったときだけ成立する。
+   * こちらからは確かめられないので、実機でA/Bするためのフラグにしてある。
+   */
+  hideLp?: boolean;
 }
 
 export interface BuildResult {
@@ -550,6 +658,14 @@ export interface BuildResult {
    * 原因を1変数に絞れるよう結果に持たせる。
    */
   liteForced?: boolean;
+  /**
+   * 黒画面の読み込み時に**裏で踏む**招待LPのURL(`hideLp` のときだけ入る)。
+   *
+   * DBには遷移先を1本しか持てないが、ラッパーの `af_dp` の `params_url` に
+   * 招待LPのURLが丸ごと入っているので、保存済みのURLからでも
+   * `wrapperPayloadUrl()` で取り出せる。ここに入れているのは生成直後の表示用。
+   */
+  prefetchUrl?: string;
 }
 
 export function parseHttpUrl(raw: unknown): URL | null {
@@ -1130,7 +1246,24 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
      URLSearchParams を経由すると並び順やパーセントエンコードが変わりうるため、
      「公式のURLと1バイトも違わない」ことを保証するにはこの分岐が必要。 */
   const untouched = removed.length === 0 && !liteForced;
-  return { url: untouched ? source.toString() : url.toString(), removed, mode: 'lp', liteForced };
+  const lpUrl = untouched ? source.toString() : url.toString();
+
+  /* ===== LPの画面を見せない形(hideLp) =====
+
+     遷移先をラッパーにして、招待LPは黒画面の裏で踏む。
+     ラッパーの中に招待LPのURLがそのまま入るので、表示側は
+     `wrapperPayloadUrl()` でそれを取り出して裏で叩ける(保存済みURLからでも取れる)。
+
+     トラッキングの成否は「裏で踏むだけでバインドが立つか」に懸かっていて、
+     それは実機でしか分からない。ONにする判断は利用者に委ね、既定はOFFのままにする。 */
+  if (opts.hideLp) {
+    const lp = parseHttpUrl(lpUrl);
+    if (lp) {
+      return { url: buildLiteWrapperUrl(lp), removed, mode: 'lp', liteForced, prefetchUrl: lpUrl };
+    }
+  }
+
+  return { url: lpUrl, removed, mode: 'lp', liteForced };
 }
 
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveCreatorUrlByFingerprint } from '@/lib/surprise';
+import { lpToPrefetch } from '@/lib/link-generator';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,5 +33,8 @@ export async function POST(request: Request) {
   }
 
   const href = await resolveCreatorUrlByFingerprint(site, fp);
-  return NextResponse.json({ href });
+
+  /* 差し替え後のURLが「LPの画面を見せない」形なら、裏で踏むべき招待LPのURLも返す。
+     公開ページ側はこれを受けて踏み先を差し替える(踏んだ招待と開くアプリを揃えるため)。 */
+  return NextResponse.json({ href, prefetch: href ? (lpToPrefetch(href) ?? null) : null });
 }

@@ -18,39 +18,25 @@
  *
  * ### アプリ内ブラウザ(X など)
  * 自動遷移はスキームもページ遷移も両方ブロックされるため、最初から試さない。
- * 真っ白な画面にプログレスバーだけを出し、画面全体を1枚の <a> にしておく。
- * 利用者のタップでリンクを辿らせることで、Universal Link を自然に発火させる。
- * バーは意図的に手前で止め、一定時間タップが無ければ再実行を促す文言を出す。
+ * 画面全体を1枚の <a> にした真っ黒な画面を出し、利用者のタップでリンクを辿らせる。
+ * タップというユーザー操作を経由することで Universal Link を自然に発火させられる。
  *
- * タップ時のアニメーションは視覚的なフィードバックのためだけのもので、遷移は
- * <a> のネイティブな挙動に任せる(`preventDefault` もしないし `setTimeout` でも飛ばさない)。
- * スクリプトで遷移させるとユーザー操作の文脈から外れ、Universal Link が発火しなくなるため。
+ * スピナーもプログレスバーも出さない。Xのアプリ内ブラウザは黒背景なので、
+ * 装飾を足さないほうが「読み込み中の画面」として自然に見える。
+ * 2秒たってもタップが無ければ、読み込みが止まったことを伝える文言だけを出す。
+ *
+ * **遷移は <a> のネイティブな挙動に任せる。** スクリプトで飛ばすとユーザー操作の
+ * 文脈から外れ、Universal Link が発火しなくなるため。
  */
 
 /** Web遷移が始まらなかったときに、もう一度だけ試すまでの時間 */
 export const WEB_RETRY_MS = 6000;
 
-/** 真っ白な画面を見せてから、プログレスバーを出現させるまでの時間 */
-export const PROGRESS_APPEAR_MS = 400;
-
-/** バーが 0% から `PROGRESS_HOLD_PCT` まで進むのにかける時間 */
-export const PROGRESS_HOLD_MS = 1400;
-
-/** 意図的に進捗を止めておく位置(%) */
-export const PROGRESS_HOLD_PCT = 86;
-
-/** ホールドに入ってから「エラーが発生しました」を出すまでの時間 */
-export const ERROR_AFTER_MS = 2500;
-
-/** タップされてから 100% になるまでの時間(1秒未満) */
-export const PROGRESS_FINISH_MS = 450;
+/** アプリ内ブラウザで、何も出さずに待つ時間。これを過ぎたらエラー文言を出す */
+export const IAB_HOLD_MS = 2000;
 
 /** アプリ内ブラウザ用の画面(画面全体を覆う <a>)のid */
 export const IAB_SCREEN_ID = 'lite-iab';
-/** プログレスバーの外枠(トラック)のid。既定では透明で、遅れて出現させる */
-export const PROGRESS_WRAP_ID = 'lite-progress-wrap';
-/** プログレスバーの中身(進捗)のid */
-export const PROGRESS_BAR_ID = 'lite-progress-bar';
 /** 「エラーが発生しました。タップして再実行」のid */
 export const ERROR_TEXT_ID = 'lite-error-text';
 
@@ -81,17 +67,12 @@ export interface LiteLaunchOptions {
   retryMs: number;
   /** アプリ内ブラウザ判定に使う正規表現。空文字なら判定しない */
   inAppBrowserPattern: string;
-
-  /* --- アプリ内ブラウザ用のローディングUI --- */
+  /** 画面全体を覆う <a> のid */
   iabScreenId: string;
-  progressWrapId: string;
-  progressBarId: string;
+  /** エラー文言のid */
   errorTextId: string;
-  progressAppearMs: number;
-  progressHoldMs: number;
-  progressHoldPct: number;
-  errorAfterMs: number;
-  progressFinishMs: number;
+  /** 何も出さずに待つ時間 */
+  holdMs: number;
 }
 
 /**
@@ -124,48 +105,26 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
     return;
   }
 
-  /* ===== アプリ内ブラウザ ===== */
+  /* ===== アプリ内ブラウザ =====
+     画面全体が <a> になっているので、遷移そのものはブラウザに任せる。
+     ここでやるのは「画面を出す」「2秒後にエラー文言を出す」だけ。 */
   var screen = document.getElementById(opts.iabScreenId);
-  var wrap = document.getElementById(opts.progressWrapId);
-  var bar = document.getElementById(opts.progressBarId);
-  var errorText = document.getElementById(opts.errorTextId);
   if (!screen) return;
 
   // 遷移先は呼び出し時点のもの(抽選で差し替わっている場合がある)
   screen.setAttribute('href', opts.webUrl);
   screen.removeAttribute('hidden');
 
-  function grow(pct: number, ms: number) {
-    if (!bar) return;
-    bar.style.transitionDuration = ms + 'ms';
-    bar.style.width = pct + '%';
-  }
+  var errorText = document.getElementById(opts.errorTextId);
+  var errorTimer = setTimeout(function () {
+    if (errorText) errorText.removeAttribute('hidden');
+  }, opts.holdMs);
 
-  // 1. 真っ白な画面を少し見せてから、バーを出現させて手前まで進める
-  setTimeout(function () {
-    if (wrap) wrap.style.opacity = '1';
-    grow(opts.progressHoldPct, opts.progressHoldMs);
-  }, opts.progressAppearMs);
-
-  // 2. ホールドしたままタップされなければ、再実行を促す
-  var errorTimer = setTimeout(
-    function () {
-      if (errorText) errorText.removeAttribute('hidden');
-    },
-    opts.progressAppearMs + opts.progressHoldMs + opts.errorAfterMs
-  );
-
-  /* 3. タップされたら一気に 100% まで進める。
-        遷移そのものは <a> のネイティブな挙動に任せる。ここで preventDefault したり
-        setTimeout で飛ばしたりすると、ユーザー操作の文脈から外れて
-        Universal Link が発火しなくなる。 */
-  var tapped = false;
+  /* タップされたら遷移が始まるので、その途中でエラー文言が出てこないように止める。
+     ここで preventDefault したり location を触ったりはしない。ユーザー操作の文脈から
+     外れると Universal Link が発火しなくなるため、遷移は <a> に任せる。 */
   function onTap() {
-    if (tapped) return;
-    tapped = true;
     clearTimeout(errorTimer);
-    if (errorText) errorText.setAttribute('hidden', '');
-    grow(100, opts.progressFinishMs);
   }
   screen.addEventListener('touchstart', onTap, { passive: true });
   screen.addEventListener('click', onTap);
@@ -178,14 +137,8 @@ export function liteLaunchOptions(webUrl: string): LiteLaunchOptions {
     retryMs: WEB_RETRY_MS,
     inAppBrowserPattern: IN_APP_BROWSER_PATTERN,
     iabScreenId: IAB_SCREEN_ID,
-    progressWrapId: PROGRESS_WRAP_ID,
-    progressBarId: PROGRESS_BAR_ID,
     errorTextId: ERROR_TEXT_ID,
-    progressAppearMs: PROGRESS_APPEAR_MS,
-    progressHoldMs: PROGRESS_HOLD_MS,
-    progressHoldPct: PROGRESS_HOLD_PCT,
-    errorAfterMs: ERROR_AFTER_MS,
-    progressFinishMs: PROGRESS_FINISH_MS,
+    holdMs: IAB_HOLD_MS,
   };
 }
 
@@ -207,16 +160,13 @@ export function liteLaunchScript(): string {
   return source.replace(/<\/(script)/gi, '<\\/$1');
 }
 
-/** アプリ内ブラウザ用ローディング画面のCSS(文字列HTML側で使う) */
+/** アプリ内ブラウザ用の画面のCSS(文字列HTML側で使う)。装飾はせず黒一色。 */
 export const LITE_IAB_CSS = `
-#${IAB_SCREEN_ID}{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:20px;background:#fff;
+#${IAB_SCREEN_ID}{position:fixed;inset:0;z-index:9999;display:flex;
+  align-items:center;justify-content:center;background:#000;
   text-decoration:none;-webkit-tap-highlight-color:transparent;}
 #${IAB_SCREEN_ID}[hidden]{display:none;}
-#${PROGRESS_WRAP_ID}{width:60%;max-width:280px;height:4px;border-radius:999px;
-  background:#eee;overflow:hidden;opacity:0;transition:opacity .3s ease;}
-#${PROGRESS_BAR_ID}{display:block;width:0;height:100%;border-radius:999px;
-  background:#161823;transition-property:width;transition-timing-function:ease-out;}
-#${ERROR_TEXT_ID}{margin:0;font-size:13px;color:#8a8b91;text-align:center;padding:0 24px;}
+#${ERROR_TEXT_ID}{margin:0;padding:0 24px;font-size:14px;line-height:1.6;
+  color:#8a8b91;text-align:center;}
 #${ERROR_TEXT_ID}[hidden]{display:none;}
 `;

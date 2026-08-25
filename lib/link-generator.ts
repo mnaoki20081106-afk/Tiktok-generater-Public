@@ -544,12 +544,6 @@ export interface BuildResult {
    * - `onelink` … AppsFlyerのOneLinkを組み立て直す(LPのURLが取れなかった場合の従来経路)
    */
   mode: BuildMode;
-  /**
-   * `params_url` の中の `inc_target_url` のスキームを Lite へ差し替えたかどうか。
-   * ここが TikTok の文字列との唯一の差分になるので、実機で挙動が変わったときに
-   * 原因を1変数に絞れるよう結果に持たせる。
-   */
-  liteForced?: boolean;
 }
 
 export function parseHttpUrl(raw: unknown): URL | null {
@@ -1024,74 +1018,37 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
     });
   };
 
-  /* ===== 描画用パラメータを落とす =====
+  /* ===== 招待LPのURLは一切改変しない =====
 
-     `__status_bar` / `_svg` / `enable_canvas` などの描画制御と、OGPカード用の
-     `og_desc_text` / `og_image` / `og_title_text` の計10件。
+     こちらが過去に付けたキー(MANAGED_PARAMS / is_retargeting)だけを掃除して、
+     あとは公式が出したURLをそのまま渡す。**描画用パラメータも消さないし、
+     inc_target_url のスキームも差し替えない。**
 
-     一度この削除をやめたことがある(「公式のURLを一切改変しない」)。理由は、
-     公式との差分が11箇所ある状態で実機が動かなかった、という当時の判断だった。
-     **これは因果が逆だった。** 実機で「タップ1回でアプリが起動し、かつ
-     『自身を招待できません』が出る(＝トラッキング成立)」状態にあったのは、
-     まさにこの10件を削っていた頃(マージ#36)である。削除をやめて以降、
-     トラッキングが成立しなくなった。
+     理由は「LPに着地したあと、公式と同じ動作をさせるため」。
+     招待LPのクエリにある
 
-     当時の生成器を実際に走らせて出力を突き合わせたところ、#36 の出力と
-     削除をやめた後の出力の差は**この10件だけ**だった(inc_target_url の
-     Lite 差し替えは両方とも行っている)。変数はこれ1つに絞れている。
+       incentive_redirect=1 / is_inc_roma=1 / inc_target_url
 
-     LPをブラウザで開いたときに中間ページ然とした描画を誘発するのを避ける、
-     というのが元々の目的で、招待の成立に必要な情報は1つも含まれていない
-     (TRACKING_PARAMS / INCENTIVE_PARAMS のどちらにも属さない)。 */
-  if (opts.stripDeepLinks) drop(INTERSTITIAL_PARAMS);
+     は、LPのJSが読んで**自動でアプリへ送り込む**ための仕掛け。その行き先である
+     inc_target_url を Lite のスキームへ書き換えていると、その自動遷移が不発になり
+     「LPに着地したあと利用者が手でタップする」状態になる。公式のまま渡せば、
+     公式の招待リンクを踏んだときとまったく同じ動作になる。
 
-  /* 生成済みURLをもう一度通したとき(サイトの再保存など)に、以前の実装が
-     焼き付けた AppsFlyer 用のキーを掃除する。
-     TikTokが出す招待LPのURLにこれらが載ることはないので、公式のURLには影響しない。 */
+     招待のバインドはLPのページが読み込まれた時点で成立することが実機で確認できている
+     (X / Safari の両方で「自身を招待できません」を確認)ので、
+     LPへ着地させる限りトラッキングは失われない。
+
+     ## 通常版TikTokが開くリスクについて
+
+     inc_target_url が指すのは通常版のスキーム(aweme://)なので、通常版と Lite の
+     両方が入った端末では通常版が開く可能性がある。ただしこれは**公式の招待リンクを
+     踏んだときとまったく同じ挙動**で、公式がその形で成果を出している以上、
+     ここを触らないことが最も安全という判断。
+
+     もし実機で通常版に取られるようなら、`forceLite` を復活させて
+     inc_target_url のスキームだけを差し替えられる(toLiteScheme が残してある)。
+     切り分けを1変数に保つため、今は差分ゼロにしてある。 */
   drop([...MANAGED_PARAMS, 'is_retargeting']);
-
-  /* ここだけが公式のURLと違ってよい唯一の点。
-     公式の `inc_target_url` は通常版TikTokのスキーム(aweme://)を指しているため、
-     通常版と Lite の両方が入った端末では通常版が開いてしまう。
-     Lite を開かせたいので、スキーム部分だけを差し替える。
-     「誰の招待か」は LP のクエリ(u_code / share_page_data)が運んでいて
-     inc_target_url のクエリには乗っていないため、招待の成立には影響しない。
-
-     パス・クエリには一切触らず、先頭のスキームだけを置換する(toLiteScheme)。
-     以前は これと同時に描画用パラメータ10件も削除しており、まとめて戻したため
-     どちらが原因か切り分けられなかった。今は差分をこの1点だけに限定してあるので、
-     万一また挙動が変わったら原因はここだと確定できる。 */
-  /* ===== TikTokの文字列と違ってよい、唯一の1点 =====
-
-     `inc_target_url` は「アプリの中でどのページへ進むか」を指しており、公式の値は
-     通常版TikTokのスキーム(`aweme://roma_redirect/?spark_page=scan_code`)。
-     こちらが開かせたいのは Lite なので、**スキーム部分だけ**を差し替える。
-
-     実機の履歴がこの1点を名指ししている。
-
-       A) inc_target_url が Lite のスキーム … 「自身を招待できません」が出た
-                                              (＝招待のバインド処理が走った)
-       B) inc_target_url が aweme:// のまま … UIは完璧に描画されるがバインドは走らない
-
-     Lite の中でLPのJSが `inc_target_url` / `is_inc_roma` / `incentive_redirect` を読んで
-     招待の処理へ進む以上、その行き先が通常版TikTokを指していれば Lite 内では解決できず、
-     処理そのものが始まらない。A と B の差はここだけだった
-     (A のときは捏造キーが8個混ざっていて、そちらがUIを壊していた。今は入っていない)。
-
-     パス・クエリには触らず、先頭のスキームだけを置換する。「誰の招待か」は
-     LPのクエリ(u_code / share_page_data)が運んでいて inc_target_url には乗っていないので、
-     招待の成立に必要な情報はここでは動かない。 */
-  let liteForced = false;
-  if (opts.forceLite) {
-    const target = params.get('inc_target_url');
-    if (target) {
-      const lite = toLiteScheme(target);
-      if (lite !== target) {
-        params.set('inc_target_url', lite);
-        liteForced = true;
-      }
-    }
-  }
 
   assertTrackingPreserved(source, url);
   assertIncentivePreserved(source, url);
@@ -1123,8 +1080,10 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
      したがって遷移先は招待LPのURLにする。アプリを開く役目はLP自身のJSに任せる
      (公式の招待リンクと同じ経路)。ワンクリックでアプリが開く形とトラッキングは
      両立しない、というのがここまでの実機の結論。 */
-  const untouched = removed.length === 0 && !liteForced;
-  return { url: untouched ? source.toString() : url.toString(), removed, mode: 'lp', liteForced };
+  /* 何も落としていなければ、URLを組み立て直さず入力の文字列をそのまま返す。
+     URLSearchParams を経由すると並び順やパーセントエンコードが変わりうるため、
+     「公式のURLと1バイトも違わない」ことを保証するにはこの分岐が必要。 */
+  return { url: removed.length === 0 ? source.toString() : url.toString(), removed, mode: 'lp' };
 }
 
 

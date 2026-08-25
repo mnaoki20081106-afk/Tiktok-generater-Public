@@ -410,15 +410,9 @@ export function LinkGeneratorForm() {
           <div className="mt-2 space-y-1">
             <p className="text-xs leading-relaxed text-slate-500">
               {built.mode === 'lp'
-                ? '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLと同じ形です。タップするとブラウザで招待LPが読み込まれ、そのJSが招待をバインドしてアプリを開きます。トラッキングが成立するのはこの経路だけです。'
+                ? '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLを一切改変せずに渡します。タップするとブラウザで招待LPが読み込まれ、そのJSが招待をバインドしてアプリを開きます。トラッキングが成立するのはこの経路だけです。'
                 : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
             </p>
-            {built.liteForced && (
-              <p className="text-xs leading-relaxed text-slate-500">
-                アプリへ渡すペイロードのうち、inc_target_url のスキームだけを Lite
-                に差し替えています(TikTokの文字列との差分はこの1点だけ)。
-              </p>
-            )}
             <p className="text-xs leading-relaxed text-slate-500">
               {built.removed.length
                 ? '除去したパラメータ: ' + built.removed.join(', ')

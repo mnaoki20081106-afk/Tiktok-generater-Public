@@ -74,11 +74,7 @@
  * 黒い画面のまま放置されるよりはよい。
  */
 
-/** 通常のブラウザで、タップされないまま自動遷移させるまでの時間(最後の保険) */
-export const WEB_FALLBACK_MS = 6000;
-
-/** スキームを叩いてから、アプリが開かなかったと判断してWebへ落とすまでの時間 */
-export const APP_TIMEOUT_MS = 1200;
+/* 自動遷移は一切行わない。遷移は <a> のネイティブな挙動だけに委ねる。 */
 
 /** アプリ内ブラウザで、何も出さずに待つ時間。これを過ぎたらエラー文言を出す */
 export const IAB_HOLD_MS = 2000;
@@ -113,17 +109,6 @@ export function isInAppBrowser(userAgent?: string): boolean {
 export interface LiteLaunchOptions {
   /** 遷移先(招待LPのURL) */
   webUrl: string;
-  /** 通常のブラウザで、タップされないまま自動遷移させるまでの時間 */
-  fallbackMs: number;
-  /**
-   * アプリを直接開くカスタムスキーム(`toLiteAppLink()` の結果)。無ければ null。
-   * 招待のトラッキングが成立するのはこれでアプリを開いたときだけ(マージ#35 で実証)。
-   */
-  appLink: string | null;
-  /** スキームを叩いてから、アプリが開かなかったと判断してWebへ落とすまでの時間 */
-  appTimeoutMs: number;
-  /** アプリ内ブラウザ判定に使う正規表現。空文字なら判定しない */
-  inAppBrowserPattern: string;
   /** 画面全体を覆う <a> のid */
   iabScreenId: string;
   /** エラー文言のid */
@@ -136,118 +121,33 @@ export interface LiteLaunchOptions {
  * 遷移シーケンスを開始する。詳細はファイル冒頭のコメントを参照。
  */
 export function startLiteLaunch(opts: LiteLaunchOptions): void {
-  var ua = (window.navigator && window.navigator.userAgent) || '';
-  var inApp = !!opts.inAppBrowserPattern && new RegExp(opts.inAppBrowserPattern, 'i').test(ua);
+  /* 画面全体が <a> になっていて、href はマークアップ側で確定している
+     (アプリを開くカスタムスキーム)。**遷移に関わることは何もしない。**
+     ここでやるのは「画面を出す」「2秒後にエラー文言を出す」の2つだけ。
 
-  /* 画面全体が <a> になっているので、遷移そのものはブラウザに任せる。
-     ここでやるのは「画面を出す」「2秒後にエラー文言を出す」だけ。 */
+     一時期ここで location.href / location.replace を使って「スキームを叩く」
+     「時間切れでWebへ落とす」を行っていたが、どちらも撤廃した。前者は利用者のタップの
+     文脈から外れ、後者は時間切れで生のLPのURLを開いてしまい、「タップしてもアプリが
+     開かず生のURLに飛ぶ」症状そのものになっていた。 */
   var screen = document.getElementById(opts.iabScreenId);
+  if (!screen) return;
 
-  if (!screen) {
-    /* 画面が無い(この対応より前に配信されたHTMLなど)。タップさせる先が無いので、
-       アプリは開かないが、せめて遷移先までは送る。 */
-    try {
-      window.location.replace(opts.webUrl);
-    } catch (e) {}
-    return;
-  }
-
-  /* href はマークアップ側で既にセットされている。**JSからは上書きしない。**
-     タップされた瞬間にJSがhrefを書き換えるような作りにすると、iOSがそのタップを
-     「ユーザーが辿ったリンク」ではなくスクリプト由来のナビゲーションとみなし、
-     Universal Link を発火させないおそれがあるため。
-     まだ何も入っていない場合(呼び出し側がマークアップに書いていない場合)だけ補う。 */
+  // マークアップ側で入れていない場合だけ補う(通常は既に入っている)
   if (!screen.getAttribute('href')) screen.setAttribute('href', opts.webUrl);
-
-  /* マークアップ側で最初から表示されている想定。hidden で来た場合だけ外す。 */
   screen.removeAttribute('hidden');
 
+  /* タップしても何も起きなかった利用者に、もう一度タップする手がかりを与える。
+     リンクにもタップにも紐づいておらず、<span> の hidden を外すだけなので遷移には影響しない。 */
   var errorText = document.getElementById(opts.errorTextId);
-  var errorTimer = setTimeout(function () {
+  setTimeout(function () {
     if (errorText) errorText.removeAttribute('hidden');
   }, opts.holdMs);
-
-  /* ===== アプリ内ブラウザ(X など)はここで終わり =====
-     **リンクには一切触らない。** リスナーも張らないし、タップに紐づくタイマーも持たない。
-     WKWebView がカスタムスキームをOSへ渡すのは「純粋な物理タップ」に対してだけで、
-     タップにJSが紐づいていると、アプリ起動の判定中にそのJSが割り込んで遷移を
-     奪ってしまう。実際、未インストール端末向けに「タップ後2.5秒でhttpsのラッパーへ
-     逃がす」保険を入れたところ、アプリ起動の判定中にそれが発火して onelink.me で
-     止まる、という実機の不具合を起こした。保険ごと撤廃してある。
-
-     未インストール端末はスキームを踏んでも何も起きないが、それは許容する。
-     このツールは「インストール済みの利用者を、招待の文脈を保ったままアプリへ渡す」ことに
-     振り切ってチューニングしてあり、そのためにタップの純度を最優先する。
-
-     2秒後のエラー文言だけは出す(上の errorTimer)。これはリンクにもタップにも
-     紐づいておらず、<span> の hidden を外すだけなので遷移には影響しない。 */
-  /* アプリが開かなかったときにWebへ落とす。スキームを叩いた後にだけ使う。 */
-  function goWeb() {
-    if (document.visibilityState === 'hidden') return; // アプリが前面に出た
-    try {
-      window.location.replace(opts.webUrl);
-    } catch (e) {}
-  }
-
-  /* スキームを叩く。トラッキングが成立するのはこの経路だけ(マージ#35 で実証)。 */
-  function openApp() {
-    try {
-      window.location.href = opts.appLink as string;
-    } catch (e) {}
-    setTimeout(goWeb, opts.appTimeoutMs);
-  }
-
-  if (inApp) {
-    /* ===== アプリ内ブラウザ(X など) =====
-       スキームは <a href> に入れても WKWebView に破棄されることが実機で分かっている。
-       そこで href には Web の遷移先を入れたまま、**タップの瞬間にJSでスキームを叩く**。
-       利用者のジェスチャーの中で実行されるので、自動遷移として弾かれる経路とは条件が違う。
-       弾かれた場合は appTimeoutMs 後に Web の遷移先へ落ちるので、従来より悪くはならない。
-
-       スキームが無い(古い形式のURLなど)ときはリスナーを張らず、<a> のネイティブな
-       遷移にそのまま任せる。 */
-    if (!opts.appLink) return;
-
-    screen.addEventListener('click', function (e) {
-      e.preventDefault();
-      clearTimeout(errorTimer);
-      openApp();
-    });
-    return;
-  }
-
-  /* ===== 通常のブラウザ(Safari など) =====
-     マージ#35 と同じく、読み込み直後にスキームを叩く。ここでOSの確認ダイアログが出るが、
-     そこから開いた場合に招待が成立することが実機で確認されている。 */
-  if (opts.appLink) {
-    openApp();
-    return;
-  }
-
-  /* スキームが作れない場合だけ、従来どおりタップ待ち＋時間切れでWebへ。 */
-  var fallbackTimer = setTimeout(function () {
-    if (document.visibilityState === 'hidden') return;
-    try {
-      window.location.replace(opts.webUrl);
-    } catch (e) {}
-  }, opts.fallbackMs);
-
-  function onTap() {
-    clearTimeout(errorTimer);
-    clearTimeout(fallbackTimer);
-  }
-  screen.addEventListener('touchstart', onTap, { passive: true });
-  screen.addEventListener('click', onTap);
 }
 
 /** 既定のタイミングでオプションを組み立てる */
 export function liteLaunchOptions(webUrl: string): LiteLaunchOptions {
   return {
     webUrl,
-    fallbackMs: WEB_FALLBACK_MS,
-    appLink: null,
-    appTimeoutMs: APP_TIMEOUT_MS,
-    inAppBrowserPattern: IN_APP_BROWSER_PATTERN,
     iabScreenId: IAB_SCREEN_ID,
     errorTextId: ERROR_TEXT_ID,
     holdMs: IAB_HOLD_MS,

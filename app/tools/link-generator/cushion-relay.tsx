@@ -23,7 +23,7 @@ export function CushionRelay({ to }: { to: string | null }) {
     /* タップを待つ画面はどの環境でもすぐ出す。遅らせると、その間のタップが
        <a> に届かず取りこぼしになる(画面は hidden のままなので)。
        通常のブラウザで誰もタップしなかった場合の自動遷移は startLiteLaunch 側が持つ。 */
-    startLiteLaunch({ ...liteLaunchOptions(to), appLink: toLiteAppLink(to) });
+    startLiteLaunch(liteLaunchOptions(to));
   }, [to]);
 
   return (
@@ -39,9 +39,10 @@ export function CushionRelay({ to }: { to: string | null }) {
               利用者のタップで Universal Link を発火させる。 */}
           {/* href は最初から入れておき、JSからは書き換えない。target="_top" を付けるのは、
               アプリ内ブラウザ(WKWebView)から最上位のコンテキストで辿らせるため。 */}
+          {/* href はアプリを直接開くカスタムスキーム。トラッキングが成立するのはこの経路だけ。 */}
           <a
             id={IAB_SCREEN_ID}
-            href={to}
+            href={toLiteAppLink(to) || to}
             target="_top"
             rel="noreferrer noopener"
             className={styles.iabScreen}

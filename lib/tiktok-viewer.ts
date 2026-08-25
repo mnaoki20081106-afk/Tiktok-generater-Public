@@ -125,7 +125,9 @@ export function renderViewerHtml(d: ViewerData): string {
   const ogp = esc(ogpImageUrl);
   const icon = esc(appIconUrl);
   /* クッションOFF版と同じ規則で出し分ける(アプリ内ブラウザはカスタムスキーム)。 */
-  const tkUrl = esc(tiktokUrl);
+  /* クッションOFF版と同じく、アプリを直接開くカスタムスキームを入れる。
+     ここが Web の遷移先のままだと、タップしても生の招待LPが開くだけになる。 */
+  const tkUrl = esc(toLiteAppLink(tiktokUrl) || tiktokUrl);
   const descHtml = renderDescription(description);
   const descJson = JSON.stringify(String(description || '')).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(slug || '')).replace(/</g, '\\u003c');
@@ -368,8 +370,7 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
     }).then(function(res){return res.ok?res.json():null;});
   }).then(function(data){
     if(!data||!data.href)return;
-    /* カスタムスキームを使っている環境では、同じ規則で af_dp を取り出してから入れる。 */
-    link.setAttribute('href',data.href);
+    link.setAttribute('href',data.appLink||data.href);
   }).catch(function(){});
   /* このリンクには click / touchstart のリスナーを一切張らない。
      タップにJSが紐づいていると、WKWebView がカスタムスキームをOSへ渡す判定に
@@ -423,7 +424,10 @@ export function renderRedirectHtml(d: ViewerData): string {
   const t = esc(d.title);
   const ogp = esc(d.ogpImageUrl);
   const pageUrl = esc(`${d.origin}/${d.slug}`);
-  const href = esc(destUrl);
+  /* <a href> に入れるのは、アプリを直接開くカスタムスキーム。
+     招待のトラッキングが成立するのはこの経路だけ(マージ#35 で実証)。
+     作れない場合(古い形式のURLなど)だけ Web の遷移先を入れる。 */
+  const href = esc(toLiteAppLink(destUrl) || destUrl);
   const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
 
@@ -453,8 +457,6 @@ var startLiteLaunch = ${liteLaunchScript()};
 
   var LAUNCH = ${JSON.stringify(liteLaunchOptions(''))};
   LAUNCH.webUrl = dest;
-  /* アプリを直接開くスキーム。招待のトラッキングが成立するのはこの経路だけ。 */
-  LAUNCH.appLink = ${JSON.stringify(toLiteAppLink(destUrl))};
 
   /* タイマー(2秒後のエラー文言 / 通常ブラウザの保険)を仕掛けるだけ。
      <a> の href はサーバー側でセット済みなので startLiteLaunch は触らない。 */
@@ -485,9 +487,8 @@ var startLiteLaunch = ${liteLaunchScript()};
     if (next === dest) return;
     var screen = document.getElementById(LAUNCH.iabScreenId);
     if (!screen) return;
-    screen.setAttribute('href', next);
-    LAUNCH.webUrl = next;
-    if (data && data.appLink) LAUNCH.appLink = data.appLink;
+    /* 本人判定で遷移先が変わった場合だけ差し替える。スキームも作り直したものを使う。 */
+    screen.setAttribute('href', (data && data.appLink) || next);
   }).catch(function(){});
 })();
 </script>`

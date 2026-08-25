@@ -32,6 +32,15 @@ export interface ViewerData {
   ogpImageUrl: string;
   appIconUrl: string;
   origin: string;
+  /**
+   * アプリ内ブラウザ(X など)から開かれているか。UserAgentでサーバー側が判定する。
+   *
+   * X の WKWebView は <a href="snssdk473824://..."> のタップを黙って破棄する
+   * (実機で確認)。スキームを入れると「タップしても何も起きない」行き止まりになるため、
+   * その環境だけ Web の遷移先を入れる。href はDOM構築の時点で確定していなければ
+   * ならないので、判定もサーバー側で行う。
+   */
+  inAppBrowser?: boolean;
 }
 
 /**
@@ -127,7 +136,7 @@ export function renderViewerHtml(d: ViewerData): string {
   /* クッションOFF版と同じ規則で出し分ける(アプリ内ブラウザはカスタムスキーム)。 */
   /* クッションOFF版と同じく、アプリを直接開くカスタムスキームを入れる。
      ここが Web の遷移先のままだと、タップしても生の招待LPが開くだけになる。 */
-  const tkUrl = esc(toLiteAppLink(tiktokUrl) || tiktokUrl);
+  const tkUrl = esc((d.inAppBrowser ? null : toLiteAppLink(tiktokUrl)) || tiktokUrl);
   const descHtml = renderDescription(description);
   const descJson = JSON.stringify(String(description || '')).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(slug || '')).replace(/</g, '\\u003c');
@@ -427,7 +436,7 @@ export function renderRedirectHtml(d: ViewerData): string {
   /* <a href> に入れるのは、アプリを直接開くカスタムスキーム。
      招待のトラッキングが成立するのはこの経路だけ(マージ#35 で実証)。
      作れない場合(古い形式のURLなど)だけ Web の遷移先を入れる。 */
-  const href = esc(toLiteAppLink(destUrl) || destUrl);
+  const href = esc((d.inAppBrowser ? null : toLiteAppLink(destUrl)) || destUrl);
   const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
 

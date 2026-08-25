@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint .",
+    "test": "node --experimental-strip-types scripts/check-invite-lp.ts"
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs": "^5.2.0",

@@ -410,9 +410,16 @@ export function LinkGeneratorForm() {
           <div className="mt-2 space-y-1">
             <p className="text-xs leading-relaxed text-slate-500">
               {built.mode === 'lp'
-                ? '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLを一切改変せずに渡します。タップするとブラウザで招待LPが読み込まれ、そのJSが招待をバインドしてアプリを開きます。トラッキングが成立するのはこの経路だけです。'
+                ? '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLをそのまま渡します。タップするとブラウザで招待LPが読み込まれ、そのJSが招待をバインドしてアプリを開きます。トラッキングが成立するのはこの経路だけです。'
                 : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
             </p>
+            {built.mode === 'lp' && (
+              <p className="text-xs leading-relaxed text-slate-500">
+                {built.liteForced
+                  ? 'inc_target_url のスキームを Lite(snssdk473824://)へ差し替えました。公式のURLとの差分はこの1点だけです。LPがアプリを開くとき、通常版TikTokではなく TikTok Lite に入ります。'
+                  : 'inc_target_url は公式のまま(通常版TikTokのスキーム)です。TikTok Lite しか入っていない端末では、LPが表示されたままアプリが起動しません。'}
+              </p>
+            )}
             <p className="text-xs leading-relaxed text-slate-500">
               {built.removed.length
                 ? '除去したパラメータ: ' + built.removed.join(', ')

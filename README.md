@@ -78,16 +78,58 @@ is_inc_roma        = 1
   `DEEPLINK_PARAMS` として削除していた
 
 「`onelink.me` で止まり『TikTok Liteを開く』ボタンが出る」症状の原因はこれ。
-対策は **組み立て直さないこと**。TikTok自身が配っているURLと同じものを遷移先にする(`buildLpUrl()`)。
+対策は **中身を組み立て直さないこと**。TikTok自身が配っているパラメータをそのまま運ぶ。
+
+#### ただし「LPのURLをそのまま配る」は最適化ではなかった
+
+公式リンクと1バイトも違わないURLを配れば同じ挙動になる、と考えて招待LPのURLを
+そのまま出力していた時期がある。これは半分しか合っていない。**招待LPのURLはただのWebページで、
+Universal Link ではない。** タップしてもブラウザでLPが開くだけで、アプリは起動しない
+（＝「生成したURLを踏んでも生のURLに飛ぶだけ」）。
+
+アプリを1タップで開く仕掛けは、LP本体ではなく **LPが内部に持っている linker の設定** にあった。
+実物の招待LPのHTML（`tiktok.share.api/tiktok/linker/component/strategy/get/v1/`）には、
+TikTok自身が使っているラッパーが18個ぶんそのまま埋まっている。どれも同じ形をしていた。
+
+```json
+"launch_type": "tiktok_lite_app",
+"wrapper_url": {
+  "url_fallback": "https://snssdk473824.onelink.me/4P4E?domain_source=tiktok&af_dp={{schema}}",
+  "url_schemes": ["snssdk473824://roma_redirect/?params_url=<招待LPのURL+全36キー>&spark_page={{url}}"]
+}
+```
+
+つまり公式のワンクリックは **`Lite の OneLink(4P4E)` + `af_dp=<Liteのディープリンク>`** という1本のURLで成立している。
+
+- `4P4E` は TikTok Lite の Universal Link / App Link として登録されている。
+  タップした瞬間にOSがURLを横取りしてアプリへ渡すので、**Webページを1枚も描画しない**
+  （＝ OSの「"TikTok Lite"で開きますか？」ダイアログも、`onelink.me` の中間ページも出ない）。
+- アプリが未インストールなら AppsFlyer がストアへ送り、`af_dp` はディファードディープリンクとして
+  初回起動時にアプリへ届く（＝招待が成立する）。
+- `4P4E` に `pid` / `c` が無いのは欠落ではない。TikTok自身の `url_fallback` にも
+  `domain_source` と `af_dp` の2つしか無く、ストアへの振り分けは AppsFlyer側（4P4Eテンプレート）の
+  サーバー設定が持っている。**だからこちらでも `af_ios_url` などを足さない**（足すと公式との差分になる）。
+
+ジェネレーターの言う「最適化」とは、この公式ラッパーを被せることそのものだった（`buildLpUrl()`）。
 
 | 方式 | 条件 | 何をするか |
 |---|---|---|
-| **`lp`（既定・推奨）** | 土台が招待LPのURL（`isInviteLpUrl()`） | 公式リンクが着地したURLをそのまま使う。変えるのは `inc_target_url` のスキームだけ（Lite強制） |
+| **`wrapper`（既定・推奨）** | 土台が招待LPのURL（`isInviteLpUrl()`）で `forceLite` ON | 公式と同じ `4P4E?domain_source=tiktok&af_dp=<Liteのディープリンク>` を組み立てる。**タップ1回でアプリが開く** |
+| `lp`（比較・切り分け用） | 土台が招待LPのURLで `forceLite` OFF | 公式リンクが着地したURLをそのまま返す。Universal Link ではないのでアプリは開かない |
 | `onelink`（フォールバック） | 土台がOneLinkのURL | 従来どおり `4P4E` へ載せ替えて `af_dp` を組み立てる |
 
-`BuildResult.mode` にどちらで生成したかが入り、結果画面にも表示される。
+`BuildResult.mode` にどれで生成したかが入り、結果画面にも表示される。
+保存済みURLからの後追い判定は `detectBuildMode()`（`isLiteWrapperUrl()` で
+「外側に `domain_source` と `af_dp` の2つしか無い」ことを見て、フォールバックの `onelink` と区別する）。
 
-- **招待LPのURLは、`inc_target_url` のスキーム以外を一切改変しない**（`buildLpUrl()`）。一度はここで「描画用パラメータ（`INTERSTITIAL_PARAMS`）を10件削除」も同時に行っていたが、**どちらも推測に基づく改変で、実機で検証していなかった**。結果として公式リンクとの差分が11箇所ある状態でURLを配っており、実機で「アプリが起動せず、ただ招待LPがブラウザで開くだけ」になっていた。アプリを開くかどうかを決めているのはLP側のJSなので、そのJSが読む可能性のあるパラメータを消せば判断が変わっても不思議はない。**削除はすべて取りやめた。**
+生成済みURLをもう一度通しても形が崩れないよう、`buildUrl()` は入力が既にラッパー形式なら
+そのまま返す（サイトの再保存でこの経路を通る）。
+
+計測用のキーはラッパーを被せると `af_dp` → `params_url` の二重エンコードの内側へ移り、
+目視でも `URL` の API でも直接は確認できなくなる。`assertOneClickPayload()` が
+ペイロードを取り出して入力と突き合わせ、1つでも欠けていれば生成を中断する。
+
+- **招待LPのURLは、`inc_target_url` のスキーム以外を一切改変しない**（`buildLpUrl()`）。ラッパーを被せるのはLPのクエリを1つも触らずに「入れ物」を替えるだけの操作で、中身（`params_url` に載る招待LPのURL）は公式のまま運ばれる。一度はここで「描画用パラメータ（`INTERSTITIAL_PARAMS`）を10件削除」も同時に行っていたが、**どちらも推測に基づく改変で、実機で検証していなかった**。結果として公式リンクとの差分が11箇所ある状態でURLを配っており、実機で「アプリが起動せず、ただ招待LPがブラウザで開くだけ」になっていた。アプリを開くかどうかを決めているのはLP側のJSなので、そのJSが読む可能性のあるパラメータを消せば判断が変わっても不思議はない。**削除はすべて取りやめた。**
   - 唯一残した差分が `inc_target_url` のスキーム差し替え（`aweme://` → `snssdk473824://`、`forceLite` オプション）。公式のままだと通常版TikTokと Lite の両方が入った端末で通常版が開いてしまうため。パス・クエリには触らず先頭のスキームだけを置換する。「誰の招待か」は LP のクエリ（`u_code` / `share_page_data`）が運んでいて `inc_target_url` のクエリには乗っていないので、招待の成立には影響しない。
   - **差分を意図的に1点だけに絞ってある。** 以前は削除と差し替えをまとめて戻したため、どちらが原因か切り分けられなかった。今の形なら、万一また実機で挙動が変わったら原因は `inc_target_url` だと確定できる。`forceLite` を OFF にすれば公式と1バイトも違わないURLになるので、その場で比較できる。
   - `BuildResult.liteForced` に差し替えの有無が入り、ツールの結果画面にも「公式との差分はこの1点だけ」と表示される。

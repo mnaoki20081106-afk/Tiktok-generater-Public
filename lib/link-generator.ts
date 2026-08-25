@@ -39,6 +39,8 @@ export const DEFAULT_WEB_DP_URL = '';
    UG_Referral_JP)であることを確認済み。 */
 export const LITE_ONELINK_ORIGIN = 'https://snssdk473824.onelink.me';
 export const LITE_ONELINK_PATH = '/4P4E';
+/* 公式のラッパーが af_dp と一緒に必ず載せている値。実物のLPのHTMLから採取。 */
+export const WRAPPER_DOMAIN_SOURCE = 'tiktok';
 /* TikTok Lite を開くためのディープリンク。
    単なるスキーム(snssdk473824://)だけではアプリが起動するだけで、
    「誰の紹介か」がアプリに伝わらない。TikTok自身は af_dp を
@@ -104,16 +106,107 @@ export function isInviteLpUrl(url: URL): boolean {
   );
 }
 
+/* ================ ワンクリック招待の実体(公式LPのHTMLから採取) ================
+
+   招待LPのHTMLには、TikTok自身が「アプリを開く」ために使っている設定が
+   そのまま埋まっている(`tiktok.share.api/tiktok/linker/component/strategy/get/v1/`)。
+   18個ある wrapper はどれも同じ形をしていた。
+
+     "launch_type": "tiktok_lite_app",
+     "wrapper_url": {
+       "url_fallback": "https://snssdk473824.onelink.me/4P4E?domain_source=tiktok&af_dp={{schema}}",
+       "url_schemes": ["snssdk473824://roma_redirect/?params_url=<招待LPのURL+全36キー>&spark_page={{url}}"]
+     }
+
+   つまり公式のワンクリックは
+
+     Lite の OneLink(4P4E) + af_dp=<Liteのディープリンク(u_code入り)>
+
+   という**1本のURL**で成立している。`4P4E` は TikTok Lite の Universal Link /
+   App Link として登録されているので、タップした瞬間にOSがURLを横取りしてアプリへ渡す。
+   Webページを1枚も描画しないため、OSの「"TikTok Lite"で開きますか？」ダイアログも
+   onelink.me の中間ページも出ない。アプリが未インストールなら AppsFlyer がストアへ送り、
+   `af_dp` はディファードディープリンクとして初回起動時にアプリへ届く(＝招待が成立する)。
+
+   ここが分かるまでは、抽出した招待LPのURL(`https://www.tiktok.com/ug/incentive/...`)を
+   そのまま配っていた。これは Universal Link ではなくただのWebページなので、
+   タップしても**生のURLがブラウザで開くだけ**でアプリは起動しない。
+   ジェネレーターの言う「最適化」とは、この公式ラッパーを被せることそのものだった。
+
+   なお `4P4E` に `pid` / `c` が無いのは欠落ではない。TikTok自身が配っている
+   `url_fallback` にも `domain_source` と `af_dp` の2つしか無く、ストアへの振り分けは
+   AppsFlyer側(4P4Eテンプレート)のサーバー設定が持っている。だからここでも
+   **その2つ以外は足さない**。af_ios_url などを足すと公式との差分になる。
+   ============================================================================ */
+
+/** どの経路で組み立てたか */
+export type BuildMode = 'wrapper' | 'lp' | 'onelink';
+/** 保存済みURLの形から後追いで判定した結果(判定できない形もありうる) */
+export type DetectedBuildMode = BuildMode | 'unknown';
+
+/**
+ * 招待ペイロード(af_dp)に、公式と同じラッパーを被せてワンクリックURLにする。
+ *
+ * 載せるのは公式の `url_fallback` と同じ `domain_source` と `af_dp` の2つだけ。
+ */
+export function buildLiteWrapperUrl(deepLink: string): string {
+  const wrapper = new URL(LITE_ONELINK_ORIGIN + LITE_ONELINK_PATH);
+  wrapper.searchParams.set('domain_source', WRAPPER_DOMAIN_SOURCE);
+  wrapper.searchParams.set('af_dp', deepLink);
+  return wrapper.toString();
+}
+
+/**
+ * ラッパーURLの `af_dp` から、アプリへ渡る招待LPのURL(params_url)を取り出す。
+ *
+ * 計測用のキーは af_dp → params_url の二重エンコードの内側に入るため、
+ * 目視でも `URL` の API でも直接は確認できない。検証と形式判定の両方で使う。
+ */
+export function wrapperPayloadUrl(rawUrl: string): URL | null {
+  const url = parseHttpUrl(rawUrl);
+  if (!url) return null;
+
+  const deepLink = url.searchParams.get('af_dp') || '';
+  const marker = '?params_url=';
+  const at = deepLink.indexOf(marker);
+  if (at < 0) return null;
+
+  try {
+    return parseHttpUrl(decodeURIComponent(deepLink.slice(at + marker.length)));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 公式と同じ形のワンクリックURLか。
+ *
+ * OneLink再構築(フォールバック)も同じホストの `4P4E` を返すので、ホストだけでは
+ * 区別できない。公式のラッパーは外側に `domain_source` と `af_dp` しか持たない
+ * (フォールバックは `af_ios_url` などを外側に並べる)ので、そこで見分ける。
+ */
+export function isLiteWrapperUrl(url: URL): boolean {
+  if (url.origin !== LITE_ONELINK_ORIGIN || url.pathname !== LITE_ONELINK_PATH) return false;
+
+  const keys = Array.from(url.searchParams.keys()).sort();
+  if (keys.length !== 2 || keys[0] !== 'af_dp' || keys[1] !== 'domain_source') return false;
+
+  const payload = wrapperPayloadUrl(url.toString());
+  return !!payload && payload.searchParams.has('u_code');
+}
+
 /**
  * 保存済みのURLが、どちらの形式で生成されたものかを見分ける。
  *
  * `BuildResult.mode` は生成した瞬間にしか手に入らないが、DBに入っている値についても
- * 「招待LP直結なのか、OneLink再構築のフォールバックなのか」を後から知りたい場面がある
- * (管理画面で当たりURLの状態を表示するなど)。URLの形だけで判定できるので切り出しておく。
+ * 「ワンクリック用のラッパーが被っているのか、生のLPのURLのままなのか」を後から
+ * 知りたい場面がある(管理画面で当たりURLの状態を表示するなど)。
+ * URLの形だけで判定できるので切り出しておく。
  */
-export function detectBuildMode(rawUrl: string | null | undefined): 'lp' | 'onelink' | 'unknown' {
+export function detectBuildMode(rawUrl: string | null | undefined): DetectedBuildMode {
   const url = parseHttpUrl(rawUrl);
   if (!url) return 'unknown';
+  if (isLiteWrapperUrl(url)) return 'wrapper';
   if (isInviteLpUrl(url)) return 'lp';
   if (ONELINK_RE.test(url.hostname)) return 'onelink';
   return 'unknown';
@@ -321,14 +414,17 @@ export interface BuildResult {
   removed: string[];
   /**
    * どちらの経路で作ったか。
-   * - `lp`      … 招待LPのURLをそのまま使う(推奨。公式リンクと同じ実体)
+   * - `wrapper` … 招待LPのURLを公式と同じラッパー(4P4E + af_dp)で包む(推奨・既定)。
+   *               タップした瞬間に Universal Link でアプリが開く＝ワンクリック招待
+   * - `lp`      … 招待LPのURLをそのまま使う(`forceLite` OFF。公式との比較用。
+   *               Universal Link ではないのでタップしてもアプリは開かない)
    * - `onelink` … AppsFlyerのOneLinkを組み立て直す(LPのURLが取れなかった場合の従来経路)
    */
-  mode: 'lp' | 'onelink';
+  mode: BuildMode;
   /**
-   * `lp` 方式で、公式のURLから `inc_target_url` のスキームだけを Lite に
-   * 差し替えたかどうか。ここが公式との唯一の差分になるので、
-   * 実機で挙動が変わったときに原因を1変数に絞れるよう結果に持たせる。
+   * 公式のURLから `inc_target_url` のスキームだけを Lite に差し替えたかどうか。
+   * ここが公式との唯一の差分になるので、実機で挙動が変わったときに
+   * 原因を1変数に絞れるよう結果に持たせる。
    */
   liteForced?: boolean;
 }
@@ -752,9 +848,27 @@ export function assertIncentivePreserved(before: URL, after: URL): void {
 }
 
 /**
- * 招待LPのURLを **そのまま** 遷移先にする(推奨経路)。
+ * 招待LPのURLに、公式と同じラッパーを被せてワンクリック招待URLにする(推奨経路)。
  *
- * ## 一切改変しない
+ * ## 招待LPのURLを「そのまま配る」のは最適化ではなかった
+ *
+ * 公式リンクが着地するURLと1バイトも違わないものを配れば公式と同じ挙動になる、
+ * と考えて招待LPのURLをそのまま出力していた時期がある。これは半分しか合っていない。
+ * 公式の招待リンクは `https://lite.tiktok.com/t/XXXX/` という**短縮リンク**で、
+ * LPのURLはそれを展開した*途中の姿*にすぎない。そしてLPのURLはただのWebページなので、
+ * タップしてもブラウザでLPが開くだけ ―― 利用者から見れば
+ * 「生成したURLを踏んでも生のURLに飛ぶだけでアプリが開かない」状態になる。
+ *
+ * アプリを1タップで開く仕掛けは、LP本体ではなくLPが内部に持っている
+ * linker の設定にあった(ファイル上部「ワンクリック招待の実体」を参照)。
+ * TikTok自身が使っているのと同じ
+ *
+ *     https://snssdk473824.onelink.me/4P4E?domain_source=tiktok&af_dp=<Liteのディープリンク>
+ *
+ * を組み立てて返す。`4P4E` は TikTok Lite の Universal Link なので、
+ * OSがタップを横取りしてアプリへ直接渡す(Webページを描画しない＝ダイアログも中間ページも出ない)。
+ *
+ * ## それでも中身は改変しない
  *
  * 以前はここで
  *   - 描画用パラメータ(INTERSTITIAL_PARAMS)を10件ほど削除
@@ -767,13 +881,13 @@ export function assertIncentivePreserved(before: URL, after: URL): void {
  * LP側のJSがアプリを開くかどうかを決めているので、そのJSが読む可能性のある
  * パラメータを消したり値を書き換えたりすれば、判断が変わっても不思議はない。
  *
- * この一件の教訓は一貫している。**TikTokが生成したURLを改変しない。**
- * 公式リンクが着地したURLと1バイトも違わないものを配れば、公式リンクと同じ挙動になる。
- * ジェネレーターの価値は「短縮リンクを展開して、その実体を取り出すこと」にあり、
- * 中身をいじることではない(展開だけでも、短縮リンクが通常版TikTokの
- * Universal Link に横取りされる問題は解消する)。
- *
+ * この一件の教訓は一貫している。**TikTokが生成したパラメータを改変しない。**
+ * ラッパーを被せるのは、LPのクエリを1つも触らずに「入れ物」を替えるだけの操作で、
+ * 中身(`params_url` に載る招待LPのURL)は公式のまま運ばれる。
  * したがってここで落とすのは、**こちらが過去に付けたキーだけ**にする。
+ *
+ * `forceLite` を OFF にすると、従来どおり招待LPのURLをそのまま返す。
+ * 公式との比較・切り分け用で、この形はワンクリックにはならない。
  */
 export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
   const url = new URL(source.toString());
@@ -816,11 +930,44 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
   assertTrackingPreserved(source, url);
   assertIncentivePreserved(source, url);
 
-  /* 何も変えていなければ、URLを組み立て直さず入力の文字列をそのまま返す。
-     URLSearchParams を経由すると並び順やパーセントエンコードが変わりうるため、
-     「公式のURLと1バイトも違わない」ことを保証するにはこの分岐が必要。 */
-  const untouched = removed.length === 0 && !liteForced;
-  return { url: untouched ? source.toString() : url.toString(), removed, mode: 'lp', liteForced };
+  if (!opts.forceLite) {
+    /* 比較・切り分け用。招待LPのURLをそのまま返す(ワンクリックにはならない)。
+       何も変えていなければ組み立て直さず入力の文字列をそのまま返す。URLSearchParams を
+       経由すると並び順やパーセントエンコードが変わりうるため、「公式のURLと1バイトも
+       違わない」ことを保証するにはこの分岐が必要。 */
+    const untouched = removed.length === 0;
+    return { url: untouched ? source.toString() : url.toString(), removed, mode: 'lp', liteForced };
+  }
+
+  /* ここが「最適化」の本体。公式と同じラッパーを被せてワンクリック招待URLにする。
+
+     params_url に載せる招待LPのURLは、キャンペーンでパスが変わっても追随できるよう
+     抽出したURLのオリジン＋パスを土台にする(既定値の INVITE_LP_URL に固定しない)。
+     ペイロードの組み立て(buildLiteDeepLink)は実機で招待の成立を確認済みのものをそのまま使う。 */
+  const wrapped = buildLiteWrapperUrl(buildLiteDeepLink(params, url.origin + url.pathname));
+
+  /* 計測用のキーは af_dp → params_url の二重エンコードの内側に隠れる。
+     欠損しても目視では気づけないので、取り出して入力と突き合わせてから返す。 */
+  assertOneClickPayload(source, wrapped);
+
+  return { url: wrapped, removed, mode: 'wrapper', liteForced };
+}
+
+/**
+ * 組み立てたワンクリックURLの中で、成果計測パラメータが生きていることを検証する。
+ *
+ * `assertTrackingPreserved()` はURLのクエリ同士を突き合わせるが、ラッパーを被せると
+ * 計測用のキーは外側のクエリから消えて `af_dp` の中へ移る。そのままでは検証が
+ * 素通りしてしまうため、ペイロードを取り出してから同じ検証にかける。
+ */
+export function assertOneClickPayload(before: URL, wrapperUrl: string): void {
+  const payload = wrapperPayloadUrl(wrapperUrl);
+  if (!payload) {
+    throw new Error(
+      'ワンクリック用のペイロード(af_dp の params_url)を組み立てられませんでした。生成を中断しました。'
+    );
+  }
+  assertTrackingPreserved(before, payload);
 }
 
 export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
@@ -830,7 +977,12 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   // 検証用に入力時点のパラメータを控えておく(以降 url は書き換わる)
   const source = new URL(url.toString());
 
-  /* 招待LPのURLなら、OneLinkを組み立て直さずそのまま遷移先にする。
+  /* 既にワンクリック用のラッパーが被っているURL(このツールで生成済みのもの)を
+     もう一度通した場合は、そのまま返す。組み立て直すと外側に AppsFlyer 用のキーが増えて
+     公式と形が変わってしまうため(サイトの再保存でこの経路を通る)。 */
+  if (isLiteWrapperUrl(url)) return { url: url.toString(), removed: [], mode: 'wrapper' };
+
+  /* 招待LPのURLなら、公式と同じラッパーを被せてワンクリック招待URLにする。
      公式リンクが着地するのはこの形だと実測で確認済み(ファイル冒頭のコメント参照)。 */
   if (isInviteLpUrl(url)) return buildLpUrl(source, opts);
 

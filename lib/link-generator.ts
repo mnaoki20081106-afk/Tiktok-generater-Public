@@ -544,6 +544,12 @@ export interface BuildResult {
    * - `onelink` … AppsFlyerのOneLinkを組み立て直す(LPのURLが取れなかった場合の従来経路)
    */
   mode: BuildMode;
+  /**
+   * `inc_target_url` のスキームを Lite へ差し替えたかどうか。
+   * ここが公式のURLとの**唯一の差分**になるので、実機で挙動が変わったときに
+   * 原因を1変数に絞れるよう結果に持たせる。
+   */
+  liteForced?: boolean;
 }
 
 export function parseHttpUrl(raw: unknown): URL | null {
@@ -1018,37 +1024,63 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
     });
   };
 
-  /* ===== 招待LPのURLは一切改変しない =====
-
-     こちらが過去に付けたキー(MANAGED_PARAMS / is_retargeting)だけを掃除して、
-     あとは公式が出したURLをそのまま渡す。**描画用パラメータも消さないし、
-     inc_target_url のスキームも差し替えない。**
-
-     理由は「LPに着地したあと、公式と同じ動作をさせるため」。
-     招待LPのクエリにある
-
-       incentive_redirect=1 / is_inc_roma=1 / inc_target_url
-
-     は、LPのJSが読んで**自動でアプリへ送り込む**ための仕掛け。その行き先である
-     inc_target_url を Lite のスキームへ書き換えていると、その自動遷移が不発になり
-     「LPに着地したあと利用者が手でタップする」状態になる。公式のまま渡せば、
-     公式の招待リンクを踏んだときとまったく同じ動作になる。
-
-     招待のバインドはLPのページが読み込まれた時点で成立することが実機で確認できている
-     (X / Safari の両方で「自身を招待できません」を確認)ので、
-     LPへ着地させる限りトラッキングは失われない。
-
-     ## 通常版TikTokが開くリスクについて
-
-     inc_target_url が指すのは通常版のスキーム(aweme://)なので、通常版と Lite の
-     両方が入った端末では通常版が開く可能性がある。ただしこれは**公式の招待リンクを
-     踏んだときとまったく同じ挙動**で、公式がその形で成果を出している以上、
-     ここを触らないことが最も安全という判断。
-
-     もし実機で通常版に取られるようなら、`forceLite` を復活させて
-     inc_target_url のスキームだけを差し替えられる(toLiteScheme が残してある)。
-     切り分けを1変数に保つため、今は差分ゼロにしてある。 */
+  /* こちらが過去に付けたキーだけを掃除する。TikTokが出す招待LPのURLに
+     これらが載ることはないので、公式のURLには影響しない。
+     (生成済みURLを再保存したときに、前回の af_dp などを落とすためのもの) */
   drop([...MANAGED_PARAMS, 'is_retargeting']);
+
+  /* ===== 公式のURLと違ってよい、唯一の1点 =====
+
+     `inc_target_url` は「LPのJSがアプリを開くとき、どのアプリのどの画面へ入るか」を
+     指している。公式の値は**通常版TikTok**のスキーム:
+
+       inc_target_url = aweme://roma_redirect/?spark_page=scan_code
+
+     LPのJSは `incentive_redirect=1` / `is_inc_roma=1` を見て、この値へ遷移しようとする。
+     つまり LPが叩くのは常に「通常版TikTok」であって、TikTok Lite ではない。
+
+     ここが「LPのWebページが開くだけでアプリが起動しない」の直接の原因になる。
+     LPが叩く aweme:// を解決できるアプリ(＝通常版TikTok)が端末に無ければ、
+     OSはそのナビゲーションを黙って捨てる。利用者から見ると
+     **「LPが表示されたまま何も起きない」**。Lite しか入っていない端末では必ずこうなる。
+
+     一度この差し替えをやめて「公式のURLと1バイトも違わない」状態にしたことがあるが
+     (ae16a73)、それは同時に**Liteを開く手段をURLから取り除く**ことでもあった。
+     実機で「アプリが起動せずLPが開くだけ」になったのはその後である。
+     実機で起動とトラッキングの両方が成立していたマージ#36 では、ここが Lite に
+     差し替わっていた。よってこの1点は戻す。
+
+     ## なぜ「起動しない原因」の候補がこれ1つに絞れるか
+
+     #36 との差分は本来11箇所あった(描画用10件の削除 + この差し替え)。
+     ただし描画用10件(`__status_bar` / `_svg` / `og_image` など)は
+     **LPとアプリ内WebViewの見た目にしか効かず、どのアプリを起動するかには関与しない**。
+     「起動しない」という症状を説明できるのは inc_target_url だけなので、
+     描画用10件は公式のまま残し、差分をこの1点に限定する。
+     こうしておけば、実機の結果が変わったとき原因はここだと確定できる。
+
+     ## 招待の成立には影響しない
+
+     「誰の招待か」を運んでいるのは LPのクエリ(`u_code` / `share_page_data`)であって
+     `inc_target_url` のクエリではない。差し替えるのは**先頭のスキームだけ**で、
+     パス(`roma_redirect/`)もクエリ(`spark_page=scan_code`)も1バイト触らない。
+     キー自体も必ず残る(消すと「アプリを開く仕掛け」ごと失われる)。
+
+     ## OFFにしたいとき
+
+     `forceLite: false` を渡せば公式と完全に同一のURLになる。UI側にも
+     チェックボックスがあるので、実機での切り分けはそこで行える。 */
+  let liteForced = false;
+  if (opts.forceLite) {
+    const target = params.get('inc_target_url');
+    if (target) {
+      const lite = toLiteScheme(target);
+      if (lite !== target) {
+        params.set('inc_target_url', lite);
+        liteForced = true;
+      }
+    }
+  }
 
   assertTrackingPreserved(source, url);
   assertIncentivePreserved(source, url);
@@ -1080,10 +1112,11 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
      したがって遷移先は招待LPのURLにする。アプリを開く役目はLP自身のJSに任せる
      (公式の招待リンクと同じ経路)。ワンクリックでアプリが開く形とトラッキングは
      両立しない、というのがここまでの実機の結論。 */
-  /* 何も落としていなければ、URLを組み立て直さず入力の文字列をそのまま返す。
+  /* 何も触っていなければ、URLを組み立て直さず入力の文字列をそのまま返す。
      URLSearchParams を経由すると並び順やパーセントエンコードが変わりうるため、
      「公式のURLと1バイトも違わない」ことを保証するにはこの分岐が必要。 */
-  return { url: removed.length === 0 ? source.toString() : url.toString(), removed, mode: 'lp' };
+  const untouched = removed.length === 0 && !liteForced;
+  return { url: untouched ? source.toString() : url.toString(), removed, mode: 'lp', liteForced };
 }
 
 

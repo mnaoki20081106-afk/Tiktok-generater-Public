@@ -22,6 +22,12 @@ export interface UpdateSurpriseConfigResult {
   error?: string;
   /** 保存できた場合、ジェネレーターを通した当たりURL(クッションページOFFのサイト用) */
   optimizedPrizeUrl?: string | null;
+  /**
+   * 最適化がどちらの経路で行われたか。
+   * `onelink` は招待LPのURLが取れなかったときのフォールバックで、
+   * この形式は実機で「招待が成立しない」ことが確認されている。管理画面で警告を出す。
+   */
+  optimizedMode?: 'lp' | 'onelink' | 'unknown';
 }
 
 /**
@@ -44,10 +50,12 @@ export async function updateSurpriseConfig(formData: FormData): Promise<UpdateSu
   const prizeUrl = String(formData.get('prize_url') ?? '').trim();
 
   let optimizedPrizeUrl: string | null = null;
+  let optimizedMode: 'lp' | 'onelink' | 'unknown' | undefined;
   if (prizeUrl) {
     try {
       const built = await generateDestinationUrl(prizeUrl);
       optimizedPrizeUrl = built.url;
+      optimizedMode = built.mode;
     } catch (e) {
       return {
         ok: false,
@@ -74,5 +82,5 @@ export async function updateSurpriseConfig(formData: FormData): Promise<UpdateSu
   }
 
   revalidatePath('/admin');
-  return { ok: true, optimizedPrizeUrl };
+  return { ok: true, optimizedPrizeUrl, optimizedMode };
 }

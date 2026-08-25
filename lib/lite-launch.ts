@@ -77,6 +77,9 @@
 /** 通常のブラウザで、タップされないまま自動遷移させるまでの時間(最後の保険) */
 export const WEB_FALLBACK_MS = 6000;
 
+/** スキームを叩いてから、アプリが開かなかったと判断してWebへ落とすまでの時間 */
+export const APP_TIMEOUT_MS = 1200;
+
 /** アプリ内ブラウザで、何も出さずに待つ時間。これを過ぎたらエラー文言を出す */
 export const IAB_HOLD_MS = 2000;
 
@@ -112,6 +115,13 @@ export interface LiteLaunchOptions {
   webUrl: string;
   /** 通常のブラウザで、タップされないまま自動遷移させるまでの時間 */
   fallbackMs: number;
+  /**
+   * アプリを直接開くカスタムスキーム(`toLiteAppLink()` の結果)。無ければ null。
+   * 招待のトラッキングが成立するのはこれでアプリを開いたときだけ(マージ#35 で実証)。
+   */
+  appLink: string | null;
+  /** スキームを叩いてから、アプリが開かなかったと判断してWebへ落とすまでの時間 */
+  appTimeoutMs: number;
   /** アプリ内ブラウザ判定に使う正規表現。空文字なら判定しない */
   inAppBrowserPattern: string;
   /** 画面全体を覆う <a> のid */
@@ -171,21 +181,57 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
 
      2秒後のエラー文言だけは出す(上の errorTimer)。これはリンクにもタップにも
      紐づいておらず、<span> の hidden を外すだけなので遷移には影響しない。 */
-  if (inApp) return;
+  /* アプリが開かなかったときにWebへ落とす。スキームを叩いた後にだけ使う。 */
+  function goWeb() {
+    if (document.visibilityState === 'hidden') return; // アプリが前面に出た
+    try {
+      window.location.replace(opts.webUrl);
+    } catch (e) {}
+  }
 
-  /* ===== 通常のブラウザ =====
-     タップされないまま時間が過ぎたときの保険。この経路ではアプリは開かない
-     (JS遷移では Universal Link が発火しない)が、黒い画面のまま放置されるよりはよい。 */
+  /* スキームを叩く。トラッキングが成立するのはこの経路だけ(マージ#35 で実証)。 */
+  function openApp() {
+    try {
+      window.location.href = opts.appLink as string;
+    } catch (e) {}
+    setTimeout(goWeb, opts.appTimeoutMs);
+  }
+
+  if (inApp) {
+    /* ===== アプリ内ブラウザ(X など) =====
+       スキームは <a href> に入れても WKWebView に破棄されることが実機で分かっている。
+       そこで href には Web の遷移先を入れたまま、**タップの瞬間にJSでスキームを叩く**。
+       利用者のジェスチャーの中で実行されるので、自動遷移として弾かれる経路とは条件が違う。
+       弾かれた場合は appTimeoutMs 後に Web の遷移先へ落ちるので、従来より悪くはならない。
+
+       スキームが無い(古い形式のURLなど)ときはリスナーを張らず、<a> のネイティブな
+       遷移にそのまま任せる。 */
+    if (!opts.appLink) return;
+
+    screen.addEventListener('click', function (e) {
+      e.preventDefault();
+      clearTimeout(errorTimer);
+      openApp();
+    });
+    return;
+  }
+
+  /* ===== 通常のブラウザ(Safari など) =====
+     マージ#35 と同じく、読み込み直後にスキームを叩く。ここでOSの確認ダイアログが出るが、
+     そこから開いた場合に招待が成立することが実機で確認されている。 */
+  if (opts.appLink) {
+    openApp();
+    return;
+  }
+
+  /* スキームが作れない場合だけ、従来どおりタップ待ち＋時間切れでWebへ。 */
   var fallbackTimer = setTimeout(function () {
-    // 既にアプリへ移った(タップが効いた)なら何もしない
     if (document.visibilityState === 'hidden') return;
     try {
       window.location.replace(opts.webUrl);
     } catch (e) {}
   }, opts.fallbackMs);
 
-  /* タップされたら遷移が始まるので、その途中でエラー文言が出たり、保険の自動遷移が
-     タップを追い越したりしないように両方止める。preventDefault も location も触らない。 */
   function onTap() {
     clearTimeout(errorTimer);
     clearTimeout(fallbackTimer);
@@ -199,6 +245,8 @@ export function liteLaunchOptions(webUrl: string): LiteLaunchOptions {
   return {
     webUrl,
     fallbackMs: WEB_FALLBACK_MS,
+    appLink: null,
+    appTimeoutMs: APP_TIMEOUT_MS,
     inAppBrowserPattern: IN_APP_BROWSER_PATTERN,
     iabScreenId: IAB_SCREEN_ID,
     errorTextId: ERROR_TEXT_ID,

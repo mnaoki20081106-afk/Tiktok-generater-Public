@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { ERROR_TEXT, ERROR_TEXT_ID, IAB_SCREEN_ID, liteLaunchOptions, startLiteLaunch } from '@/lib/lite-launch';
+import { toLiteAppLink } from '@/lib/link-generator';
 import styles from './cushion-relay.module.css';
 
 /**
@@ -22,7 +23,7 @@ export function CushionRelay({ to }: { to: string | null }) {
     /* タップを待つ画面はどの環境でもすぐ出す。遅らせると、その間のタップが
        <a> に届かず取りこぼしになる(画面は hidden のままなので)。
        通常のブラウザで誰もタップしなかった場合の自動遷移は startLiteLaunch 側が持つ。 */
-    startLiteLaunch(liteLaunchOptions(to));
+    startLiteLaunch({ ...liteLaunchOptions(to), appLink: toLiteAppLink(to) });
   }, [to]);
 
   return (

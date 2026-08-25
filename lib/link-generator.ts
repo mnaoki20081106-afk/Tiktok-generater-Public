@@ -320,29 +320,43 @@ export const MANAGED_PARAMS = [
   'af_dp',
 ];
 
-/* かつて params_url へ足していたキー。**今は1つも足さない。**
+/* アプリへ渡す params_url に足す、アプリ内コンテナの設定値。
+   招待LPのクエリには含まれず、リンク生成側で付ける固定値。実物のHTMLの af_dp から採取した。
 
-   「TikTok自身が載せている固定値」だと考えて補完していたが、実物のLPのHTMLにある
-   TikTok自身のスキーム(url_schemes)と突き合わせたところ、params_url に載っているのは
-   招待LPのクエリ36キーちょうどで、これらは1つも含まれていなかった。
-   とくに spark_page は params_url の**中**ではなく**兄弟キー**として置くもので、
-   場所を間違えたまま値も入れていた。実機で「アプリは起動するが招待ページが開かない」
-   状態になった直接の原因がこれ。
+   一度これを「捏造キー」とみなして削除したが、**実機の結果と合わなかった**。
+   「アプリが起動し、UIも描画され、かつ『自身を招待できません』が出る(＝トラッキング成立)」
+   状態にあったのはマージ#35 で、そこではこれらが params_url に入っていた。 */
+export const LITE_DEEPLINK_CONTEXT: Record<string, string> = {
+  spark_page: 'scan_code',
+  use_spark: '1',
+  bdhm_bid: 'incentive_campaign_hybrid',
+  needlaunchlog: '1',
+  ug_medium: 'fe_component',
+  disable_ttnet_proxy: '0',
+  use_mutable_context: '1',
+};
 
-   定義を残してあるのは、この実装で保存されてしまったURLから取り除くため
-   (`unwrapLiteWrapperUrl()`)。新しく足すことは二度としない。 */
-export const LEGACY_INJECTED_PARAMS = [
-  'spark_page',
-  'use_spark',
-  'bdhm_bid',
-  'needlaunchlog',
-  'ug_medium',
-  'disable_ttnet_proxy',
-  'use_mutable_context',
-  // ロングリンク化で補完していた。招待LPのクエリには元から無い
-  'pid',
-];
+/* アプリ内WebView(Sparkコンテナ)の描画設定。
 
+   Web側では INTERSTITIAL_PARAMS として除去しているが、**アプリ内では招待ページを
+   描画するコンテナの設定そのもの**で、これが無いと「アプリは起動するが招待ページへ
+   画面が切り替わらない」状態になる。
+
+   マージ#34 と #35 の差はここだけで、#34(これらが無い)では「UIは出ないがトラッキングは
+   成立する」、#35(これらを戻した)で「UIも出る」になった。当時の生成器を実際に走らせて
+   確認してある。 */
+export const LITE_INAPP_RENDER: Record<string, string> = {
+  __status_bar: 'true',
+  _pia_: '1',
+  _svg: '1',
+  enable_canvas: '1',
+  enable_canvas_optimize: '1',
+  hide_nav_bar: '1',
+  should_full_screen: '1',
+};
+
+/* ラッパー形式で保存済みのURLから取り除くキー(復旧用)。 */
+export const LEGACY_INJECTED_PARAMS = [...Object.keys(LITE_DEEPLINK_CONTEXT), 'pid'];
 /* かつて params_url へ補完していた描画用パラメータ(__status_bar / _svg など)。
    これらは招待LPのクエリに**元から入っている**ので、LPのURLをそのまま params_url に
    載せる今の実装では補完する必要がない。定義ごと削除した。 */
@@ -397,43 +411,63 @@ export function lpUrlFromParams(params: URLSearchParams, lpBase: string = INVITE
 }
 
 /**
- * TikTok Lite 向けのディープリンク(`af_dp` の値)を組み立てる。
+ * アプリへ直接渡すディープリンクを組み立てる(マージ#35 と同一の実装)。
  *
- *   snssdk473824://roma_redirect/?params_url=<招待LPのURL>&spark_page=scan_code
+ *   snssdk473824://roma_redirect/?params_url=<招待LPのURL + アプリ用の設定値>
  *
- *  1. `params_url` は招待LPのURLを**そのまま**載せる。並び順もエンコードも変えない。
- *     TikTok の params_url に載っているのはLPのクエリ36キーちょうどで、
- *     `use_spark` / `bdhm_bid` / `pid` のような値は1つも入っていない。
- *  2. `spark_page` は `params_url` の**中ではなく兄弟キー**。値は `sparkPageOf()` が
- *     招待LPの `inc_target_url` から読む。
+ * `params_url` には、招待LPのクエリに加えて `LITE_DEEPLINK_CONTEXT`(アプリ内コンテナの設定)と
+ * `LITE_INAPP_RENDER`(描画設定)を足し、`inc_target_url` のスキームを Lite へ差し替える。
  *
- * 唯一 TikTok の文字列と違ってよいのが、`params_url` の中の `inc_target_url` の
- * スキーム(`buildLpUrl` の `forceLite`)。理由はそちらのコメントを参照。
+ * 一時期これを「TikTokの url_schemes と1バイト一致させる」方向で作り直したが、
+ * 実機ではトラッキングが成立しなかった。**基準は公式の文字列ではなく、
+ * 実機で成立が確認された #35 の出力**に戻してある。
  */
-export function buildLiteDeepLink(lpUrl: URL): string {
-  let deepLink = LITE_DEEPLINK_BASE + '?params_url=' + encodeURIComponent(lpUrl.toString());
+export function buildLiteDeepLink(sourceParams: URLSearchParams, lpBase: string = INVITE_LP_URL): string {
+  const lp = new URL(lpBase);
+  lp.search = '';
 
-  const sparkPage = sparkPageOf(lpUrl);
-  if (sparkPage) deepLink += '&spark_page=' + encodeURIComponent(sparkPage);
+  sourceParams.forEach((v, k) => {
+    if (k === 'is_retargeting') return;
+    if (MANAGED_PARAMS.includes(k)) return;
+    // アプリ内で開く先も通常版ではなくLiteに向ける(キーは残す)
+    lp.searchParams.set(k, k === 'inc_target_url' ? toLiteScheme(v) : v);
+  });
 
-  return deepLink;
+  // ロングリンク化と同じ規則で pid を補完する
+  if (!lp.searchParams.has('pid')) {
+    const mediaSource = lp.searchParams.get('media_source') || lp.searchParams.get('inc_pid');
+    if (mediaSource) lp.searchParams.set('pid', mediaSource);
+  }
+
+  for (const [k, v] of Object.entries({ ...LITE_DEEPLINK_CONTEXT, ...LITE_INAPP_RENDER })) {
+    if (!lp.searchParams.has(k)) lp.searchParams.set(k, v);
+  }
+
+  return LITE_DEEPLINK_BASE + '?params_url=' + encodeURIComponent(lp.toString());
 }
 
 /**
- * 招待LPの `inc_target_url` から `spark_page` を取り出す。
+ * 遷移先URLから、アプリを直接開くためのディープリンクを作る(マージ#35 と同一)。
  *
- * `inc_target_url` は `aweme://roma_redirect/?spark_page=scan_code` の形で、
- * 「アプリ内でどのページを開くか」を指している。キャンペーンが変われば
- * `scan_code` 以外になりうるので、固定値にせず毎回ここから読む。
+ * 作れない場合は null を返す。呼び出し側はWeb遷移だけを行う。
  */
-export function sparkPageOf(lpUrl: URL): string | null {
-  const target = lpUrl.searchParams.get('inc_target_url');
-  if (!target) return null;
+export function toLiteAppLink(rawUrl: string): string | null {
+  const url = parseHttpUrl(rawUrl);
+  if (!url) return null;
 
-  const at = target.indexOf('?');
-  if (at < 0) return null;
+  // 招待LPのURL … そのクエリからディープリンクを組み立てる
+  if (isInviteLpUrl(url)) return buildLiteDeepLink(url.searchParams, url.origin + url.pathname);
 
-  return new URLSearchParams(target.slice(at + 1)).get('spark_page');
+  /* OneLink形式 … af_dp が既に「中身の詰まった」Liteディープリンクならそれを使う。
+     空だったり通常版向けだったりするものは、アプリを開いても紹介元が伝わらないので使わない。 */
+  if (ONELINK_RE.test(url.hostname)) {
+    const afdp = url.searchParams.get('af_dp') || '';
+    if (LITE_DEEPLINK_BASES.some((b) => afdp.startsWith(b)) && decodeURIComponent(afdp).includes('u_code=')) {
+      return afdp;
+    }
+  }
+
+  return null;
 }
 
 /** クッションページが遷移先を受け取るクエリキー。単独版と同じ `to`。 */
@@ -1279,7 +1313,7 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
     opts.forceLite
       ? keepSourceDeepLink
         ? sourceDeepLink
-        : buildLiteDeepLink(lpUrlFromParams(recoverAppParams(source)))
+        : buildLiteDeepLink(recoverAppParams(source))
       : '',
   ]);
 

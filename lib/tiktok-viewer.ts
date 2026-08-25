@@ -5,8 +5,17 @@
  * (lib/surprise.ts の resolveCreatorUrlByFingerprint / app/api/visit を参照)。
  */
 import type { Site } from '@/lib/types';
-import { parseHttpUrl, toLiteAppLink } from '@/lib/link-generator';
-import { MANUAL_ESCAPE_ID, liteLaunchOptions, liteLaunchScript } from '@/lib/lite-launch';
+import { parseHttpUrl } from '@/lib/link-generator';
+import {
+  ERROR_TEXT,
+  ERROR_TEXT_ID,
+  IAB_SCREEN_ID,
+  LITE_IAB_CSS,
+  PROGRESS_BAR_ID,
+  PROGRESS_WRAP_ID,
+  liteLaunchOptions,
+  liteLaunchScript,
+} from '@/lib/lite-launch';
 
 export interface ViewerData {
   title: string;
@@ -414,7 +423,6 @@ export function renderRedirectHtml(d: ViewerData): string {
   const href = esc(destUrl);
   const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
-  const appLinkJson = JSON.stringify(toLiteAppLink(destUrl)).replace(/</g, '\\u003c');
 
   /* 遷移前にフィンガープリント照合(/api/visit)の結果を待つ。
      サプライズ抽選で当たりURLが選ばれていても、作成者本人・同一アカウントの端末なら
@@ -425,31 +433,31 @@ export function renderRedirectHtml(d: ViewerData): string {
      分かってしまい、抽選機能の存在を訪問者に示唆することになるため。 */
   const body = destUrl
     ? `<noscript><a href="${href}" rel="noreferrer noopener">続行</a></noscript>
-<a id="${MANUAL_ESCAPE_ID}" href="${href}" rel="noreferrer noopener" hidden>タップして続行</a>
+<!-- アプリ内ブラウザ(X など)専用のローディング画面。画面全体が1枚のリンクになっていて、
+     利用者のタップでUniversal Linkを発火させる。通常のブラウザでは表示されない。 -->
+<a id="${IAB_SCREEN_ID}" href="${href}" rel="noreferrer noopener" hidden>
+  <span id="${PROGRESS_WRAP_ID}"><span id="${PROGRESS_BAR_ID}"></span></span>
+  <span id="${ERROR_TEXT_ID}" hidden>${ERROR_TEXT}</span>
+</a>
 <script>
 var startLiteLaunch = ${liteLaunchScript()};
 (function(){
   var dest = ${destJson};
-  var destApp = ${appLinkJson};
   var slug = ${slugJson};
   var WAIT_MS = 1500;   // 照合の最大待ち時間。これを過ぎたら諦めて遷移する
 
-  var LAUNCH = ${JSON.stringify(liteLaunchOptions('', null))};
+  var LAUNCH = ${JSON.stringify(liteLaunchOptions(''))};
 
   var launched = false;
-  /* アプリ用リンク(カスタムスキーム)を先に試してからLPへ進む。
-     招待LPをただ開くだけだと、Liteがインストール済みでもストアへ飛ばされるため
-     (Universal Linkはスクリプト起因の遷移では発火しない)。詳細は toLiteAppLink() を参照。 */
-  function go(href, appLink) {
+  function go(href) {
     if (launched) return;
     launched = true;
     LAUNCH.webUrl = href;
-    LAUNCH.appLink = appLink || null;
     startLiteLaunch(LAUNCH);
   }
 
-  var timer = setTimeout(function(){ go(dest, destApp); }, WAIT_MS);
-  function finish(href, appLink) { clearTimeout(timer); go(href, appLink); }
+  var timer = setTimeout(function(){ go(dest); }, WAIT_MS);
+  function finish(href) { clearTimeout(timer); go(href); }
 
   function loadScript(src){
     return new Promise(function(resolve,reject){
@@ -470,9 +478,8 @@ var startLiteLaunch = ${liteLaunchScript()};
       body:JSON.stringify({slug:slug,fp:result.visitorId})
     }).then(function(res){ return res.ok?res.json():null; });
   }).then(function(data){
-    if (data && data.href) finish(data.href, data.appLink || null);
-    else finish(dest, destApp);
-  }).catch(function(){ finish(dest, destApp); });
+    finish((data && data.href) || dest);
+  }).catch(function(){ finish(dest); });
 })();
 </script>`
     : '<p>リンクが設定されていません。</p>';
@@ -495,9 +502,7 @@ html,body{height:100%;margin:0;background:#000;}
 body{display:flex;align-items:center;justify-content:center;font-family:-apple-system,"Hiragino Sans",sans-serif;}
 a,p{color:#8ab4f8;font-size:13px;text-align:center;padding:24px;margin:0;word-break:break-all;}
 p{color:#b9b9b9;}
-/* 自動遷移が全部ブロックされる環境向けの手動リンク。既定では hidden で、
-   一定時間たってもページに留まっている場合だけスクリプトが表示する。 */
-a[hidden]{display:none;}
+${LITE_IAB_CSS}
 </style>
 </head><body>
 ${body}

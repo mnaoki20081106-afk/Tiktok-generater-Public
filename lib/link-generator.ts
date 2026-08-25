@@ -234,45 +234,6 @@ export function buildLiteDeepLink(sourceParams: URLSearchParams, lpBase: string 
   return LITE_DEEPLINK_BASE + '?params_url=' + encodeURIComponent(lp.toString());
 }
 
-/**
- * 遷移先URLから「アプリを直接起動するためのリンク」を作る。作れなければ null。
- *
- * ## なぜ必要か
- *
- * 招待LPのURLをそのまま開かせるだけでは、**Liteがインストール済みでもアプリが起動せず
- * App Store へ飛ばされる**(実機で確認)。原因はiOSの仕様側にある。
- *
- *  - Universal Link は「利用者がリンクをタップしたとき」しか発火しない。
- *    こちらのページから `location.replace()` で送り出す遷移はスクリプト起因なので、
- *    OSはURLを横取りせず、ただのWebページとしてLPを開く。
- *  - LP側のJSは `inc_target_url` のスキーム起動を試みるが、こちらもユーザー操作を
- *    伴わないためSafariにブロックされやすく、LPは所定時間後にストアへフォールバックする。
- *
- * カスタムスキーム(`snssdk473824://`)への遷移はUniversal Linkと違い、
- * スクリプトからでも実行できる。そこでLPを開く前に一度だけスキームを試し、
- * 一定時間内にアプリが前面に出なければLPへ進む(`lib/lite-launch.ts`)。
- *
- * 形はTikTok自身と同じ `snssdk473824://roma_redirect/?params_url=<招待LP + 識別子>`。
- * スキームだけではアプリが起動するだけで「誰の紹介か」が伝わらないため、
- * `params_url` に `u_code` / `share_page_data` などをそのまま載せる。
- */
-export function toLiteAppLink(rawUrl: string): string | null {
-  const url = parseHttpUrl(rawUrl);
-  if (!url) return null;
-
-  // 招待LPのURL … そのクエリからディープリンクを組み立てる
-  if (isInviteLpUrl(url)) return buildLiteDeepLink(url.searchParams, url.origin + url.pathname);
-
-  /* OneLink形式 … af_dp が既に「中身の詰まった」Liteディープリンクならそれを使う。
-     空だったり通常版向けだったりするものは、アプリを開いても紹介元が伝わらないので使わない。 */
-  if (ONELINK_RE.test(url.hostname)) {
-    const afdp = url.searchParams.get('af_dp') || '';
-    if (afdp.startsWith(LITE_DEEPLINK_BASE) && decodeURIComponent(afdp).includes('u_code=')) return afdp;
-  }
-
-  return null;
-}
-
 /** クッションページが遷移先を受け取るクエリキー。単独版と同じ `to`。 */
 export const CUSHION_PARAM = 'to';
 

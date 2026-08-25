@@ -80,58 +80,58 @@ is_inc_roma        = 1
 「`onelink.me` で止まり『TikTok Liteを開く』ボタンが出る」症状の原因はこれ。
 対策は **中身を組み立て直さないこと**。TikTok自身が配っているパラメータをそのまま運ぶ。
 
-#### 実機で否定された案: OneLinkラッパー（4P4E）で包む
+#### ワンクリック招待の実体は、LPが内部に持っているラッパーだった
 
 招待LPのHTMLには、TikTok自身がアプリを開くために使っている設定が埋まっている
-（`tiktok.share.api/tiktok/linker/component/strategy/get/v1/`）。18個ある wrapper はどれも同じ形をしていた。
+（`tiktok.share.api/tiktok/linker/component/strategy/get/v1/`）。18個ある wrapper はどれも同じ形をしている。
 
 ```json
 "launch_type": "tiktok_lite_app",
 "wrapper_url": {
   "url_fallback": "https://snssdk473824.onelink.me/4P4E?domain_source=tiktok&af_dp={{schema}}",
-  "url_schemes": ["snssdk473824://roma_redirect/?params_url=<招待LPのURL+全36キー>&spark_page={{url}}"]
+  "url_schemes": ["snssdk473824://roma_redirect/?params_url=<招待LPのURL(36キー)>&spark_page={{url}}"]
 }
 ```
 
-ここから「`Lite の OneLink(4P4E)` + `af_dp=<ディープリンク>`」を組み立てれば1タップでアプリが開く、
-と考えて一度そう実装した。**実機で、アプリは起動するがアトリビューションが切れることが判明して差し戻した。**
-原因は2つあり、どちらも単独で致命的。
+**招待LPのURLをそのまま配ってもアプリは起動しない**（X / Safari の両方で確認済み。TikTok公式の
+招待リンクも同じ挙動）。タップでアプリが起動することを実機で確認できているのは、
+このラッパー（`4P4E` + `af_dp`）を被せた形だけ。`4P4E` は TikTok Lite の Universal Link なので、
+タップした瞬間にOSがURLを横取りしてアプリへ渡す。
 
-1. **三重エンコードで `share_page_data` が壊れる。**
-   `share_page_data` は `+` と `%2F` を含む500文字のBase64。ラッパーにすると
-   `LPのクエリ(+)` → `params_url(%2B)` → `af_dp(%252B)` と3層になり、
-   AppsFlyerのクリックサーバ・SDK・アプリ側の `roma_redirect` ハンドラが
-   **それぞれちょうど1回ずつ**デコードして初めて元に戻る。1箇所でも `+` を空白として扱えば
-   （フォームエンコードの慣習では正しい挙動）Base64が壊れ、アプリは招待者を特定できない。
-2. **AppsFlyerのクリックが招待者に紐づかない。**
-   `4P4E` を素で叩くとクリックはテンプレート既定の文脈で記録される。招待者を指す `wid` / `c` は
-   ショートリンク側のサーバー設定にあり、こちらでは再現できない（`assertOneLink()` のコメント参照）。
-   TikTok自身の `url_fallback` が機能するのは、彼らのリンクサービスが `{{schema}}` 以外も
-   サーバー側で埋めているため。
+##### 一度これで「アプリは起動するが招待ページが開かない」状態になった原因
 
-#### 招待LPのURLは「ただのWebページ」ではない
+最初にラッパーを実装したとき、`af_dp` の中身を自前で組み立てていた。実物のLPにある
+TikTok自身のスキームと突き合わせたところ、**3点で構造が違っていた**。
 
-差し戻した先、つまり**招待LPのURLをそのまま遷移先にする形が、アプリを開く経路として最良**である。
+| | TikTok自身 | 当時の実装 |
+|---|---|---|
+| `spark_page` | `params_url` の**兄弟キー** | `params_url` の**中**に混入 |
+| `params_url` のキー | LPのクエリ36キーちょうど | **+8キー捏造**（`use_spark` / `bdhm_bid` / `pid` 等） |
+| `inc_target_url` | `aweme://` のまま | `snssdk473824://` へ書き換え |
 
-- 招待LPのURLはTikTokの関連ドメイン上のHTTPSリンクなので、**利用者がタップすればそれ自体が
-  Universal Link として発火してアプリが開く。**
-- 招待の文脈（`u_code` / `share_page_data` / 描画用パラメータ）を素のクエリとして持っているので、
-  アプリへ渡るまでに**エンコード層が1つも増えない**。
-- ただし **JSから `location.href` で飛ばすと iOS が Universal Link を抑止する。**
-  この形が効くのは利用者のタップを経由したときで、だから遷移は画面全体を覆う `<a>` に任せている
-  （`lib/lite-launch.ts`）。
+`&spark_page={{url}}` は「URLを入れる場所」ではなく、招待LPが `inc_target_url`
+（`aweme://roma_redirect/?spark_page=scan_code`）として持っている値を入れる場所だった。
+場所も値も外したまま配っていたので、アプリ側が解釈できず招待ページに到達できなかった。
+
+現在は `buildLiteDeepLink()` が `url_schemes` と同じ構造で組み立てる。
+**実物のLPから採取した TikTok自身のスキーム文字列と、生成結果が1バイトも違わないこと**を
+検証してある（2894文字が完全一致）。
+
+- `params_url` は招待LPのURLを**そのまま**載せる。並び順もエンコードも変えない
+- `spark_page` は `sparkPageOf()` が `inc_target_url` から読む（キャンペーンが変わっても追随する）
+- `inc_target_url` は書き換えない。どのアプリが開くかは外側で既に Lite に決まっている
+- 外側に載せるのは `domain_source` と `af_dp` の2つだけ。ストアへの振り分けは
+  AppsFlyer側（4P4Eテンプレート）のサーバー設定が持つので `af_ios_url` などは足さない
 
 | 方式 | 条件 | 何をするか |
 |---|---|---|
-| **`lp`（既定・推奨）** | 土台が招待LPのURL（`isInviteLpUrl()`） | 公式リンクが着地したURLをそのまま使う。変えるのは `inc_target_url` のスキームだけ（Lite強制） |
+| **`wrapper`（既定・推奨）** | 土台が招待LPのURL（`isInviteLpUrl()`）で `forceLite` ON | TikTok自身と同じ `4P4E?domain_source=tiktok&af_dp=<スキーム>` を組み立てる |
+| `lp`（比較・切り分け用） | 土台が招待LPのURLで `forceLite` OFF | 招待LPのURLをそのまま返す。**タップしてもアプリは起動しない** |
 | `onelink`（フォールバック） | 土台がOneLinkのURL | 従来どおり `4P4E` へ載せ替えて `af_dp` を組み立てる |
 
-`BuildResult.mode` にどちらで生成したかが入り、結果画面にも表示される。
-
-撤回済みのラッパー形式で保存されてしまったURLは `detectBuildMode()` が `wrapper` として検出し、
-管理画面に警告を出す。`buildUrl()` はこの形式を受け取ると包み直さず、`unwrapLiteWrapperUrl()` で
-中の `params_url` を取り出して招待LPのURLへ復旧する（＝保存し直すだけで直る）。
-取り出すときに落とすのはアプリ用ペイロードとして足したキー（`LITE_DEEPLINK_CONTEXT` と `pid`）だけで、
+壊れた構造のまま保存されてしまったURLは、`buildUrl()` が `unwrapLiteWrapperUrl()` で
+中の `params_url` を取り出し、捏造キー（`LEGACY_INJECTED_PARAMS`）を落として
+`inc_target_url` を `aweme://` へ戻したうえで組み立て直す（＝保存し直すだけで直る）。
 描画用パラメータは**落とさない**。これはLPが元から持っているクエリで、
 欠けると「アプリは起動するが招待ページが開かない」状態になる。
 

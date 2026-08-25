@@ -409,15 +409,12 @@ export function LinkGeneratorForm() {
           {/* どちらの経路で作ったか / 何を除去したかを見せる。原因追跡に必要。 */}
           <div className="mt-2 space-y-1">
             <p className="text-xs leading-relaxed text-slate-500">
-              {built.mode === 'lp'
-                ? '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLと同じで、u_code・share_page_data・描画用パラメータをすべて素のクエリのまま持っています。TikTokの関連ドメイン上のHTTPSリンクなので、利用者がタップすればそれ自体が Universal Link として発火します。'
-                : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
+              {built.mode === 'wrapper'
+                ? '生成方式: ワンクリック招待(推奨)。TikTok Lite の Universal Link(4P4E)に招待ペイロード(af_dp)を載せた形で、招待LPが内部で使っているものと構造が完全に一致します。タップでアプリが起動します。'
+                : built.mode === 'lp'
+                  ? '生成方式: 招待LP直結(Lite強制OFF)。比較・切り分け用です。タップしてもアプリは起動せず、ブラウザで招待LPが開くだけになります(TikTok公式の招待リンクも同じ挙動)。'
+                  : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
             </p>
-            {built.liteForced && (
-              <p className="text-xs leading-relaxed text-slate-500">
-                inc_target_url のスキームだけを Lite に差し替えています(公式のパラメータとの差分はこの1点だけ)。
-              </p>
-            )}
             <p className="text-xs leading-relaxed text-slate-500">
               {built.removed.length
                 ? '除去したパラメータ: ' + built.removed.join(', ')

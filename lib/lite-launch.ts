@@ -8,29 +8,46 @@
  * 直列化する都合上、`startLiteLaunch()` は**モジュール内の他の識別子を参照しない**
  * 完全に自己完結した関数にしてある(参照するとインライン化時に未定義になる)。
  *
- * ## 環境で挙動を2つに分ける
+ * ## どの環境でも「利用者のタップ」を経由させる
  *
- * ### 通常のブラウザ(Safari など)
- * 招待LPのURLへそのまま遷移するだけ。**カスタムスキーム(`snssdk473824://`)は使わない。**
- * 一時期これをJSから直接叩いていたが、iOSが「"TikTok Lite"で開きますか？」の確認ダイアログを
- * 出し、そこから開くとアトリビューションが切れることが実機で判明した(招待が無効になる)。
- * 公式リンクと同じく素直にURLへ飛ばすのが、トラッキングを保ったままアプリへ入る唯一の経路。
+ * 遷移先(招待LP)のURLは TikTok の関連ドメイン上のHTTPSリンクで、それ自体が
+ * Universal Link として登録されている。**ただし発火するのは利用者がリンクを
+ * タップしたときだけ。** iOSは次のいずれでもアプリを開かず、素のWebページを表示する。
  *
- * ### アプリ内ブラウザ(X など)
- * 自動遷移はスキームもページ遷移も両方ブロックされるため、最初から試さない。
+ *   - `location.href` / `location.replace` によるJS遷移
+ *   - サーバーの 301/302 リダイレクト
+ *
+ * 後者は「公式の招待リンク(`https://lite.tiktok.com/t/XXXX/`)を踏んでも
+ * アプリが起動せず招待LPがブラウザで開くだけ」という既知の症状の正体でもある
+ * (短縮リンクはリダイレクトで招待LPへ着地するため)。
+ *
+ * つまり**アプリを開けるかどうかを決めているのはURLの形ではなく、遷移のさせ方**である。
+ * 一時期この分岐は「アプリ内ブラウザだけタップに委ね、通常のブラウザでは
+ * `location.replace()` で自動遷移させる」形だったが、後者は上記のとおり
+ * 原理的にアプリが開かない。カスタムスキームを直接叩くのをやめた時点で
+ * 自動遷移にする理由も無くなったので、**全環境でタップを経由させる**。
+ *
+ * ### 画面
+ *
  * 画面全体を1枚の <a> にした真っ黒な画面を出し、利用者のタップでリンクを辿らせる。
- * タップというユーザー操作を経由することで Universal Link を自然に発火させられる。
- *
  * スピナーもプログレスバーも出さない。Xのアプリ内ブラウザは黒背景なので、
  * 装飾を足さないほうが「読み込み中の画面」として自然に見える。
  * 2秒たってもタップが無ければ、読み込みが止まったことを伝える文言だけを出す。
  *
  * **遷移は <a> のネイティブな挙動に任せる。** スクリプトで飛ばすとユーザー操作の
  * 文脈から外れ、Universal Link が発火しなくなるため。
+ *
+ * ### 通常のブラウザだけ、最後の保険を持つ
+ *
+ * それでもタップされないまま時間が過ぎた場合に限り、`location.replace()` で
+ * 遷移先へ送る。この経路ではアプリは開かず招待LPがブラウザで開くだけだが、
+ * 黒い画面のまま放置されるよりはよい。アプリ内ブラウザではこの保険を使わない
+ * (自動遷移そのものがブロックされるうえ、フォールバック先の招待LPが内部で
+ * `onelink.me` へ飛ぼうとしてそこでも止まるため)。
  */
 
-/** Web遷移が始まらなかったときに、もう一度だけ試すまでの時間 */
-export const WEB_RETRY_MS = 6000;
+/** 通常のブラウザで、タップされないまま自動遷移させるまでの時間(最後の保険) */
+export const WEB_FALLBACK_MS = 6000;
 
 /** アプリ内ブラウザで、何も出さずに待つ時間。これを過ぎたらエラー文言を出す */
 export const IAB_HOLD_MS = 2000;
@@ -64,7 +81,8 @@ export function isInAppBrowser(userAgent?: string): boolean {
 export interface LiteLaunchOptions {
   /** 遷移先(招待LPのURL) */
   webUrl: string;
-  retryMs: number;
+  /** 通常のブラウザで、タップされないまま自動遷移させるまでの時間 */
+  fallbackMs: number;
   /** アプリ内ブラウザ判定に使う正規表現。空文字なら判定しない */
   inAppBrowserPattern: string;
   /** 画面全体を覆う <a> のid */
@@ -82,34 +100,18 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
   var ua = (window.navigator && window.navigator.userAgent) || '';
   var inApp = !!opts.inAppBrowserPattern && new RegExp(opts.inAppBrowserPattern, 'i').test(ua);
 
-  if (!inApp) {
-    /* ===== 通常のブラウザ =====
-       カスタムスキームは使わず、そのまま遷移先へ。 */
-    var left = false;
-    window.addEventListener('pagehide', function () {
-      left = true;
-    });
+  /* 画面全体が <a> になっているので、遷移そのものはブラウザに任せる。
+     ここでやるのは「画面を出す」「2秒後にエラー文言を出す」だけ。 */
+  var screen = document.getElementById(opts.iabScreenId);
 
+  if (!screen) {
+    /* 画面が無い(この対応より前に配信されたHTMLなど)。タップさせる先が無いので、
+       アプリは開かないが、せめて遷移先までは送る。 */
     try {
       window.location.replace(opts.webUrl);
     } catch (e) {}
-
-    /* 遷移が始まらなかった場合の保険。1回だけ。
-       ページ離脱が始まっていれば何もしない(遅いだけの遷移を中断しないため)。 */
-    setTimeout(function () {
-      if (left || document.visibilityState === 'hidden') return;
-      try {
-        window.location.href = opts.webUrl;
-      } catch (e) {}
-    }, opts.retryMs);
     return;
   }
-
-  /* ===== アプリ内ブラウザ =====
-     画面全体が <a> になっているので、遷移そのものはブラウザに任せる。
-     ここでやるのは「画面を出す」「2秒後にエラー文言を出す」だけ。 */
-  var screen = document.getElementById(opts.iabScreenId);
-  if (!screen) return;
 
   // 遷移先は呼び出し時点のもの(抽選で差し替わっている場合がある)
   screen.setAttribute('href', opts.webUrl);
@@ -120,11 +122,29 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
     if (errorText) errorText.removeAttribute('hidden');
   }, opts.holdMs);
 
-  /* タップされたら遷移が始まるので、その途中でエラー文言が出てこないように止める。
+  /* 通常のブラウザだけが持つ最後の保険。タップされないまま時間が過ぎたら遷移先へ送る。
+     この経路ではアプリは開かない(JS遷移では Universal Link が発火しない)が、
+     黒い画面のまま放置されるよりはよい。
+     アプリ内ブラウザでは張らない。自動遷移がブロックされるうえ、
+     フォールバック先の招待LPが内部で onelink.me へ飛ぼうとしてそこでも止まるため。 */
+  var fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  if (!inApp) {
+    fallbackTimer = setTimeout(function () {
+      // 既にアプリへ移った(タップが効いた)なら何もしない
+      if (document.visibilityState === 'hidden') return;
+      try {
+        window.location.replace(opts.webUrl);
+      } catch (e) {}
+    }, opts.fallbackMs);
+  }
+
+  /* タップされたら遷移が始まるので、その途中でエラー文言が出たり、
+     保険の自動遷移がタップを追い越したりしないように両方止める。
      ここで preventDefault したり location を触ったりはしない。ユーザー操作の文脈から
      外れると Universal Link が発火しなくなるため、遷移は <a> に任せる。 */
   function onTap() {
     clearTimeout(errorTimer);
+    if (fallbackTimer) clearTimeout(fallbackTimer);
   }
   screen.addEventListener('touchstart', onTap, { passive: true });
   screen.addEventListener('click', onTap);
@@ -134,7 +154,7 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
 export function liteLaunchOptions(webUrl: string): LiteLaunchOptions {
   return {
     webUrl,
-    retryMs: WEB_RETRY_MS,
+    fallbackMs: WEB_FALLBACK_MS,
     inAppBrowserPattern: IN_APP_BROWSER_PATTERN,
     iabScreenId: IAB_SCREEN_ID,
     errorTextId: ERROR_TEXT_ID,

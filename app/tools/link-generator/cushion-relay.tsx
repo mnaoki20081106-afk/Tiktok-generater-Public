@@ -36,7 +36,15 @@ export function CushionRelay({ to }: { to: string | null }) {
         <>
           {/* 読み込み画面。画面全体が1枚のリンクになっていて、
               利用者のタップで Universal Link を発火させる。 */}
-          <a id={IAB_SCREEN_ID} href={to} rel="noreferrer noopener" hidden className={styles.iabScreen}>
+          {/* href は最初から入れておき、JSからは書き換えない。target="_top" を付けるのは、
+              アプリ内ブラウザ(WKWebView)から最上位のコンテキストで辿らせるため。 */}
+          <a
+            id={IAB_SCREEN_ID}
+            href={to}
+            target="_top"
+            rel="noreferrer noopener"
+            className={styles.iabScreen}
+          >
             <span id={ERROR_TEXT_ID} hidden className={styles.errorText}>
               {ERROR_TEXT}
             </span>

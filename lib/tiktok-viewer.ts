@@ -288,7 +288,7 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
         <p class="md">アプリでさらに多くの動画と優れた機能をお楽しみください</p>
       </div>
       <div class="ma">
-        <a href="${tkUrl}" class="bo" rel="noreferrer noopener">TikTokを開く</a>
+        <a href="${tkUrl}" class="bo" target="_top" rel="noreferrer noopener">TikTokを開く</a>
         <button class="bl" type="button">後で</button>
         <div class="tg" aria-hidden="true">
           <span class="tg-ripple"></span>
@@ -348,7 +348,6 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
   var link=document.querySelector('.bo');
   if(!link)return;
   var slug=${slugJson};
-  var resolvedHref=null;
   function loadScript(src){
     return new Promise(function(resolve,reject){
       var s=document.createElement('script');
@@ -356,7 +355,7 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
       document.head.appendChild(s);
     });
   }
-  var pending=loadScript('/fp.js').then(function(){
+  loadScript('/fp.js').then(function(){
     if(!window.FingerprintJS)return null;
     return window.FingerprintJS.load().then(function(agent){return agent.get();});
   }).then(function(result){
@@ -368,22 +367,13 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
     }).then(function(res){return res.ok?res.json():null;});
   }).then(function(data){
     if(data&&data.href){
-      resolvedHref=data.href;
-      link.setAttribute('href',resolvedHref);
+      link.setAttribute('href',data.href);
     }
   }).catch(function(){});
-  link.addEventListener('click',function(e){
-    if(resolvedHref)return;
-    e.preventDefault();
-    var navigated=false;
-    function go(){
-      if(navigated)return;
-      navigated=true;
-      window.location.href=resolvedHref||link.getAttribute('href');
-    }
-    pending.then(go,go);
-    setTimeout(go,800);
-  });
+  /* ここで click を横取りして preventDefault() → location.href で飛ばしていた。
+     照合の完了を待つためだったが、JS由来のナビゲーションになるため
+     Universal Link が発火せず、アプリが起動しない原因になっていた。
+     遷移は <a> のネイティブな挙動に任せ、照合結果は href の差し替えだけで反映する。 */
 })();
 </script>
 </body></html>`;
@@ -422,18 +412,22 @@ export function renderRedirectHtml(d: ViewerData): string {
   const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
 
-  /* 遷移前にフィンガープリント照合(/api/visit)の結果を待つ。
-     サプライズ抽選で当たりURLが選ばれていても、作成者本人・同一アカウントの端末なら
-     本来のURLへ差し替えるため(dvid Cookieが削除されていた場合の保険)。
-     TikTok風ページ版と違ってタップを挟まないので、照合が終わるまでの数百ミリ秒だけ待つ。
+  /* 黒画面(<a>)はサーバー側で href を入れた状態で最初から出す。JSの完了を待たない。
+     待たせると、その間のタップが <a> に届かず取りこぼしになるため。
 
-     照合を「当選したときだけ」待つ実装にはしない。待ち時間の有無で当選したことが
-     分かってしまい、抽選機能の存在を訪問者に示唆することになるため。 */
+     フィンガープリント照合(/api/visit)は裏で走らせ、当たりURLが本人向けに
+     差し替わったときだけ href を書き換える。サプライズ抽選で当たりURLが
+     選ばれていても、作成者本人・同一アカウントの端末なら本来のURLへ戻すための保険
+     (dvid Cookieが削除されていた場合)。
+
+     照合の完了を待って遷移する作りにはしない。タップの瞬間にJSがhrefを差し替えたり
+     preventDefault() でルーティングを横取りしたりすると、iOSがそのタップを
+     ユーザーが辿ったリンクとみなさず、Universal Link が発火しなくなるため。 */
   const body = destUrl
     ? `<noscript><a href="${href}" rel="noreferrer noopener">続行</a></noscript>
 <!-- アプリ内ブラウザ(X など)専用の読み込み画面。画面全体が1枚のリンクになっていて、
      利用者のタップでUniversal Linkを発火させる。通常のブラウザでは表示されない。 -->
-<a id="${IAB_SCREEN_ID}" href="${href}" rel="noreferrer noopener" hidden>
+<a id="${IAB_SCREEN_ID}" href="${href}" target="_top" rel="noreferrer noopener">
   <span id="${ERROR_TEXT_ID}" hidden>${ERROR_TEXT}</span>
 </a>
 <script>
@@ -441,20 +435,13 @@ var startLiteLaunch = ${liteLaunchScript()};
 (function(){
   var dest = ${destJson};
   var slug = ${slugJson};
-  var WAIT_MS = 1500;   // 照合の最大待ち時間。これを過ぎたら諦めて遷移する
 
   var LAUNCH = ${JSON.stringify(liteLaunchOptions(''))};
+  LAUNCH.webUrl = dest;
 
-  var launched = false;
-  function go(href) {
-    if (launched) return;
-    launched = true;
-    LAUNCH.webUrl = href;
-    startLiteLaunch(LAUNCH);
-  }
-
-  var timer = setTimeout(function(){ go(dest); }, WAIT_MS);
-  function finish(href) { clearTimeout(timer); go(href); }
+  /* タイマー(2秒後のエラー文言 / 通常ブラウザの保険)を仕掛けるだけ。
+     <a> の href はサーバー側でセット済みなので startLiteLaunch は触らない。 */
+  startLiteLaunch(LAUNCH);
 
   function loadScript(src){
     return new Promise(function(resolve,reject){
@@ -475,8 +462,13 @@ var startLiteLaunch = ${liteLaunchScript()};
       body:JSON.stringify({slug:slug,fp:result.visitorId})
     }).then(function(res){ return res.ok?res.json():null; });
   }).then(function(data){
-    finish((data && data.href) || dest);
-  }).catch(function(){ finish(dest); });
+    /* 本人判定で遷移先が変わったときだけ書き換える。変わらないなら触らない
+       (無意味な setAttribute でも、タップ直前に走れば余計な疑いを招くため)。 */
+    var href = (data && data.href) || dest;
+    if (href === dest) return;
+    var screen = document.getElementById(LAUNCH.iabScreenId);
+    if (screen) screen.setAttribute('href', href);
+  }).catch(function(){});
 })();
 </script>`
     : '<p>リンクが設定されていません。</p>';

@@ -415,6 +415,12 @@ export function LinkGeneratorForm() {
                   ? '生成方式: 招待LP直結(Lite強制OFF)。比較・切り分け用です。タップしてもアプリは起動せず、ブラウザで招待LPが開くだけになります(TikTok公式の招待リンクも同じ挙動)。'
                   : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
             </p>
+            {built.liteForced && (
+              <p className="text-xs leading-relaxed text-slate-500">
+                アプリへ渡すペイロードのうち、inc_target_url のスキームだけを Lite
+                に差し替えています(TikTokの文字列との差分はこの1点だけ)。
+              </p>
+            )}
             <p className="text-xs leading-relaxed text-slate-500">
               {built.removed.length
                 ? '除去したパラメータ: ' + built.removed.join(', ')

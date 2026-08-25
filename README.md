@@ -113,15 +113,40 @@ TikTok自身のスキームと突き合わせたところ、**3点で構造が�
 （`aweme://roma_redirect/?spark_page=scan_code`）として持っている値を入れる場所だった。
 場所も値も外したまま配っていたので、アプリ側が解釈できず招待ページに到達できなかった。
 
-現在は `buildLiteDeepLink()` が `url_schemes` と同じ構造で組み立てる。
-**実物のLPから採取した TikTok自身のスキーム文字列と、生成結果が1バイトも違わないこと**を
-検証してある（2894文字が完全一致）。
+現在は `buildLiteDeepLink()` が `wrapper_incentive_share_jump_to_roma` の `url_schemes` と
+同じ構造で組み立てる。
 
 - `params_url` は招待LPのURLを**そのまま**載せる。並び順もエンコードも変えない
-- `spark_page` は `sparkPageOf()` が `inc_target_url` から読む（キャンペーンが変わっても追随する）
-- `inc_target_url` は書き換えない。どのアプリが開くかは外側で既に Lite に決まっている
+- `spark_page` は `params_url` の**中ではなく兄弟キー**。値は `sparkPageOf()` が
+  `inc_target_url` から読む（キャンペーンが変わっても追随する）。テンプレート上は
+  `{{url}}` だが、**LP自身の `inc_target_url` が答えを持っている**ので推測にならない
 - 外側に載せるのは `domain_source` と `af_dp` の2つだけ。ストアへの振り分けは
   AppsFlyer側（4P4Eテンプレート）のサーバー設定が持つので `af_ios_url` などは足さない
+- **TikTokの文字列と違ってよいのは `inc_target_url` のスキームだけ**（`forceLite` / `liteForced`）。
+  公式の値は通常版TikTokの `aweme://roma_redirect/?spark_page=scan_code` だが、開かせたいのは
+  Lite なのでスキーム部分だけを差し替える。実機の履歴がこの1点を名指ししている。
+
+  | `params_url` の `inc_target_url` | 実機の結果 |
+  |---|---|
+  | Lite のスキーム | 「自身を招待できません」が出た（＝招待のバインドが走った） |
+  | `aweme://` のまま | UIは完璧に描画されるが、バインドは走らない |
+
+  Lite の中でLPのJSが `inc_target_url` / `is_inc_roma` / `incentive_redirect` を読んで招待の処理へ
+  進む以上、その行き先が通常版TikTokを指していれば Lite 内では解決できず、処理そのものが始まらない。
+
+##### `wrapper_incentive_share_gift` は実機で否定された
+
+`snssdk473824://webview?params_url=<LP>&url=<gift_giving.html>?{{query}}` に変えたところ、
+アプリ内に「不明なエラーが発生しました」が出て止まった。
+
+- `{{query}}` は**LPのどこにも解決済みの実例が無い**（テンプレート1箇所きり）。招待LPのクエリを
+  そのまま入れるというのはこちらの推測だった
+- `url=` はパーセントエンコードされない生の値なので、そこに `&` を含むクエリを入れると、
+  以降がすべてスキーム側のトップレベルのパラメータとして解釈されて構造が壊れる
+- ペイロード長も 2894 → 5084 文字に倍増していた
+
+`roma` 側の `{{url}}` は LP自身の `inc_target_url` が答えを持っている点が決定的に違う。
+**解決済みの実例が無いプレースホルダを推測で埋めない。**
 
 | 方式 | 条件 | 何をするか |
 |---|---|---|

@@ -101,6 +101,21 @@ export function isInviteLpUrl(url: URL): boolean {
   );
 }
 
+/**
+ * 保存済みのURLが、どちらの形式で生成されたものかを見分ける。
+ *
+ * `BuildResult.mode` は生成した瞬間にしか手に入らないが、DBに入っている値についても
+ * 「招待LP直結なのか、OneLink再構築のフォールバックなのか」を後から知りたい場面がある
+ * (管理画面で当たりURLの状態を表示するなど)。URLの形だけで判定できるので切り出しておく。
+ */
+export function detectBuildMode(rawUrl: string | null | undefined): 'lp' | 'onelink' | 'unknown' {
+  const url = parseHttpUrl(rawUrl);
+  if (!url) return 'unknown';
+  if (isInviteLpUrl(url)) return 'lp';
+  if (ONELINK_RE.test(url.hostname)) return 'onelink';
+  return 'unknown';
+}
+
 /* LPの inc_target_url が指しているのは通常版TikTokのスキーム(aweme://)。
    通常版がインストールされた端末ではそちらが起動してしまう。
    「誰の招待か」はLPのクエリ(u_code / share_page_data)が運んでいて

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { updateSurpriseConfig, type UpdateSurpriseConfigResult } from './actions';
+import { detectBuildMode } from '@/lib/link-generator';
 import type { SurpriseConfig } from '@/lib/types';
 
 export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null }) {
@@ -11,6 +12,9 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
 
   // 保存直後は返ってきた値を、それ以外はDBの値を見せる
   const optimized = result?.ok ? result.optimizedPrizeUrl : config?.prize_url_optimized;
+  /* 保存直後は生成時に分かった経路をそのまま使い、ページを開き直したときは
+     保存済みURLの形から判定する(DBには経路を持たせていないため)。 */
+  const mode = result?.ok && result.optimizedMode ? result.optimizedMode : detectBuildMode(optimized);
 
   return (
     <form
@@ -62,9 +66,37 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
       </label>
 
       {optimized && (
-        <div className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div
+          data-id="optimizedPrize"
+          className={
+            'flex flex-col gap-1.5 rounded-lg border p-3 ' +
+            (mode === 'lp' ? 'border-slate-200 bg-slate-50' : 'border-amber-300 bg-amber-50')
+          }
+        >
           <span className="text-xs font-medium text-slate-900">最適化済みの当たりURL(実際に当選者へ渡されるURL)</span>
           <code className="break-all font-mono text-xs text-slate-600">{optimized}</code>
+
+          {/* どちらの形式で生成されたかを見せる。フォールバック側は実機で招待が
+              成立しないことが分かっているため、気づけるように警告を出す。 */}
+          {mode === 'lp' && (
+            <span data-id="prizeMode" className="text-xs text-emerald-700">
+              形式: 招待LP直結（推奨）。公式の招待リンクが着地するURLと同じ形です。
+            </span>
+          )}
+          {mode === 'onelink' && (
+            <span data-id="prizeMode" className="text-xs leading-relaxed text-amber-800">
+              形式: <strong>OneLink再構築（フォールバック）</strong>。招待LPのURLを取得できなかったため、
+              AppsFlyerのOneLinkを組み立て直しています。
+              <strong>この形式は実機で「アプリは開くが招待が成立しない」ことが確認されています。</strong>
+              当たりURLを入れ直して保存し直すか、TikTokアプリからコピーし直した招待リンクを使ってください。
+            </span>
+          )}
+          {mode === 'unknown' && (
+            <span data-id="prizeMode" className="text-xs leading-relaxed text-amber-800">
+              形式: <strong>不明</strong>。TikTok Liteの招待リンクとして認識できない形です。
+              当たりURLを入れ直してください。
+            </span>
+          )}
         </div>
       )}
 

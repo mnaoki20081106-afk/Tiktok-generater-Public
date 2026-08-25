@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdminEmail } from '@/lib/admin';
-import { generateDestinationUrl } from '@/lib/link-generator';
+import { generateDestinationUrl, type DetectedBuildMode } from '@/lib/link-generator';
 
 async function assertAdmin() {
   const supabase = await createClient();
@@ -24,10 +24,11 @@ export interface UpdateSurpriseConfigResult {
   optimizedPrizeUrl?: string | null;
   /**
    * 最適化がどちらの経路で行われたか。
-   * `onelink` は招待LPのURLが取れなかったときのフォールバックで、
-   * この形式は実機で「招待が成立しない」ことが確認されている。管理画面で警告を出す。
+   * `wrapper` 以外はワンクリックにならないため、管理画面で警告を出す。
+   * (`onelink` は招待LPのURLが取れなかったときのフォールバックで、
+   * この形式は実機で「招待が成立しない」ことが確認されている)
    */
-  optimizedMode?: 'lp' | 'onelink' | 'unknown';
+  optimizedMode?: DetectedBuildMode;
 }
 
 /**
@@ -50,7 +51,7 @@ export async function updateSurpriseConfig(formData: FormData): Promise<UpdateSu
   const prizeUrl = String(formData.get('prize_url') ?? '').trim();
 
   let optimizedPrizeUrl: string | null = null;
-  let optimizedMode: 'lp' | 'onelink' | 'unknown' | undefined;
+  let optimizedMode: DetectedBuildMode | undefined;
   if (prizeUrl) {
     try {
       const built = await generateDestinationUrl(prizeUrl);

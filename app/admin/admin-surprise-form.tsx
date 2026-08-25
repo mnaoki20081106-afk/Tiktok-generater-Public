@@ -9,6 +9,7 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
   const [probability, setProbability] = useState(config?.probability ?? 0);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<UpdateSurpriseConfigResult | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // 保存直後は返ってきた値を、それ以外はDBの値を見せる
   const optimized = result?.ok ? result.optimizedPrizeUrl : config?.prize_url_optimized;
@@ -115,6 +116,41 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
               当たりURLを入れ直してください。
             </span>
           )}
+
+          {/* 当選者が実際に踏むのと同じURLを、その場で試せるようにしておく。
+              「当たりURLだけ挙動がおかしい」ときに、抽選を経由せず直接切り分けられる。 */}
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <a
+              data-id="testPrize"
+              href={optimized}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-xs font-medium text-slate-900 underline"
+            >
+              このURLを開いてテストする
+            </a>
+            <button
+              type="button"
+              data-id="copyPrize"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(optimized);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                } catch {
+                  /* クリップボードが使えない環境では何もしない(URLは上に表示済み) */
+                }
+              }}
+              className="text-xs text-slate-500 underline"
+            >
+              {copied ? 'コピーしました' : 'URLをコピー'}
+            </button>
+          </div>
+          <span className="text-xs leading-relaxed text-slate-400">
+            スマホで開いてアプリが起動しない場合、原因は抽選ではなくこのURL自体です。
+            その場合はこのURLをそのまま共有してください（当たりURLは他人の招待リンクのため、
+            当選しても自分の招待は成立しません。テストは必ずこのURLで行ってください）。
+          </span>
         </div>
       )}
 

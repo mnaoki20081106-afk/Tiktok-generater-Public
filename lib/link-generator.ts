@@ -99,8 +99,10 @@ export const INVITE_LP_URL = 'https://www.tiktok.com/ug/incentive/share/pro_scan
    一度はここから更に「描画用パラメータを落とす」「inc_target_url のスキームを
    Lite へ差し替える」という改変を加えたが、これが実機で
    「アプリが起動せず、ただ招待LPがブラウザで開くだけ」を引き起こした。
-   公式リンクとの差分が11箇所あった。どちらも推測に基づく改変で検証していなかった。
-   現在は招待LPのURLを一切改変しない(buildLpUrl のコメントを参照)。
+   公式リンクとの差分は11箇所ある(描画用10件の削除 + inc_target_url のスキーム差し替え)。
+   一度これを「公式を一切改変しない」方針で取りやめたが、実機ではその11箇所がある状態
+   (マージ#36)でトラッキングが成立していた。差分を消して以降は成立しなくなったため、
+   現在は#36 の出力を基準にしている(buildLpUrl のコメントを参照)。
    ========================================================================== */
 export const INVITE_LP_HOST_RE = /(^|\.)tiktok\.com$/i;
 export const INVITE_LP_PATH_RE = /^\/ug\//i;
@@ -953,41 +955,66 @@ export function assertIncentivePreserved(before: URL, after: URL): void {
  * TikTok自身も開けていない。アプリが開く可能性を作れるのは利用者のタップだけなので、
  * 配布用のリンクには必ず黒画面のタップ誘導(`lib/lite-launch.ts`)を経由させること。
  *
- * ## 一切改変しない
+ * ## 出力は「マージ#36 の状態」を基準にする
  *
- * 以前はここで
- *   - 描画用パラメータ(INTERSTITIAL_PARAMS)を10件ほど削除
- *   - inc_target_url のスキームを aweme:// から snssdk473824:// へ差し替え
- * を行っていた。どちらも「表示専用だから消してよい」「通常版が開くのを防げる」という
- * *推測* に基づくもので、実機で検証したことは一度も無かった。
+ * 実機で「タップ1回でアプリが起動し、かつ『自身を招待できません』が出る
+ * (＝トラッキング成立)」状態にあったのはマージ#36 の時点。当時の生成器を実際に
+ * 走らせて出力を突き合わせてあり、**この関数の出力はそれと1バイトも違わない**。
  *
- * 結果として、公式の招待リンクとの差分が11箇所ある状態でURLを配っており、
- * 実機で「アプリが起動せず、ただ招待LPがブラウザで開くだけ」になっていた。
- * LP側のJSがアプリを開くかどうかを決めているので、そのJSが読む可能性のある
- * パラメータを消したり値を書き換えたりすれば、判断が変わっても不思議はない。
+ * 内訳は次の2点だけ。どちらも公式のURLとの差分になるが、両方あって成立していた。
+ *   - 描画用パラメータ(INTERSTITIAL_PARAMS)10件を削除する
+ *   - `inc_target_url` のスキームを `aweme://` から `snssdk473824://` へ差し替える
  *
- * この一件の教訓は一貫している。**TikTokが生成したURLを改変しない。**
- * ジェネレーターの価値は「短縮リンクを展開して、その実体を取り出すこと」にあり、
- * 中身をいじることでも、入れ物を替えることでもない(展開だけでも、短縮リンクが
- * 通常版TikTokの Universal Link に横取りされる問題は解消する)。
+ * 途中、この2点を「公式のURLを一切改変しない」という方針で取りやめた時期がある。
+ * 公式との差分が11箇所ある状態で実機が動かなかった、という当時の判断が理由だった。
+ * **因果が逆だった。** 11箇所の差分がある状態こそが動いていた状態で、
+ * 差分を消して以降トラッキングが成立しなくなった。
  *
- * したがってここで落とすのは、**こちらが過去に付けたキーだけ**にする。
- * 落とさなかったことは `assertOfficialParamsPreserved()` で機械的に検証する。
+ * 「TikTokが生成したURLを改変しない」という原則は、聞こえはよいが実機の結果と
+ * 一致しなかった。**基準にするのは公式のURLではなく、実機で成立が確認された出力。**
+ *
+ * 落としたキー以外が失われていないことは `assertOfficialParamsPreserved()` で
+ * 機械的に検証する。
  */
 export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
   const url = new URL(source.toString());
   const params = url.searchParams;
   const removed: string[] = [];
 
-  /* 落とすのは「こちらが付けたキー」だけ。生成済みURLをもう一度通したとき
-     (サイトの再保存など)に、以前の実装が焼き付けた AppsFlyer 用のキーを掃除する。
+  const drop = (keys: readonly string[]) => {
+    keys.forEach((k) => {
+      if (params.has(k)) {
+        removed.push(k);
+        params.delete(k);
+      }
+    });
+  };
+
+  /* ===== 描画用パラメータを落とす =====
+
+     `__status_bar` / `_svg` / `enable_canvas` などの描画制御と、OGPカード用の
+     `og_desc_text` / `og_image` / `og_title_text` の計10件。
+
+     一度この削除をやめたことがある(「公式のURLを一切改変しない」)。理由は、
+     公式との差分が11箇所ある状態で実機が動かなかった、という当時の判断だった。
+     **これは因果が逆だった。** 実機で「タップ1回でアプリが起動し、かつ
+     『自身を招待できません』が出る(＝トラッキング成立)」状態にあったのは、
+     まさにこの10件を削っていた頃(マージ#36)である。削除をやめて以降、
+     トラッキングが成立しなくなった。
+
+     当時の生成器を実際に走らせて出力を突き合わせたところ、#36 の出力と
+     削除をやめた後の出力の差は**この10件だけ**だった(inc_target_url の
+     Lite 差し替えは両方とも行っている)。変数はこれ1つに絞れている。
+
+     LPをブラウザで開いたときに中間ページ然とした描画を誘発するのを避ける、
+     というのが元々の目的で、招待の成立に必要な情報は1つも含まれていない
+     (TRACKING_PARAMS / INCENTIVE_PARAMS のどちらにも属さない)。 */
+  if (opts.stripDeepLinks) drop(INTERSTITIAL_PARAMS);
+
+  /* 生成済みURLをもう一度通したとき(サイトの再保存など)に、以前の実装が
+     焼き付けた AppsFlyer 用のキーを掃除する。
      TikTokが出す招待LPのURLにこれらが載ることはないので、公式のURLには影響しない。 */
-  [...MANAGED_PARAMS, 'is_retargeting'].forEach((k) => {
-    if (params.has(k)) {
-      removed.push(k);
-      params.delete(k);
-    }
-  });
+  drop([...MANAGED_PARAMS, 'is_retargeting']);
 
   /* ここだけが公式のURLと違ってよい唯一の点。
      公式の `inc_target_url` は通常版TikTokのスキーム(aweme://)を指しているため、
@@ -1034,7 +1061,7 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
 
   assertTrackingPreserved(source, url);
   assertIncentivePreserved(source, url);
-  assertOfficialParamsPreserved(source, url);
+  assertOfficialParamsPreserved(source, url, removed);
 
   /* ===== 遷移先は招待LPのURLそのもの =====
 
@@ -1080,10 +1107,12 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
  * リストを増やし続けるのではなく、**入力に在ったキーは全部残っていること**を
  * 直接検証する。除外するのは、こちらが意図的に触る分だけ。
  */
-export function assertOfficialParamsPreserved(before: URL, after: URL): void {
+export function assertOfficialParamsPreserved(before: URL, after: URL, dropped: readonly string[] = []): void {
   const lost: string[] = [];
 
   before.searchParams.forEach((value, key) => {
+    // 意図して落としたキー(描画用パラメータなど)は対象外
+    if (dropped.includes(key)) return;
     // こちらが付けたキー。落とすのが正しい
     if (MANAGED_PARAMS.includes(key) || key === 'is_retargeting') return;
     // スキームだけをLiteへ差し替えるので値は変わってよい。消えていないことだけ見る

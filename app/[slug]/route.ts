@@ -5,6 +5,7 @@ import { renderRedirectHtml, renderViewerHtml, siteToViewerData } from '@/lib/ti
 import { resolveDestinationUrl } from '@/lib/surprise';
 import { recordPageView } from '@/lib/analytics';
 import { DEVICE_COOKIE } from '@/lib/device';
+import { isInAppBrowser } from '@/lib/lite-launch';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 
   const viewerData = siteToViewerData(site, origin);
   viewerData.tiktokUrl = destinationUrl;
+
+  /* <a> の href はDOM構築の時点で確定していなければならない(JSから書き換えると
+     利用者のタップとして扱われず Universal Link / スキームの受け渡しが壊れる)ので、
+     アプリ内ブラウザかどうかの判定もサーバー側で行う。 */
+  viewerData.inAppBrowser = isInAppBrowser(request.headers.get('user-agent') ?? '');
 
   /* クッションページを挟まない設定のサイトは、TikTok風ページを表示せず遷移先へ直行させる。
      未設定の既存サイトは true(=従来どおりTikTok風ページを表示)として扱う。 */

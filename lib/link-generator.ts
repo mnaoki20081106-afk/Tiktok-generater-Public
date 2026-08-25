@@ -149,6 +149,25 @@ export const LITE_DEEPLINK_CONTEXT: Record<string, string> = {
   use_mutable_context: '1',
 };
 
+/* アプリ内WebView(Sparkコンテナ)の描画設定。値は Run A(公式の招待リンク)のまま。
+   Web側では INTERSTITIAL_PARAMS として除去している。ブラウザで踏んだときに
+   中間ページ然とした描画を誘発するためで、そこでは不要なもの。
+   一方**アプリ内では招待ページを描画するコンテナの設定そのもの**で、
+   これが無いと「アプリは起動するが招待ページへ画面が切り替わらない」状態になる(実機で確認)。
+   Web用のURLからアプリ用ペイロードを組み立てている都合で欠落するため、ここで補完する。
+
+   og_desc_text / og_image / og_title_text は同じく除去しているが、こちらは
+   招待LPのOGPカード(SNSでシェアしたときの見た目)用でアプリ内の描画には関与しないため補完しない。 */
+export const LITE_INAPP_RENDER: Record<string, string> = {
+  __status_bar: 'true',
+  _pia_: '1',
+  _svg: '1',
+  enable_canvas: '1',
+  enable_canvas_optimize: '1',
+  hide_nav_bar: '1',
+  should_full_screen: '1',
+};
+
 /**
  * アプリへ渡すパラメータの元ネタを取り出す。
  *
@@ -208,7 +227,7 @@ export function buildLiteDeepLink(sourceParams: URLSearchParams, lpBase: string 
     if (mediaSource) lp.searchParams.set('pid', mediaSource);
   }
 
-  for (const [k, v] of Object.entries(LITE_DEEPLINK_CONTEXT)) {
+  for (const [k, v] of Object.entries({ ...LITE_DEEPLINK_CONTEXT, ...LITE_INAPP_RENDER })) {
     if (!lp.searchParams.has(k)) lp.searchParams.set(k, v);
   }
 

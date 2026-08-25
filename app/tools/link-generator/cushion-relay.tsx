@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { toLiteAppLink } from '@/lib/link-generator';
-import { MANUAL_ESCAPE_ID, liteLaunchOptions, startLiteLaunch } from '@/lib/lite-launch';
+import { MANUAL_ESCAPE_ID, isInAppBrowser, liteLaunchOptions, startLiteLaunch } from '@/lib/lite-launch';
 
 /**
  * クッションページ(遅延リダイレクト画面)。
@@ -15,12 +15,20 @@ import { MANUAL_ESCAPE_ID, liteLaunchOptions, startLiteLaunch } from '@/lib/lite
  * 招待LPをただ開くだけだと、Liteがインストール済みでもストアへ飛ばされてしまうため、
  * 先にカスタムスキームでアプリを直接起動しにいく(`toLiteAppLink()` を参照)。
  *
- * 手動リンクは既定では出さない。自動遷移が全部ブロックされる環境(Xのアプリ内ブラウザなど)で
- * 一定時間ページに留まっている場合だけ、`startLiteLaunch()` が hidden を外して表示する。
+ * 手動リンクは既定では出さない。表示するのは次の2つの場合だけ。
+ *  - アプリ内ブラウザ(X など)… 自動遷移が裏目に出るため、待たずに即表示してタップに委ねる
+ *  - それ以外で自動遷移が全部ブロックされた場合 … 一定時間ページに留まっていれば表示する
  */
 export function CushionRelay({ to }: { to: string | null }) {
   useEffect(() => {
     if (!to) return;
+
+    /* アプリ内ブラウザ(X など)では自動遷移を一切行わず、すぐ手動リンクを出す。
+       待たせても状況が良くなることはないため、ランダム待機も挟まない。 */
+    if (isInAppBrowser()) {
+      startLiteLaunch(liteLaunchOptions(to, toLiteAppLink(to)));
+      return;
+    }
 
     /* アプリ起動の待ち(1.2秒)がこのあとに乗るため、以前の 1〜2秒 から短くしてある。
        合計で従来と同じ体感(2秒前後)に収めるため。 */
@@ -48,7 +56,7 @@ export function CushionRelay({ to }: { to: string | null }) {
             hidden
             className="px-6 py-6 text-center text-sm text-[#8ab4f8] underline [&[hidden]]:hidden"
           >
-            TikTok Liteを開く
+            タップして続行
           </a>
           {/* JSが無効な環境だけの避難口。JSが動く通常の閲覧では表示されない。 */}
           <noscript>

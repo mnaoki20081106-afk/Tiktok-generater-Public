@@ -70,6 +70,9 @@ export const WEB_FALLBACK_MS = 6000;
 /** アプリ内ブラウザで、何も出さずに待つ時間。これを過ぎたらエラー文言を出す */
 export const IAB_HOLD_MS = 2000;
 
+/** タップ後、アプリが起動しなかった(未インストール)と判断するまでの時間 */
+export const APP_FALLBACK_MS = 2500;
+
 /** アプリ内ブラウザ用の画面(画面全体を覆う <a>)のid */
 export const IAB_SCREEN_ID = 'lite-iab';
 /** 「エラーが発生しました。タップして再実行」のid */
@@ -101,6 +104,14 @@ export interface LiteLaunchOptions {
   webUrl: string;
   /** 通常のブラウザで、タップされないまま自動遷移させるまでの時間 */
   fallbackMs: number;
+  /**
+   * アプリが起動しなかったとき(未インストール)に送る先のURL(https)。
+   * アプリ内ブラウザではカスタムスキームを直接タップさせるので、
+   * 未インストールだと何も起きない。その場合だけここへ送ってストアへ導く。
+   */
+  storeFallbackUrl?: string;
+  /** タップ後、アプリが起動しなかったと判断するまでの時間 */
+  appFallbackMs: number;
   /** アプリ内ブラウザ判定に使う正規表現。空文字なら判定しない */
   inAppBrowserPattern: string;
   /** 画面全体を覆う <a> のid */
@@ -169,6 +180,21 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
   function onTap() {
     clearTimeout(errorTimer);
     if (fallbackTimer) clearTimeout(fallbackTimer);
+
+    /* カスタムスキームをタップした未インストール端末は、OSに渡した先で何も起きず
+       黒画面に取り残される。少し待って画面がまだ見えていれば、https のラッパーへ送る
+       (AppsFlyer がストアへ振り分け、ディファードディープリンクで招待も引き継がれる)。
+
+       タップ自体には一切介入していない(preventDefault もしないし href も触らない)。
+       これはネイティブの遷移が始まらなかった場合にだけ動く後処理。
+       アプリが開いていればページは hidden になるので何もしない。 */
+    if (!opts.storeFallbackUrl) return;
+    setTimeout(function () {
+      if (document.visibilityState === 'hidden') return;
+      try {
+        window.location.replace(opts.storeFallbackUrl as string);
+      } catch (e) {}
+    }, opts.appFallbackMs);
   }
   screen.addEventListener('touchstart', onTap, { passive: true });
   screen.addEventListener('click', onTap);
@@ -179,6 +205,7 @@ export function liteLaunchOptions(webUrl: string): LiteLaunchOptions {
   return {
     webUrl,
     fallbackMs: WEB_FALLBACK_MS,
+    appFallbackMs: APP_FALLBACK_MS,
     inAppBrowserPattern: IN_APP_BROWSER_PATTERN,
     iabScreenId: IAB_SCREEN_ID,
     errorTextId: ERROR_TEXT_ID,

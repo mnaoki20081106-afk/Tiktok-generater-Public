@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
-import { CUSHION_PARAM, parseHttpUrl } from '@/lib/link-generator';
+import { headers } from 'next/headers';
+import { CUSHION_PARAM, parseHttpUrl, schemeFromWrapperUrl } from '@/lib/link-generator';
+import { isInAppBrowser } from '@/lib/lite-launch';
 import { ToolsShell } from '../tools-shell';
 import { LinkGeneratorForm } from './link-generator-form';
 import { CushionRelay } from './cushion-relay';
@@ -73,7 +75,14 @@ export default async function LinkGeneratorPage({ searchParams }: { searchParams
   if (to !== null) {
     // http/https 以外(javascript: 等)は location.href に到達させない
     const dest = parseHttpUrl(to);
-    return <CushionRelay to={dest ? dest.toString() : null} />;
+
+    /* href はDOM構築の時点で確定させる必要があるので、環境判定はサーバー側で行う。
+       アプリ内ブラウザではカスタムスキームを、それ以外では https をそのまま渡す。 */
+    const ua = (await headers()).get('user-agent') ?? '';
+    const httpsUrl = dest ? dest.toString() : null;
+    const scheme = httpsUrl && isInAppBrowser(ua) ? schemeFromWrapperUrl(httpsUrl) : null;
+
+    return <CushionRelay to={scheme ?? httpsUrl} storeFallback={scheme ? httpsUrl : null} />;
   }
 
   // ===== ビルダーモード =====

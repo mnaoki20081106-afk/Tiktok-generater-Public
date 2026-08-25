@@ -5,8 +5,9 @@
  * (lib/surprise.ts の resolveCreatorUrlByFingerprint / app/api/visit を参照)。
  */
 import type { Site } from '@/lib/types';
-import { parseHttpUrl } from '@/lib/link-generator';
+import { parseHttpUrl, schemeFromWrapperUrl } from '@/lib/link-generator';
 import {
+  APP_FALLBACK_MS,
   ERROR_TEXT,
   ERROR_TEXT_ID,
   IAB_SCREEN_ID,
@@ -32,6 +33,13 @@ export interface ViewerData {
   ogpImageUrl: string;
   appIconUrl: string;
   origin: string;
+  /**
+   * アプリ内ブラウザ(X など)から開かれているか。UserAgentでサーバー側が判定する。
+   *
+   * <a> の href はDOM構築の時点で確定していなければならない(JSから書き換えると
+   * ユーザーのタップとして扱われなくなる)ため、環境判定もサーバー側で行う。
+   */
+  inAppBrowser?: boolean;
 }
 
 /**
@@ -124,7 +132,9 @@ export function renderViewerHtml(d: ViewerData): string {
   const av = esc(avatarUrl);
   const ogp = esc(ogpImageUrl);
   const icon = esc(appIconUrl);
-  const tkUrl = esc(tiktokUrl);
+  /* クッションOFF版と同じ規則で出し分ける(アプリ内ブラウザはカスタムスキーム)。 */
+  const viewerLaunch = launchHref(d);
+  const tkUrl = esc(viewerLaunch.href);
   const descHtml = renderDescription(description);
   const descJson = JSON.stringify(String(description || '')).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(slug || '')).replace(/</g, '\\u003c');
@@ -348,6 +358,8 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
   var link=document.querySelector('.bo');
   if(!link)return;
   var slug=${slugJson};
+  var scheme=${JSON.stringify(!!viewerLaunch.storeFallback)};
+  var store=${JSON.stringify(viewerLaunch.storeFallback)};
   function loadScript(src){
     return new Promise(function(resolve,reject){
       var s=document.createElement('script');
@@ -366,10 +378,24 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
       body:JSON.stringify({slug:slug,fp:result.visitorId})
     }).then(function(res){return res.ok?res.json():null;});
   }).then(function(data){
-    if(data&&data.href){
-      link.setAttribute('href',data.href);
+    if(!data||!data.href)return;
+    /* カスタムスキームを使っている環境では、同じ規則で af_dp を取り出してから入れる。 */
+    if(scheme){
+      var m=/[?&]af_dp=([^&]*)/.exec(data.href);
+      if(m){link.setAttribute('href',decodeURIComponent(m[1]));store=data.href;return;}
     }
+    link.setAttribute('href',data.href);
   }).catch(function(){});
+  /* 未インストール端末はカスタムスキームを踏んでも何も起きないので、
+     少し待って画面がまだ見えていれば https のラッパーへ逃がす(ストアへ振り分けられる)。
+     タップ自体には介入していない(preventDefault もしないし href も触らない)。 */
+  link.addEventListener('click',function(){
+    if(!store)return;
+    setTimeout(function(){
+      if(document.visibilityState==='hidden')return;
+      try{window.location.replace(store);}catch(e){}
+    },${APP_FALLBACK_MS});
+  });
   /* ここで click を横取りして preventDefault() → location.href で飛ばしていた。
      照合の完了を待つためだったが、JS由来のナビゲーションになるため
      Universal Link が発火せず、アプリが起動しない原因になっていた。
@@ -401,14 +427,51 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
  * 応答が遅いだけのケースでも出てしまっていた。代わりに遷移手段を重ねてかけ、
  * タップ無しで確実に飛ばす。JSが無効な環境向けの <noscript> だけ残している。
  */
+/**
+ * <a href> に入れるURLを、環境で出し分ける。
+ *
+ * ## アプリ内ブラウザ(X など) … カスタムスキームを直接入れる
+ *
+ * 実機で分かったこと。
+ *   - https のラッパー(Universal Link)でタップ … アプリは起動し招待ページも描画されるが、
+ *     **招待トラッキングが成立しない**(「自身を招待できません」が出ない)
+ *   - カスタムスキームを直接渡す … **トラッキングは成立する**
+ *
+ * Universal Link で開くと、OSはHTTPリクエストを一切行わずURLをアプリへ渡す。
+ * アプリ側は AppsFlyer 経由の起動として解釈し、招待の文脈がそこで解決し直される。
+ * 一方カスタムスキームは、アプリのディープリンクハンドラが params_url を直接受け取る。
+ * 招待の成立に必要なのは後者だった。
+ *
+ * アプリ内ブラウザでは、利用者の物理タップがあれば WKWebView がカスタムスキームを
+ * OSへ渡すので、確認ダイアログを挟まずアプリが開く。
+ *
+ * ## 通常のブラウザ(Safari など) … https のまま
+ *
+ * カスタムスキームを踏むとiOSが「"TikTok Lite"で開きますか？」の確認ダイアログを出し、
+ * そこから開くとアトリビューションが切れることが実機で判明している。
+ */
+export function launchHref(d: ViewerData): { href: string; storeFallback: string | null } {
+  const dest = parseHttpUrl(d.tiktokUrl);
+  const httpsUrl = dest ? dest.toString() : '';
+  if (!httpsUrl || !d.inAppBrowser) return { href: httpsUrl, storeFallback: null };
+
+  const scheme = schemeFromWrapperUrl(httpsUrl);
+  /* スキームを取り出せない(ラッパー形式でない古いURL)なら、従来どおり https を使う。 */
+  if (!scheme) return { href: httpsUrl, storeFallback: null };
+
+  /* 未インストール端末はスキームを踏んでも何も起きないので、https のラッパーへ逃がす。 */
+  return { href: scheme, storeFallback: httpsUrl };
+}
+
 export function renderRedirectHtml(d: ViewerData): string {
   const dest = parseHttpUrl(d.tiktokUrl);
   const destUrl = dest ? dest.toString() : '';
+  const launch = launchHref(d);
 
   const t = esc(d.title);
   const ogp = esc(d.ogpImageUrl);
   const pageUrl = esc(`${d.origin}/${d.slug}`);
-  const href = esc(destUrl);
+  const href = esc(launch.href);
   const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
 
@@ -438,6 +501,7 @@ var startLiteLaunch = ${liteLaunchScript()};
 
   var LAUNCH = ${JSON.stringify(liteLaunchOptions(''))};
   LAUNCH.webUrl = dest;
+  LAUNCH.storeFallbackUrl = ${JSON.stringify(launch.storeFallback)};
 
   /* タイマー(2秒後のエラー文言 / 通常ブラウザの保険)を仕掛けるだけ。
      <a> の href はサーバー側でセット済みなので startLiteLaunch は触らない。 */
@@ -464,10 +528,21 @@ var startLiteLaunch = ${liteLaunchScript()};
   }).then(function(data){
     /* 本人判定で遷移先が変わったときだけ書き換える。変わらないなら触らない
        (無意味な setAttribute でも、タップ直前に走れば余計な疑いを招くため)。 */
-    var href = (data && data.href) || dest;
-    if (href === dest) return;
+    var next = (data && data.href) || dest;
+    if (next === dest) return;
+    /* 本人判定で遷移先が変わった場合だけ差し替える。カスタムスキームを使っている
+       環境では、同じ規則で af_dp を取り出してから入れる。 */
     var screen = document.getElementById(LAUNCH.iabScreenId);
-    if (screen) screen.setAttribute('href', href);
+    if (!screen) return;
+    if (LAUNCH.storeFallbackUrl) {
+      var m = /[?&]af_dp=([^&]*)/.exec(next);
+      if (m) {
+        screen.setAttribute('href', decodeURIComponent(m[1]));
+        LAUNCH.storeFallbackUrl = next;
+        return;
+      }
+    }
+    screen.setAttribute('href', next);
   }).catch(function(){});
 })();
 </script>`

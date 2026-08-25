@@ -169,6 +169,22 @@ export function buildLiteWrapperUrl(deepLink: string): string {
 }
 
 /**
+ * ラッパーURLから、アプリへ直接渡すカスタムスキーム(`af_dp` の値)を取り出す。
+ *
+ * アプリ内ブラウザ(X など)では、この文字列をそのまま <a href> に入れる。
+ * 利用者のタップで WKWebView がOSへ渡し、アプリが**直接**受け取る。
+ * AppsFlyer のクリックサーバを経由しないぶん、招待の文脈が途中で解釈し直されない。
+ * 通常のブラウザでは使わない(OSの確認ダイアログが出るため)。
+ */
+export function schemeFromWrapperUrl(rawUrl: string): string | null {
+  const url = parseHttpUrl(rawUrl);
+  if (!url) return null;
+
+  const deepLink = url.searchParams.get('af_dp') || '';
+  return deepLink.startsWith(LITE_DEEPLINK_BASE) ? deepLink : null;
+}
+
+/**
  * ラッパーURLの `af_dp` から、中に包まれている招待LPのURL(params_url)を取り出す。
  *
  * 撤回済みのラッパー形式で保存されてしまったURLを、招待LPのURLへ戻すために使う。

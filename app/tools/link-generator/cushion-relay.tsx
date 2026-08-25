@@ -15,15 +15,15 @@ import styles from './cushion-relay.module.css';
  * 画面全体を1枚のリンクにした黒い画面を出し、利用者のタップで遷移させる
  * (Universal Link はJS遷移では発火せず、タップを経由したときだけ効くため)。
  */
-export function CushionRelay({ to }: { to: string | null }) {
+export function CushionRelay({ to, storeFallback }: { to: string | null; storeFallback?: string | null }) {
   useEffect(() => {
     if (!to) return;
 
     /* タップを待つ画面はどの環境でもすぐ出す。遅らせると、その間のタップが
        <a> に届かず取りこぼしになる(画面は hidden のままなので)。
        通常のブラウザで誰もタップしなかった場合の自動遷移は startLiteLaunch 側が持つ。 */
-    startLiteLaunch(liteLaunchOptions(to));
-  }, [to]);
+    startLiteLaunch({ ...liteLaunchOptions(to), storeFallbackUrl: storeFallback ?? undefined });
+  }, [to, storeFallback]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">

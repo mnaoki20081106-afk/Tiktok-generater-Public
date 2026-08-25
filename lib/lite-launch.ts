@@ -21,6 +21,25 @@ export const MANUAL_ESCAPE_MS = 8000;
 /** 手動リンクに付けるDOMのid */
 export const MANUAL_ESCAPE_ID = 'lite-manual-escape';
 
+/**
+ * アプリ内ブラウザ(In-App Browser)のUserAgent。
+ *
+ * X(Twitter)のアプリ内ブラウザは、カスタムスキームの起動もページ遷移も両方ブロックする。
+ * さらにフォールバック先の公式LPが内部で `onelink.me` へ飛ぼうとして、そこでも止まる。
+ * 自動遷移を試みるほど手詰まりになるので、これらの環境では**最初から何も自動で行わず**、
+ * 利用者のタップに委ねる。実タップは Universal Link を発火させられる唯一の手段でもある。
+ *
+ * 文字列で持っているのは、`startLiteLaunch()` が直列化のためモジュール内の識別子を
+ * 参照できず、オプション経由で受け取る必要があるため。
+ */
+export const IN_APP_BROWSER_PATTERN = 'Twitter|FBAN|FBAV|FB_IAB|Instagram|Line/|MicroMessenger';
+
+/** 現在の環境がアプリ内ブラウザか(React側から使う。判定内容は startLiteLaunch と同じ) */
+export function isInAppBrowser(userAgent?: string): boolean {
+  const ua = userAgent ?? (typeof navigator === 'undefined' ? '' : navigator.userAgent);
+  return new RegExp(IN_APP_BROWSER_PATTERN, 'i').test(ua || '');
+}
+
 export interface LiteLaunchOptions {
   /** 最終的な遷移先(招待LPのURL)。アプリ未インストールならここからストアへ落ちる */
   webUrl: string;
@@ -31,6 +50,8 @@ export interface LiteLaunchOptions {
   manualEscapeMs: number;
   /** 手動リンクの要素id。空文字なら手動リンクを出さない */
   manualId: string;
+  /** アプリ内ブラウザ判定に使う正規表現。空文字なら判定しない */
+  inAppBrowserPattern: string;
 }
 
 /**
@@ -50,6 +71,22 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
   }
   function gone() {
     return left || document.visibilityState === 'hidden';
+  }
+
+  /* 手動リンクを表示する。遷移先は呼び出し時点のもの(抽選で差し替わっている場合がある)。 */
+  function showManual() {
+    if (!opts.manualId) return;
+    var el = document.getElementById(opts.manualId);
+    if (!el) return;
+    el.setAttribute('href', opts.webUrl);
+    el.removeAttribute('hidden');
+  }
+
+  /* アプリ内ブラウザ(X など)では自動遷移が裏目に出るので、一切試さずタップに委ねる。 */
+  var ua = (window.navigator && window.navigator.userAgent) || '';
+  if (opts.inAppBrowserPattern && new RegExp(opts.inAppBrowserPattern, 'i').test(ua)) {
+    showManual();
+    return;
   }
 
   window.addEventListener('pagehide', markLeft);
@@ -83,13 +120,10 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
 
   /* アプリ内ブラウザ(X など)は、カスタムスキームもページ遷移もブロックすることがある。
      その場合だけ手動リンクを出す。自動で抜けられた環境では表示されない。 */
-  if (opts.manualId) {
-    setTimeout(function () {
-      if (gone()) return;
-      var el = document.getElementById(opts.manualId);
-      if (el) el.removeAttribute('hidden');
-    }, opts.manualEscapeMs);
-  }
+  setTimeout(function () {
+    if (gone()) return;
+    showManual();
+  }, opts.manualEscapeMs);
 
   if (opts.appLink) {
     try {
@@ -115,6 +149,7 @@ export function liteLaunchOptions(webUrl: string, appLink: string | null): LiteL
     retryMs: WEB_RETRY_MS,
     manualEscapeMs: MANUAL_ESCAPE_MS,
     manualId: MANUAL_ESCAPE_ID,
+    inAppBrowserPattern: IN_APP_BROWSER_PATTERN,
   };
 }
 

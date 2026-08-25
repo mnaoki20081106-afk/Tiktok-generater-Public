@@ -425,7 +425,7 @@ export function renderRedirectHtml(d: ViewerData): string {
      分かってしまい、抽選機能の存在を訪問者に示唆することになるため。 */
   const body = destUrl
     ? `<noscript><a href="${href}" rel="noreferrer noopener">続行</a></noscript>
-<a id="${MANUAL_ESCAPE_ID}" href="${href}" rel="noreferrer noopener" hidden>TikTok Liteを開く</a>
+<a id="${MANUAL_ESCAPE_ID}" href="${href}" rel="noreferrer noopener" hidden>タップして続行</a>
 <script>
 var startLiteLaunch = ${liteLaunchScript()};
 (function(){

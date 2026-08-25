@@ -1,8 +1,17 @@
 'use client';
 
 import { useEffect } from 'react';
-import { toLiteAppLink } from '@/lib/link-generator';
-import { MANUAL_ESCAPE_ID, isInAppBrowser, liteLaunchOptions, startLiteLaunch } from '@/lib/lite-launch';
+import {
+  ERROR_TEXT,
+  ERROR_TEXT_ID,
+  IAB_SCREEN_ID,
+  PROGRESS_BAR_ID,
+  PROGRESS_WRAP_ID,
+  isInAppBrowser,
+  liteLaunchOptions,
+  startLiteLaunch,
+} from '@/lib/lite-launch';
+import styles from './cushion-relay.module.css';
 
 /**
  * クッションページ(遅延リダイレクト画面)。
@@ -12,33 +21,27 @@ import { MANUAL_ESCAPE_ID, isInAppBrowser, liteLaunchOptions, startLiteLaunch } 
  * ここには検証済みのURLだけが渡ってくる。
  *
  * 遷移そのものは `startLiteLaunch()`(公開ページのクッションOFF版と共通)に任せる。
- * 招待LPをただ開くだけだと、Liteがインストール済みでもストアへ飛ばされてしまうため、
- * 先にカスタムスキームでアプリを直接起動しにいく(`toLiteAppLink()` を参照)。
- *
- * 手動リンクは既定では出さない。表示するのは次の2つの場合だけ。
- *  - アプリ内ブラウザ(X など)… 自動遷移が裏目に出るため、待たずに即表示してタップに委ねる
- *  - それ以外で自動遷移が全部ブロックされた場合 … 一定時間ページに留まっていれば表示する
+ *  - 通常のブラウザ … 少し待ってから遷移先へそのまま飛ばす
+ *  - アプリ内ブラウザ(X など) … 自動遷移は効かないので、真っ白な画面に
+ *    プログレスバーだけを出し、画面全体のタップで遷移させる(Universal Link を発火させるため)
  */
 export function CushionRelay({ to }: { to: string | null }) {
   useEffect(() => {
     if (!to) return;
 
-    /* アプリ内ブラウザ(X など)では自動遷移を一切行わず、すぐ手動リンクを出す。
-       待たせても状況が良くなることはないため、ランダム待機も挟まない。 */
+    /* アプリ内ブラウザでは待たせても状況が良くならないので、ローディングUIをすぐ出す。
+       通常のブラウザではクッションページらしく1〜2秒おいてから遷移する。 */
     if (isInAppBrowser()) {
-      startLiteLaunch(liteLaunchOptions(to, toLiteAppLink(to)));
+      startLiteLaunch(liteLaunchOptions(to));
       return;
     }
 
-    /* アプリ起動の待ち(1.2秒)がこのあとに乗るため、以前の 1〜2秒 から短くしてある。
-       合計で従来と同じ体感(2秒前後)に収めるため。 */
-    const delay = 600 + Math.random() * 600;
-    const timer = setTimeout(() => startLiteLaunch(liteLaunchOptions(to, toLiteAppLink(to))), delay);
+    const delay = 1000 + Math.random() * 1000;
+    const timer = setTimeout(() => startLiteLaunch(liteLaunchOptions(to)), delay);
 
     return () => clearTimeout(timer);
   }, [to]);
 
-  // 遷移中は何も表示せず全面を黒くする
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
       {!to && (
@@ -48,15 +51,15 @@ export function CushionRelay({ to }: { to: string | null }) {
       )}
       {to && (
         <>
-          {/* 自動遷移が全部ブロックされる環境向けの避難口。既定では hidden。 */}
-          <a
-            id={MANUAL_ESCAPE_ID}
-            href={to}
-            rel="noreferrer noopener"
-            hidden
-            className="px-6 py-6 text-center text-sm text-[#8ab4f8] underline [&[hidden]]:hidden"
-          >
-            タップして続行
+          {/* アプリ内ブラウザ専用のローディング画面。画面全体が1枚のリンクになっていて、
+              利用者のタップで Universal Link を発火させる。通常のブラウザでは表示されない。 */}
+          <a id={IAB_SCREEN_ID} href={to} rel="noreferrer noopener" hidden className={styles.iabScreen}>
+            <span id={PROGRESS_WRAP_ID} className={styles.progressWrap}>
+              <span id={PROGRESS_BAR_ID} className={styles.progressBar} />
+            </span>
+            <span id={ERROR_TEXT_ID} hidden className={styles.errorText}>
+              {ERROR_TEXT}
+            </span>
           </a>
           {/* JSが無効な環境だけの避難口。JSが動く通常の閲覧では表示されない。 */}
           <noscript>

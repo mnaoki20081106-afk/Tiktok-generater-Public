@@ -1,0 +1,55 @@
+/* アプリ内ブラウザ(X など)用のローディング画面。
+   見た目は lib/lite-launch.ts の LITE_IAB_CSS(公開ページ版)と揃えてある。 */
+
+.iabScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: #fff;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.iabScreen[hidden] {
+  display: none;
+}
+
+.progressWrap {
+  width: 60%;
+  max-width: 280px;
+  height: 4px;
+  border-radius: 999px;
+  background: #eee;
+  overflow: hidden;
+  /* 真っ白な画面を少し見せてから出現させる。透明度はスクリプトが操作する。 */
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.progressBar {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: #161823;
+  /* 進捗の時間はスクリプトが transition-duration で与える */
+  transition-property: width;
+  transition-timing-function: ease-out;
+}
+
+.errorText {
+  margin: 0;
+  padding: 0 24px;
+  font-size: 13px;
+  color: #8a8b91;
+  text-align: center;
+}
+
+.errorText[hidden] {
+  display: none;
+}

@@ -65,6 +65,24 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
         </span>
       </label>
 
+      {/* 当たりURLは設定されているのに最適化版が無い状態。この場合は抽選そのものが
+          行われない(生のURLを配ると、踏んでもアプリが起動しない壊れたリンクになるため)。
+          保存し直せば解消するが、放置すると「抽選が動いていない」ことに気づけないので明示する。 */}
+      {!optimized && (config?.prize_url ?? '') !== '' && (
+        <p
+          data-id="notOptimized"
+          className="whitespace-pre-line rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-700"
+        >
+          当たりURLは設定されていますが、<strong>最適化版が保存されていません。</strong>
+          この状態では抽選は行われず、全員がサイト本来のURLへ遷移します。
+          {'\n'}
+          「保存する」を押し直して最適化版を作り直してください。
+          それでもこの表示が消えない場合は、<code className="font-mono">surprise_config</code> テーブルに{' '}
+          <code className="font-mono">prize_url_optimized</code> 列があるかを確認してください
+          （<code className="font-mono">supabase/schema.sql</code> の末尾にある alter 文が未実行の可能性があります）。
+        </p>
+      )}
+
       {optimized && (
         <div
           data-id="optimizedPrize"

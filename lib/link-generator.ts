@@ -42,14 +42,29 @@ export const LITE_ONELINK_PATH = '/4P4E';
 /* ラッパーが af_dp と一緒に必ず載せている値。実物のLPのHTMLから採取。 */
 export const WRAPPER_DOMAIN_SOURCE = 'tiktok';
 /* TikTok Lite を開くためのディープリンク。
-   単なるスキーム(snssdk473824://)だけではアプリが起動するだけで、
-   「誰の紹介か」がアプリに伝わらない。TikTok自身は af_dp を
+   実物の招待LPに埋まっている TikTok自身のスキーム(url_schemes)と同じ形にする。
 
-     snssdk473824://roma_redirect/?params_url=<招待LPのURL + 全パラメータ>
+   18個ある wrapper のうち、このLPが使うのは `wrapper_incentive_share_gift`。
+   LPのクエリが `gameplay=scan_code_support`(＝友だちをサポートするギフトのフロー)で、
+   配列の先頭に置かれているのもこれ。
 
-   の形で組み立てており、params_url のクエリに u_code / share_page_data などの
-   識別子を載せてアプリへ渡している(実物のLPのHTMLで確認)。同じ構造で組み立てる。 */
-export const LITE_DEEPLINK_BASE = 'snssdk473824://roma_redirect/';
+     snssdk473824://webview?params_url=<招待LPのURL>&url=<ギフト受け取りページ>?<LPのクエリ>
+
+   一度 `wrapper_incentive_share_jump_to_roma`(`snssdk473824://roma_redirect/?...&spark_page=scan_code`)
+   で組み立てたことがあるが、これは18個から取り違えて選んだもので、実機では
+   **アプリは起動し招待ページも描画されるが、招待が成立しない**(「自身を招待できません」が
+   出ない)状態になった。roma は招待キャンペーンのページを開くだけで、
+   「招待を受け取る」処理を行うページ(gift_giving.html)には行き着かないため。 */
+export const LITE_DEEPLINK_BASE = 'snssdk473824://webview';
+
+/* アプリ内で「招待を受け取る」処理を行うページ。実物のHTMLから採取。
+   TikTok自身のスキームでは `&url=` の値としてそのまま(パーセントエンコードせずに)置かれ、
+   末尾の `{{query}}` が実行時に招待LPのクエリで埋められる。 */
+export const LITE_GIFT_PAGE_URL = 'https://inapp.tiktokv.com/falcon/incentive_campaign/gift_giving.html';
+
+/* 判定に使うスキームの候補。過去に roma で保存されたURLも「ラッパー形式」として
+   認識し、再保存で今の形へ復旧できるようにするため両方を見る。 */
+export const LITE_DEEPLINK_BASES = [LITE_DEEPLINK_BASE, 'snssdk473824://roma_redirect/'];
 
 /* params_url が指す招待LPのURL。実物のHTMLから採取したもの。
    キャンペーンが変わるとパスも変わりうるため、定数として切り出しておく。 */
@@ -181,7 +196,7 @@ export function schemeFromWrapperUrl(rawUrl: string): string | null {
   if (!url) return null;
 
   const deepLink = url.searchParams.get('af_dp') || '';
-  return deepLink.startsWith(LITE_DEEPLINK_BASE) ? deepLink : null;
+  return LITE_DEEPLINK_BASES.some((b) => deepLink.startsWith(b)) ? deepLink : null;
 }
 
 /**
@@ -240,14 +255,20 @@ export function unwrapLiteWrapperUrl(url: URL): URL | null {
   const payload = wrapperPayloadUrl(url.toString());
   if (!payload) return null;
 
-  for (const key of LEGACY_INJECTED_PARAMS) {
-    payload.searchParams.delete(key);
-  }
+  /* `searchParams` を触ると、変更が無くてもクエリ全体が再シリアライズされて
+     パーセントエンコードの形が変わる(`+` が `%2B` になるなど)。招待LPのURLは
+     1バイトも変えたくないので、直すものが実際にあるときだけ触る。 */
+  const legacy = LEGACY_INJECTED_PARAMS.filter((k) => payload.searchParams.has(k));
 
   /* 古い実装は inc_target_url のスキームを Lite へ差し替えていた。TikTok は書き換えないので、
      Lite のスキームが入っていればこちらが付けた跡。元(aweme://)へ戻す。 */
   const target = payload.searchParams.get('inc_target_url') || '';
-  if (target.toLowerCase().startsWith(LITE_SCHEME)) {
+  const forced = target.toLowerCase().startsWith(LITE_SCHEME);
+
+  if (legacy.length === 0 && !forced) return payload;
+
+  for (const key of legacy) payload.searchParams.delete(key);
+  if (forced) {
     payload.searchParams.set('inc_target_url', REGULAR_TIKTOK_SCHEMES[0] + target.slice(LITE_SCHEME.length));
   }
 
@@ -384,52 +405,29 @@ export function lpUrlFromParams(params: URLSearchParams, lpBase: string = INVITE
 /**
  * TikTok Lite 向けのディープリンク(`af_dp` の値)を組み立てる。
  *
- * 実物の招待LPのHTMLに入っている TikTok自身のスキーム
+ * 実物の招待LPに入っている TikTok自身のスキーム
  * (`strategy.wrappers[].wrapper_url.url_schemes[0]`)と**同じ構造**にする。
  *
- *   snssdk473824://roma_redirect/?params_url=<招待LPのURL(36キーそのまま)>&spark_page=<scan_code>
- *
- * ポイントは3つで、いずれも過去の実装が外していた点。
+ *   snssdk473824://webview?params_url=<招待LPのURL>&url=<ギフト受け取りページ>?<LPのクエリ>
  *
  *  1. `params_url` は招待LPのURLを**そのまま**載せる。並び順もエンコードも変えない。
  *     TikTok の params_url に載っているのはLPのクエリ36キーちょうどで、
  *     `use_spark` / `bdhm_bid` / `pid` のような値は1つも入っていない。
- *  2. `spark_page` は `params_url` の**中ではなく兄弟キー**。TikTok のスキームでは
- *     `&spark_page={{url}}` というプレースホルダになっていて、実行時に埋められる。
- *     埋まる値は招待LPが `inc_target_url`(`aweme://roma_redirect/?spark_page=scan_code`)
- *     として持っているものと同じなので、そこから取り出す。
+ *  2. `url` は**パーセントエンコードしない**。TikTok自身の文字列でも生のまま置かれている。
+ *     末尾の `{{query}}` は招待LPのクエリで埋める。
  *  3. `inc_target_url` は `aweme://` のまま触らない。TikTok も書き換えていない。
- *     どのアプリが開くかは外側(OneLinkのホストとスキーム)で既に Lite に決まっており、
- *     ここを書き換える必要はない。
- *
- * 過去に 1.〜3. をすべて外した状態で配ったところ、実機で
- * 「アプリは起動するが招待ページが正しく開かず、アトリビューションも維持されない」
- * 状態になった。TikTokが組み立てているものと構造が違えば、アプリ側が解釈できない。
+ *     どのアプリが開くかは外側(OneLinkのホストとスキーム)で既に Lite に決まっている。
  */
 export function buildLiteDeepLink(lpUrl: URL): string {
-  let deepLink = LITE_DEEPLINK_BASE + '?params_url=' + encodeURIComponent(lpUrl.toString());
-
-  const sparkPage = sparkPageOf(lpUrl);
-  if (sparkPage) deepLink += '&spark_page=' + encodeURIComponent(sparkPage);
-
-  return deepLink;
-}
-
-/**
- * 招待LPの `inc_target_url` から `spark_page` を取り出す。
- *
- * `inc_target_url` は `aweme://roma_redirect/?spark_page=scan_code` の形で、
- * 「アプリ内でどのページを開くか」を指している。キャンペーンが変われば
- * `scan_code` 以外になりうるので、固定値にせず毎回ここから読む。
- */
-export function sparkPageOf(lpUrl: URL): string | null {
-  const target = lpUrl.searchParams.get('inc_target_url');
-  if (!target) return null;
-
-  const at = target.indexOf('?');
-  if (at < 0) return null;
-
-  return new URLSearchParams(target.slice(at + 1)).get('spark_page');
+  return (
+    LITE_DEEPLINK_BASE +
+    '?params_url=' +
+    encodeURIComponent(lpUrl.toString()) +
+    '&url=' +
+    LITE_GIFT_PAGE_URL +
+    '?' +
+    lpUrl.search.slice(1)
+  );
 }
 
 /** クッションページが遷移先を受け取るクエリキー。単独版と同じ `to`。 */
@@ -1207,7 +1205,8 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
      中身が空(u_code が無い)ものは、古い実装で作った不完全なものなので作り直す。 */
   const sourceDeepLink = source.searchParams.get('af_dp') || '';
   const keepSourceDeepLink =
-    sourceDeepLink.startsWith(LITE_DEEPLINK_BASE) && decodeURIComponent(sourceDeepLink).includes('u_code=');
+    LITE_DEEPLINK_BASES.some((b) => sourceDeepLink.startsWith(b)) &&
+    decodeURIComponent(sourceDeepLink).includes('u_code=');
 
   managed.push([
     'af_dp',

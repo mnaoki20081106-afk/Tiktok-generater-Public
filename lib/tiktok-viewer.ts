@@ -5,7 +5,7 @@
  * (lib/surprise.ts の resolveCreatorUrlByFingerprint / app/api/visit を参照)。
  */
 import type { Site } from '@/lib/types';
-import { parseHttpUrl, schemeFromWrapperUrl } from '@/lib/link-generator';
+import { parseHttpUrl } from '@/lib/link-generator';
 import {
   ERROR_TEXT,
   ERROR_TEXT_ID,
@@ -32,13 +32,6 @@ export interface ViewerData {
   ogpImageUrl: string;
   appIconUrl: string;
   origin: string;
-  /**
-   * アプリ内ブラウザ(X など)から開かれているか。UserAgentでサーバー側が判定する。
-   *
-   * <a> の href はDOM構築の時点で確定していなければならない(JSから書き換えると
-   * ユーザーのタップとして扱われなくなる)ため、環境判定もサーバー側で行う。
-   */
-  inAppBrowser?: boolean;
 }
 
 /**
@@ -132,7 +125,7 @@ export function renderViewerHtml(d: ViewerData): string {
   const ogp = esc(ogpImageUrl);
   const icon = esc(appIconUrl);
   /* クッションOFF版と同じ規則で出し分ける(アプリ内ブラウザはカスタムスキーム)。 */
-  const tkUrl = esc(launchHref(d));
+  const tkUrl = esc(tiktokUrl);
   const descHtml = renderDescription(description);
   const descJson = JSON.stringify(String(description || '')).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(slug || '')).replace(/</g, '\\u003c');
@@ -356,7 +349,6 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
   var link=document.querySelector('.bo');
   if(!link)return;
   var slug=${slugJson};
-  var usesScheme=${JSON.stringify(!!d.inAppBrowser)};
   function loadScript(src){
     return new Promise(function(resolve,reject){
       var s=document.createElement('script');
@@ -377,10 +369,6 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
   }).then(function(data){
     if(!data||!data.href)return;
     /* カスタムスキームを使っている環境では、同じ規則で af_dp を取り出してから入れる。 */
-    if(usesScheme){
-      var m=/[?&]af_dp=([^&]*)/.exec(data.href);
-      if(m){link.setAttribute('href',decodeURIComponent(m[1]));return;}
-    }
     link.setAttribute('href',data.href);
   }).catch(function(){});
   /* このリンクには click / touchstart のリスナーを一切張らない。
@@ -417,51 +405,25 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
  * 応答が遅いだけのケースでも出てしまっていた。代わりに遷移手段を重ねてかけ、
  * タップ無しで確実に飛ばす。JSが無効な環境向けの <noscript> だけ残している。
  */
-/**
- * <a href> に入れるURLを、環境で出し分ける。
- *
- * ## アプリ内ブラウザ(X など) … カスタムスキームを直接入れる
- *
- * 実機で分かったこと。
- *   - https のラッパー(Universal Link)でタップ … アプリは起動し招待ページも描画されるが、
- *     **招待トラッキングが成立しない**(「自身を招待できません」が出ない)
- *   - カスタムスキームを直接渡す … **トラッキングは成立する**
- *
- * Universal Link で開くと、OSはHTTPリクエストを一切行わずURLをアプリへ渡す。
- * アプリ側は AppsFlyer 経由の起動として解釈し、招待の文脈がそこで解決し直される。
- * 一方カスタムスキームは、アプリのディープリンクハンドラが params_url を直接受け取る。
- * 招待の成立に必要なのは後者だった。
- *
- * アプリ内ブラウザでは、利用者の物理タップがあれば WKWebView がカスタムスキームを
- * OSへ渡すので、確認ダイアログを挟まずアプリが開く。
- *
- * **未インストール端末向けのフォールバックは持たない。** 一度「タップ後2.5秒で
- * https のラッパーへ逃がす」保険を入れたが、アプリ起動の判定中にそれが発火して
- * `onelink.me` で止まる不具合を実機で起こした。タップの純度を最優先する。
- *
- * ## 通常のブラウザ(Safari など) … https のまま
- *
- * カスタムスキームを踏むとiOSが「"TikTok Lite"で開きますか？」の確認ダイアログを出し、
- * そこから開くとアトリビューションが切れることが実機で判明している。
- */
-export function launchHref(d: ViewerData): string {
-  const dest = parseHttpUrl(d.tiktokUrl);
-  const httpsUrl = dest ? dest.toString() : '';
-  if (!httpsUrl || !d.inAppBrowser) return httpsUrl;
+/* かつてここに launchHref() があり、アプリ内ブラウザには
+   カスタムスキーム(snssdk473824://...)を、通常のブラウザには https のラッパーを
+   出し分けていた。**実機で否定されたので撤回した。**
 
-  /* スキームを取り出せない(ラッパー形式でない古いURL)なら、従来どおり https を使う。 */
-  return schemeFromWrapperUrl(httpsUrl) ?? httpsUrl;
-}
+   Xのアプリ内ブラウザ(WKWebView)は、<a> のタップであっても未知のスキームへの
+   ナビゲーションを黙って破棄する。黒画面を何度タップしても何も起きず、
+   2秒後のエラー文言のまま固まる状態になった。
+   一方 https のラッパー(Universal Link)なら、タップでアプリが起動し招待ページも描画される。
+
+   したがって遷移先はどの環境でも https のラッパーを使う。 */
 
 export function renderRedirectHtml(d: ViewerData): string {
   const dest = parseHttpUrl(d.tiktokUrl);
   const destUrl = dest ? dest.toString() : '';
-  const launchUrl = launchHref(d);
 
   const t = esc(d.title);
   const ogp = esc(d.ogpImageUrl);
   const pageUrl = esc(`${d.origin}/${d.slug}`);
-  const href = esc(launchUrl);
+  const href = esc(destUrl);
   const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
 
@@ -491,7 +453,6 @@ var startLiteLaunch = ${liteLaunchScript()};
 
   var LAUNCH = ${JSON.stringify(liteLaunchOptions(''))};
   LAUNCH.webUrl = dest;
-  var usesScheme = ${JSON.stringify(!!d.inAppBrowser)};
 
   /* タイマー(2秒後のエラー文言 / 通常ブラウザの保険)を仕掛けるだけ。
      <a> の href はサーバー側でセット済みなので startLiteLaunch は触らない。 */
@@ -520,14 +481,8 @@ var startLiteLaunch = ${liteLaunchScript()};
        (無意味な setAttribute でも、タップ直前に走れば余計な疑いを招くため)。 */
     var next = (data && data.href) || dest;
     if (next === dest) return;
-    /* 本人判定で遷移先が変わった場合だけ差し替える。カスタムスキームを使っている
-       環境では、同じ規則で af_dp を取り出してから入れる。 */
     var screen = document.getElementById(LAUNCH.iabScreenId);
     if (!screen) return;
-    if (usesScheme) {
-      var m = /[?&]af_dp=([^&]*)/.exec(next);
-      if (m) { screen.setAttribute('href', decodeURIComponent(m[1])); return; }
-    }
     screen.setAttribute('href', next);
   }).catch(function(){});
 })();

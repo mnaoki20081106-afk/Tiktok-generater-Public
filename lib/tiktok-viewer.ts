@@ -5,7 +5,7 @@
  * (lib/surprise.ts の resolveCreatorUrlByFingerprint / app/api/visit を参照)。
  */
 import type { Site } from '@/lib/types';
-import { parseHttpUrl } from '@/lib/link-generator';
+import { parseHttpUrl, toLiteAppLink } from '@/lib/link-generator';
 import {
   ERROR_TEXT,
   ERROR_TEXT_ID,
@@ -453,6 +453,8 @@ var startLiteLaunch = ${liteLaunchScript()};
 
   var LAUNCH = ${JSON.stringify(liteLaunchOptions(''))};
   LAUNCH.webUrl = dest;
+  /* アプリを直接開くスキーム。招待のトラッキングが成立するのはこの経路だけ。 */
+  LAUNCH.appLink = ${JSON.stringify(toLiteAppLink(destUrl))};
 
   /* タイマー(2秒後のエラー文言 / 通常ブラウザの保険)を仕掛けるだけ。
      <a> の href はサーバー側でセット済みなので startLiteLaunch は触らない。 */
@@ -484,6 +486,8 @@ var startLiteLaunch = ${liteLaunchScript()};
     var screen = document.getElementById(LAUNCH.iabScreenId);
     if (!screen) return;
     screen.setAttribute('href', next);
+    LAUNCH.webUrl = next;
+    if (data && data.appLink) LAUNCH.appLink = data.appLink;
   }).catch(function(){});
 })();
 </script>`

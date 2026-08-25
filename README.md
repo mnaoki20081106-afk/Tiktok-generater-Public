@@ -80,109 +80,53 @@ is_inc_roma        = 1
 「`onelink.me` で止まり『TikTok Liteを開く』ボタンが出る」症状の原因はこれ。
 対策は **中身を組み立て直さないこと**。TikTok自身が配っているパラメータをそのまま運ぶ。
 
-#### ワンクリック招待の実体は、LPが内部に持っているラッパーだった
+#### 遷移先は招待LPのURL。ラッパーで包むとトラッキングが消える
 
-招待LPのHTMLには、TikTok自身がアプリを開くために使っている設定が埋まっている
-（`tiktok.share.api/tiktok/linker/component/strategy/get/v1/`）。18個ある wrapper はどれも同じ形をしている。
+一時期、招待LPのHTMLに埋まっている TikTok自身のラッパー
+（`https://snssdk473824.onelink.me/4P4E?domain_source=tiktok&af_dp=<スキーム>`）を被せていた。
+タップ1回でアプリが起動するという点では確かに優れていて、実機でもアプリの起動と
+招待ページの描画までは成立した。**しかし招待のトラッキングが消えた。**
 
-```json
-"launch_type": "tiktok_lite_app",
-"wrapper_url": {
-  "url_fallback": "https://snssdk473824.onelink.me/4P4E?domain_source=tiktok&af_dp={{schema}}",
-  "url_schemes": ["snssdk473824://roma_redirect/?params_url=<招待LPのURL(36キー)>&spark_page={{url}}"]
-}
-```
+実機の観測を並べると理由がはっきりする。
 
-**招待LPのURLをそのまま配ってもアプリは起動しない**（X / Safari の両方で確認済み。TikTok公式の
-招待リンクも同じ挙動）。タップでアプリが起動することを実機で確認できているのは、
-このラッパー（`4P4E` + `af_dp`）を被せた形だけ。`4P4E` は TikTok Lite の Universal Link なので、
-タップした瞬間にOSがURLを横取りしてアプリへ渡す。
+| 遷移先 | アプリ起動 | 招待ページの描画 | トラッキング |
+|---|---|---|---|
+| **招待LPのURL** | LP経由 | ○ | **○** |
+| OneLinkラッパー | 1タップ | ○ | **×** |
 
-##### 一度これで「アプリは起動するが招待ページが開かない」状態になった原因
+**招待のバインドは「招待LPのページがブラウザで読み込まれ、そのJSが走ること」で成立する。**
+LPのクエリにある `incentive_redirect=1` / `is_inc_roma=1` / `inc_target_url` は、
+まさにそのページのJSが読むためのもの。ラッパーはそのページごと飛ばしてしまうので、
+ペイロードとして `u_code` が届いていてもバインドが起きない
+（アプリ内に招待ページのUIは出るのに「自身を招待できません」が出ない、という症状になる）。
 
-最初にラッパーを実装したとき、`af_dp` の中身を自前で組み立てていた。実物のLPにある
-TikTok自身のスキームと突き合わせたところ、**3点で構造が違っていた**。
+`af_dp` の中身の構造は何度も作り直して確かめたが、どれも結果は変わらなかった。
 
-| | TikTok自身 | 当時の実装 |
-|---|---|---|
-| `spark_page` | `params_url` の**兄弟キー** | `params_url` の**中**に混入 |
-| `params_url` のキー | LPのクエリ36キーちょうど | **+8キー捏造**（`use_spark` / `bdhm_bid` / `pid` 等） |
-| `inc_target_url` | `aweme://` のまま | `snssdk473824://` へ書き換え |
+| 試した `af_dp` | 結果 |
+|---|---|
+| `roma_redirect`（TikTokの `url_schemes` と1バイト一致） | アプリ起動・描画○、トラッキング× |
+| `webview` + `gift_giving.html`（`wrapper_incentive_share_gift`） | アプリ内で「不明なエラーが発生しました」 |
+| 上記＋`inc_target_url` を Lite のスキームへ差し替え | アプリ起動・描画○、トラッキング× |
 
-`&spark_page={{url}}` は「URLを入れる場所」ではなく、招待LPが `inc_target_url`
-（`aweme://roma_redirect/?spark_page=scan_code`）として持っている値を入れる場所だった。
-場所も値も外したまま配っていたので、アプリ側が解釈できず招待ページに到達できなかった。
+問題はペイロードの中身ではなく、**LPのページを経由するかどうか**だった。
 
-現在は `buildLiteDeepLink()` が `wrapper_incentive_share_jump_to_roma` の `url_schemes` と
-同じ構造で組み立てる。
+> **ワンクリックでアプリが開く形と、招待トラッキングは両立しない。** これがここまでの実機の結論。
+> 遷移先は招待LPのURLにして、アプリを開く役目はLP自身のJSに任せる（公式の招待リンクと同じ経路）。
 
-- `params_url` は招待LPのURLを**そのまま**載せる。並び順もエンコードも変えない
-- `spark_page` は `params_url` の**中ではなく兄弟キー**。値は `sparkPageOf()` が
-  `inc_target_url` から読む（キャンペーンが変わっても追随する）。テンプレート上は
-  `{{url}}` だが、**LP自身の `inc_target_url` が答えを持っている**ので推測にならない
-- 外側に載せるのは `domain_source` と `af_dp` の2つだけ。ストアへの振り分けは
-  AppsFlyer側（4P4Eテンプレート）のサーバー設定が持つので `af_ios_url` などは足さない
-- **TikTokの文字列と違ってよいのは `inc_target_url` のスキームだけ**（`forceLite` / `liteForced`）。
-  公式の値は通常版TikTokの `aweme://roma_redirect/?spark_page=scan_code` だが、開かせたいのは
-  Lite なのでスキーム部分だけを差し替える。実機の履歴がこの1点を名指ししている。
-
-  | `params_url` の `inc_target_url` | 実機の結果 |
-  |---|---|
-  | Lite のスキーム | 「自身を招待できません」が出た（＝招待のバインドが走った） |
-  | `aweme://` のまま | UIは完璧に描画されるが、バインドは走らない |
-
-  Lite の中でLPのJSが `inc_target_url` / `is_inc_roma` / `incentive_redirect` を読んで招待の処理へ
-  進む以上、その行き先が通常版TikTokを指していれば Lite 内では解決できず、処理そのものが始まらない。
-
-##### `wrapper_incentive_share_gift` は実機で否定された
-
-`snssdk473824://webview?params_url=<LP>&url=<gift_giving.html>?{{query}}` に変えたところ、
-アプリ内に「不明なエラーが発生しました」が出て止まった。
-
-- `{{query}}` は**LPのどこにも解決済みの実例が無い**（テンプレート1箇所きり）。招待LPのクエリを
-  そのまま入れるというのはこちらの推測だった
-- `url=` はパーセントエンコードされない生の値なので、そこに `&` を含むクエリを入れると、
-  以降がすべてスキーム側のトップレベルのパラメータとして解釈されて構造が壊れる
-- ペイロード長も 2894 → 5084 文字に倍増していた
-
-`roma` 側の `{{url}}` は LP自身の `inc_target_url` が答えを持っている点が決定的に違う。
+`wrapper_incentive_share_gift` の `{{query}}` については、**LPのどこにも解決済みの実例が無い**
+（`gift_giving` はテンプレートの1箇所きり）。招待LPのクエリをそのまま入れるというのは推測でしかなく、
+加えて `url=` はパーセントエンコードされない生の値なので、そこに `&` を含むクエリを入れると
+以降がすべてスキーム側のトップレベルのパラメータとして解釈されて構造が壊れる。
 **解決済みの実例が無いプレースホルダを推測で埋めない。**
+
+撤回済みのラッパー形式で保存されてしまったURLは `detectBuildMode()` が `wrapper` として検出し、
+管理画面に警告を出す。`buildUrl()` はこの形式を受け取ると `unwrapLiteWrapperUrl()` で
+中の `params_url` を取り出して招待LPのURLへ復旧する（＝保存し直すだけで直る）。
 
 | 方式 | 条件 | 何をするか |
 |---|---|---|
-| **`wrapper`（既定・推奨）** | 土台が招待LPのURL（`isInviteLpUrl()`）で `forceLite` ON | TikTok自身と同じ `4P4E?domain_source=tiktok&af_dp=<スキーム>` を組み立てる |
-| `lp`（比較・切り分け用） | 土台が招待LPのURLで `forceLite` OFF | 招待LPのURLをそのまま返す。**タップしてもアプリは起動しない** |
+| **`lp`（既定・推奨）** | 土台が招待LPのURL（`isInviteLpUrl()`） | 公式リンクが着地したURLをそのまま使う。変えるのは `inc_target_url` のスキームだけ |
 | `onelink`（フォールバック） | 土台がOneLinkのURL | 従来どおり `4P4E` へ載せ替えて `af_dp` を組み立てる |
-
-壊れた構造のまま保存されてしまったURLは、`buildUrl()` が `unwrapLiteWrapperUrl()` で
-中の `params_url` を取り出し、捏造キー（`LEGACY_INJECTED_PARAMS`）を落として
-`inc_target_url` を `aweme://` へ戻したうえで組み立て直す（＝保存し直すだけで直る）。
-描画用パラメータは**落とさない**。これはLPが元から持っているクエリで、
-欠けると「アプリは起動するが招待ページが開かない」状態になる。
-
-サニタイズは削除リスト方式なので、リストを編集したときに必要なキーを巻き込んでも気づけない。
-`assertOfficialParamsPreserved()` が「入力に在ったキーは全部残っていること」を直接検証し、
-1つでも欠けていれば生成を中断する（`TRACKING_PARAMS` / `INCENTIVE_PARAMS` のような
-リストに載っていない描画用パラメータもこれで守られる）。
-
-- **招待LPのURLは、`inc_target_url` のスキーム以外を一切改変しない**（`buildLpUrl()`）。一度はここで「描画用パラメータ（`INTERSTITIAL_PARAMS`）を10件削除」も同時に行っていたが、**どちらも推測に基づく改変で、実機で検証していなかった**。結果として公式リンクとの差分が11箇所ある状態でURLを配っており、実機で「アプリが起動せず、ただ招待LPがブラウザで開くだけ」になっていた。アプリを開くかどうかを決めているのはLP側のJSなので、そのJSが読む可能性のあるパラメータを消せば判断が変わっても不思議はない。**削除はすべて取りやめた。**
-  - 唯一残した差分が `inc_target_url` のスキーム差し替え（`aweme://` → `snssdk473824://`、`forceLite` オプション）。公式のままだと通常版TikTokと Lite の両方が入った端末で通常版が開いてしまうため。パス・クエリには触らず先頭のスキームだけを置換する。「誰の招待か」は LP のクエリ（`u_code` / `share_page_data`）が運んでいて `inc_target_url` のクエリには乗っていないので、招待の成立には影響しない。
-  - **差分を意図的に1点だけに絞ってある。** 以前は削除と差し替えをまとめて戻したため、どちらが原因か切り分けられなかった。今の形なら、万一また実機で挙動が変わったら原因は `inc_target_url` だと確定できる。`forceLite` を OFF にすれば公式と1バイトも違わないURLになるので、その場で比較できる。
-  - `BuildResult.liteForced` に差し替えの有無が入り、ツールの結果画面にも「公式との差分はこの1点だけ」と表示される。
-  - 落とすのは**こちらが過去に付けたキーだけ**（`MANAGED_PARAMS` と `is_retargeting`）。TikTokが出すLPのURLにこれらが載ることはないので、公式のURLには影響しない。
-  - 何も変えていなければ URL を組み立て直さず入力の文字列をそのまま返す。`URLSearchParams` を経由すると並び順やパーセントエンコードが変わりうるため、「公式と1バイトも違わない」ことを保証するにはこの分岐が必要。
-  - `stripDeepLinks` は `lp` 方式では効かない。
-  - ジェネレーターの価値は「短縮リンクを展開して実体を取り出すこと」にあり、中身をいじることではない。展開だけでも、短縮リンクが通常版TikTokの Universal Link に横取りされる問題は解消する。
-- **短縮リンクは自前で展開する**(`followRedirects()` / `app/api/expand/route.ts`): 公式の招待リンクは
-  ただのリダイレクトで招待LPへ着地するので、Puppeteer(Stealth API)を経由する必要がない。
-  Stealth API は `universal-data` から「共有用のOneLink」を取り出す実装のため、公式リンクの実体である
-  LPのURLは返してくれない。ブラウザからはクロスオリジンのリダイレクトを追えないので、
-  同一オリジンの `/api/expand` を挟む。
-  - リダイレクトは `redirect: 'manual'` で1ホップずつ追う。許可ホストの外(App Store等)へ出る手前で止め、
-    着地先が1.5MB近い招待LPでも本文を読まずに済ませるため。最大10ホップ。
-  - 取りに行けるのは `tiktok.com` / `tiktokv.com` / `onelink.me` のみ(`EXPANDABLE_HOST_RE`)。
-    任意のURLを取得させないため(SSRF対策)。返すのは最終URLだけで、本文は返さない。
-  - 展開に失敗した場合(JS経由の遷移など)だけ、従来どおり Stealth API へフォールバックする。
 
 #### どの環境でも「利用者のタップ」を経由させる
 

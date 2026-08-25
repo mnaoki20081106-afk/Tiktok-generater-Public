@@ -409,11 +409,9 @@ export function LinkGeneratorForm() {
           {/* どちらの経路で作ったか / 何を除去したかを見せる。原因追跡に必要。 */}
           <div className="mt-2 space-y-1">
             <p className="text-xs leading-relaxed text-slate-500">
-              {built.mode === 'wrapper'
-                ? '生成方式: ワンクリック招待(推奨)。TikTok Lite の Universal Link(4P4E)に招待ペイロード(af_dp)を載せた形で、招待LPが内部で使っているものと構造が完全に一致します。タップでアプリが起動します。'
-                : built.mode === 'lp'
-                  ? '生成方式: 招待LP直結(Lite強制OFF)。比較・切り分け用です。タップしてもアプリは起動せず、ブラウザで招待LPが開くだけになります(TikTok公式の招待リンクも同じ挙動)。'
-                  : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
+              {built.mode === 'lp'
+                ? '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLと同じ形です。タップするとブラウザで招待LPが読み込まれ、そのJSが招待をバインドしてアプリを開きます。トラッキングが成立するのはこの経路だけです。'
+                : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
             </p>
             {built.liteForced && (
               <p className="text-xs leading-relaxed text-slate-500">

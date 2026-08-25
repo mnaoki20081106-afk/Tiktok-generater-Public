@@ -163,23 +163,17 @@ export function isInviteLpUrl(url: URL): boolean {
    ==================================================================== */
 
 /** どの経路で組み立てたか */
-export type BuildMode = 'wrapper' | 'lp' | 'onelink';
-/** 保存済みURLの形から後追いで判定した結果 */
-export type DetectedBuildMode = BuildMode | 'unknown';
-
+export type BuildMode = 'lp' | 'onelink';
 /**
- * 招待ペイロード(`af_dp`)に、TikTok自身と同じラッパーを被せる。
- *
- * 実物の招待LPが持っている `wrapper_url.url_fallback` と同じで、載せるのは
- * `domain_source` と `af_dp` の2つだけ。ストアへの振り分けは AppsFlyer側
- * (4P4Eテンプレート)のサーバー設定が持っているので、af_ios_url などは足さない。
+ * 保存済みURLの形から後追いで判定した結果。
+ * `wrapper` は撤回済みの形式で、見つけたら再保存を促すためだけに存在する。
  */
-export function buildLiteWrapperUrl(deepLink: string): string {
-  const wrapper = new URL(LITE_ONELINK_ORIGIN + LITE_ONELINK_PATH);
-  wrapper.searchParams.set('domain_source', WRAPPER_DOMAIN_SOURCE);
-  wrapper.searchParams.set('af_dp', deepLink);
-  return wrapper.toString();
-}
+export type DetectedBuildMode = BuildMode | 'wrapper' | 'unknown';
+
+/* かつて `buildLiteWrapperUrl()` がここにあり、OneLink のラッパーを組み立てていた。
+   実機でトラッキングが消えるため撤去した(理由は buildLpUrl のコメントを参照)。
+   ラッパー形式で保存済みのURLを見つけて招待LPのURLへ戻すために、
+   判定(`isLiteWrapperUrl`)と取り出し(`wrapperPayloadUrl` / `unwrapLiteWrapperUrl`)だけを残す。 */
 
 /**
  * ラッパーURLから、アプリへ直接渡すカスタムスキーム(`af_dp` の値)を取り出す。
@@ -509,10 +503,8 @@ export interface BuildResult {
   removed: string[];
   /**
    * どちらの経路で作ったか。
-   * - `wrapper` … 招待LPのURLを TikTok自身と同じラッパー(4P4E + af_dp)で包む(推奨・既定)。
-   *               タップでアプリが起動することを実機で確認できている唯一の形
-   * - `lp`      … 招待LPのURLをそのまま使う(`forceLite` OFF。比較・切り分け用)。
-   *               タップしてもアプリは起動しない(X / Safari の両方で確認済み)
+   * - `lp`      … 招待LPのURLをそのまま使う(推奨・既定)。ブラウザでLPが読み込まれ、
+   *               そのJSが招待をバインドする。トラッキングが成立する唯一の形
    * - `onelink` … AppsFlyerのOneLinkを組み立て直す(LPのURLが取れなかった場合の従来経路)
    */
   mode: BuildMode;
@@ -1044,40 +1036,37 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
   assertIncentivePreserved(source, url);
   assertOfficialParamsPreserved(source, url);
 
-  if (!opts.forceLite) {
-    /* 比較・切り分け用。招待LPのURLをそのまま返す。
-       この形はタップしてもアプリが起動しないことが実機で確認されている
-       (X / Safari の両方。TikTok公式の招待リンクも同じ挙動)。 */
-    const untouched = removed.length === 0;
-    return { url: untouched ? source.toString() : url.toString(), removed, mode: 'lp' };
-  }
+  /* ===== 遷移先は招待LPのURLそのもの =====
 
-  /* TikTok自身と同じラッパーを被せる。`4P4E` は TikTok Lite の Universal Link なので、
-     タップするとOSがアプリへ渡す。実機で「タップでアプリが起動する」ことを確認できている
-     唯一の形。招待LPのURLをそのまま配るとアプリは起動しない。
+     一時期ここで OneLink のラッパー(`4P4E?domain_source=tiktok&af_dp=<スキーム>`)を
+     被せていた。タップ1回でアプリが起動するという点では確かに優れていて、実機でも
+     アプリの起動と招待ページの描画までは成立した。**しかし招待のトラッキングが消えた。**
 
-     以前この形で「アプリは起動するが招待ページが開かない」状態になったのは、
-     中に入れるペイロードの構造がTikTokのものと違っていたため(buildLiteDeepLink 参照)。
-     今は url_schemes と同じ構造で組み立てている。 */
-  const wrapped = buildLiteWrapperUrl(buildLiteDeepLink(url));
-  assertOneClickPayload(source, wrapped);
+     実機の観測を並べると理由がはっきりする。
 
-  return { url: wrapped, removed, mode: 'wrapper', liteForced };
+       遷移先 = 招待LPのURL     → ブラウザでLPが読み込まれる → トラッキング成立
+       遷移先 = OneLinkラッパー → LPを読み込まずアプリが直接開く → トラッキング消失
+                                  (アプリ内に招待ページのUIは出る＝ u_code は届いている)
+
+     **招待のバインドは「招待LPのページがブラウザで読み込まれ、そのJSが走ること」で成立する。**
+     LPのクエリにある `incentive_redirect=1` / `is_inc_roma=1` / `inc_target_url` は、
+     まさにそのページのJSが読むためのもの。ラッパーはそのページごと飛ばしてしまうので、
+     ペイロードとして u_code が届いていてもバインドが起きない。
+
+     af_dp の中身の構造を何度も作り直して確かめたが、どれも結果は変わらなかった。
+     `roma_redirect`(TikTokの url_schemes と1バイト一致)、`webview` + `gift_giving.html`
+     (アプリ内で「不明なエラー」)、`inc_target_url` を Lite のスキームに差し替えたもの
+     ―― いずれもトラッキングは戻らなかった。問題はペイロードの中身ではなく、
+     **LPのページを経由するかどうか**だった。
+
+     したがって遷移先は招待LPのURLにする。アプリを開く役目はLP自身のJSに任せる
+     (公式の招待リンクと同じ経路)。ワンクリックでアプリが開く形とトラッキングは
+     両立しない、というのがここまでの実機の結論。 */
+  const untouched = removed.length === 0 && !liteForced;
+  return { url: untouched ? source.toString() : url.toString(), removed, mode: 'lp', liteForced };
 }
 
-/**
- * ラッパーの中で、招待LPのパラメータが1つも欠けていないことを検証する。
- *
- * ラッパーを被せると計測用のキーは `af_dp` → `params_url` の内側へ移り、
- * 目視でも `URL` の API でも直接は確認できなくなる。取り出して突き合わせる。
- */
-export function assertOneClickPayload(before: URL, wrapperUrl: string): void {
-  const payload = wrapperPayloadUrl(wrapperUrl);
-  if (!payload) {
-    throw new Error('ワンクリック用のペイロード(af_dp の params_url)を組み立てられませんでした。');
-  }
-  assertOfficialParamsPreserved(before, payload);
-}
+
 
 /**
  * 招待LPのURLが持っていたパラメータが、1つも欠けず・書き換わっていないことを検証する。

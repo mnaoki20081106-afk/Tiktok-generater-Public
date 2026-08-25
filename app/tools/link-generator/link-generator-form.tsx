@@ -8,10 +8,14 @@ import {
   DEFAULT_IOS_URL,
   DEFAULT_WEB_DP_URL,
   MIN_BUSY_MS,
+  ONELINK_RE,
   buildUrl,
   callExtractApi,
   diagnose,
+  expandShortUrl,
+  isInviteLpUrl,
   parseHttpUrl,
+  preferSourceUrl,
   resolveOutputUrl,
   type BuildResult,
   type NetworkLevelError,
@@ -102,11 +106,29 @@ export function LinkGeneratorForm() {
     };
 
     try {
-      const data = await callExtractApi(value);
-      setSrcUrl(data.trackingUrl);
+      /* まずリダイレクトを追うだけで済ませる。公式の招待リンクは、これだけで
+         招待LP(www.tiktok.com/ug/incentive/...)へ着地する。
+         Stealth API が返すのはLPが内部に持つ「共有用のOneLink」であって
+         公式リンクの実体ではないため、こちらを先に試す。 */
+      const parsed = parseHttpUrl(value);
+      let extracted: string | null = null;
+
+      if (parsed && (isInviteLpUrl(parsed) || ONELINK_RE.test(parsed.hostname))) {
+        extracted = parsed.toString(); // 既に展開済みのURLを貼られた場合
+      } else {
+        const expanded = parseHttpUrl(await expandShortUrl(value));
+        if (expanded && (isInviteLpUrl(expanded) || ONELINK_RE.test(expanded.hostname))) {
+          extracted = expanded.toString();
+        }
+      }
+
+      // 展開できなかった(JS経由の遷移など)場合だけ Stealth API に頼る
+      if (!extracted) extracted = preferSourceUrl(await callExtractApi(value));
+
+      setSrcUrl(extracted);
       setExtractLabel('抽出成功！');
       setTimeout(restore, 1500);
-      runBuild(data.trackingUrl); // そのままリダイレクトURL生成へ
+      runBuild(extracted); // そのままリダイレクトURL生成へ
     } catch (e) {
       let msg = '抽出失敗: ' + (e instanceof Error ? e.message : String(e));
 
@@ -288,15 +310,18 @@ export function LinkGeneratorForm() {
 
         <div className="mb-4 flex flex-col gap-2.5">
           <Check checked={optLite} onChange={setOptLite}>
-            <span className="font-medium text-slate-900">TikTok Lite の OneLink に載せ替える</span>
+            <span className="font-medium text-slate-900">TikTok Lite を強制する(通常版TikTokが開くのを防ぐ)</span>
             <span className="mt-1 block text-xs leading-relaxed text-slate-500">
-              招待リンクのドメイン(
-              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">snssdk1180.onelink.me</code>
-              )は通常版TikTokのUniversal Linkとして登録されているため、通常版がインストール済みの端末では
-              OSがURLを横取りして通常版を起動してしまいます。Lite側のドメイン(
-              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">snssdk473824.onelink.me</code>
-              )へ載せ替えると、Liteがインストール済みならLiteが開き、未インストールならLiteのストアへ遷移します。
-              トラッキング用のパラメータはすべて引き継ぎます。
+              招待LPがアプリを開くときの飛び先(
+              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">inc_target_url</code>)は
+              通常版TikTokのスキーム(
+              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">aweme://</code>
+              )を指しているため、通常版がインストール済みの端末では通常版が起動してしまいます。
+              Lite のスキーム(
+              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">snssdk473824://</code>
+              )へ差し替えます。招待の宛先(<code className="rounded bg-slate-100 px-1 py-0.5 font-mono">u_code</code>)は
+              LPのクエリが運んでいるため、差し替えても引き継がれます。
+              OneLink形式のURLが入力された場合は、あわせてドメインもLite側へ載せ替えます。
             </span>
           </Check>
           <Check checked={optStrip} onChange={setOptStrip}>
@@ -366,12 +391,17 @@ export function LinkGeneratorForm() {
           </pre>
           <p className="mt-2 text-xs text-slate-500">リンクを直接タップしてもコピーできます。</p>
 
-          {/* 何を除去したかを見せる。通常版が開いてしまう原因追跡に必要。 */}
-          <div className="mt-2">
+          {/* どちらの経路で作ったか / 何を除去したかを見せる。原因追跡に必要。 */}
+          <div className="mt-2 space-y-1">
+            <p className="text-xs leading-relaxed text-slate-500">
+              {built.mode === 'lp'
+                ? '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLと同じものをそのまま使っています。'
+                : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
+            </p>
             <p className="text-xs leading-relaxed text-slate-500">
               {built.removed.length
-                ? '除去したディープリンク系パラメータ: ' + built.removed.join(', ')
-                : '除去対象のディープリンク系パラメータはありませんでした。'}
+                ? '除去したパラメータ: ' + built.removed.join(', ')
+                : '除去対象のパラメータはありませんでした。'}
             </p>
           </div>
 

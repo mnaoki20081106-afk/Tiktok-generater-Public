@@ -80,9 +80,12 @@ export const INVITE_LP_URL = 'https://www.tiktok.com/ug/incentive/share/pro_scan
    「onelink.me で止まり『TikTok Liteを開く』ボタンが出る」症状の原因はこれ。
 
    対策は「組み立て直さない」こと。TikTok自身が配っているURLと同じものを遷移先にする。
-   こちらが手を入れるのは次の2点だけに絞る。
-     1. WebView描画用パラメータ(INTERSTITIAL_PARAMS)を落とす
-     2. inc_target_url のスキームを通常版(aweme://)から Lite(snssdk473824://)へ差し替える
+
+   一度はここから更に「描画用パラメータを落とす」「inc_target_url のスキームを
+   Lite へ差し替える」という改変を加えたが、これが実機で
+   「アプリが起動せず、ただ招待LPがブラウザで開くだけ」を引き起こした。
+   公式リンクとの差分が11箇所あった。どちらも推測に基づく改変で検証していなかった。
+   現在は招待LPのURLを一切改変しない(buildLpUrl のコメントを参照)。
    ========================================================================== */
 export const INVITE_LP_HOST_RE = /(^|\.)tiktok\.com$/i;
 export const INVITE_LP_PATH_RE = /^\/ug\//i;
@@ -739,51 +742,51 @@ export function assertIncentivePreserved(before: URL, after: URL): void {
 }
 
 /**
- * 招待LPのURLをそのまま遷移先にする(推奨経路)。
+ * 招待LPのURLを **そのまま** 遷移先にする(推奨経路)。
  *
- * 公式の招待リンクが実際に着地するURLと同じものを配るので、
- * u_code / share_page_data / media_source / inc_pid などの計測値は定義上そのまま残る。
- * OneLinkを組み立て直さないので、こちらでは再現できない wid / c の欠落も起こらない。
+ * ## 一切改変しない
  *
- * 触るのは次の3点だけ。
- *  1. WebView描画用パラメータ(INTERSTITIAL_PARAMS)を落とす … 表示制御専用で計測に無関係
- *  2. inc_target_url のスキームを Lite へ差し替える … 通常版TikTokの起動を防ぐ
- *  3. 過去の実装が焼き付けた af_* を落とす … LP側では意味を持たず、URLを膨らませるだけ
+ * 以前はここで
+ *   - 描画用パラメータ(INTERSTITIAL_PARAMS)を10件ほど削除
+ *   - inc_target_url のスキームを aweme:// から snssdk473824:// へ差し替え
+ * を行っていた。どちらも「表示専用だから消してよい」「通常版が開くのを防げる」という
+ * *推測* に基づくもので、実機で検証したことは一度も無かった。
+ *
+ * 結果として、公式の招待リンクとの差分が11箇所ある状態でURLを配っており、
+ * 実機で「アプリが起動せず、ただ招待LPがブラウザで開くだけ」になっていた。
+ * LP側のJSがアプリを開くかどうかを決めているので、そのJSが読む可能性のある
+ * パラメータを消したり値を書き換えたりすれば、判断が変わっても不思議はない。
+ *
+ * この一件の教訓は一貫している。**TikTokが生成したURLを改変しない。**
+ * 公式リンクが着地したURLと1バイトも違わないものを配れば、公式リンクと同じ挙動になる。
+ * ジェネレーターの価値は「短縮リンクを展開して、その実体を取り出すこと」にあり、
+ * 中身をいじることではない(展開だけでも、短縮リンクが通常版TikTokの
+ * Universal Link に横取りされる問題は解消する)。
+ *
+ * したがってここで落とすのは、**こちらが過去に付けたキーだけ**にする。
  */
-export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
+export function buildLpUrl(source: URL): BuildResult {
   const url = new URL(source.toString());
   const params = url.searchParams;
   const removed: string[] = [];
 
-  const drop = (keys: string[]) => {
-    keys.forEach((k) => {
-      if (params.has(k)) {
-        removed.push(k);
-        params.delete(k);
-      }
-    });
-  };
-
-  if (opts.stripDeepLinks) drop(INTERSTITIAL_PARAMS);
-
-  /* 生成済みURLを再度通したときのために、こちらが付けたAppsFlyer用のキーも落とす。
-     LPはこれらを解釈しないので、残っていても無駄に長くなるだけ。
-     is_retargeting も同様に、過去のURLに焼き付いていれば必ず落とす。 */
-  drop([...MANAGED_PARAMS, 'is_retargeting']);
-
-  /* 通常版TikTokのスキームをLiteへ差し替える。キー自体は必ず残す。 */
-  if (opts.useLiteOneLink) {
-    const target = params.get('inc_target_url');
-    if (target) {
-      const lite = toLiteScheme(target);
-      if (lite !== target) params.set('inc_target_url', lite);
+  /* 落とすのは「こちらが付けたキー」だけ。生成済みURLをもう一度通したとき
+     (サイトの再保存など)に、以前の実装が焼き付けた AppsFlyer 用のキーを掃除する。
+     TikTokが出す招待LPのURLにこれらが載ることはないので、公式のURLには影響しない。 */
+  [...MANAGED_PARAMS, 'is_retargeting'].forEach((k) => {
+    if (params.has(k)) {
+      removed.push(k);
+      params.delete(k);
     }
-  }
+  });
 
   assertTrackingPreserved(source, url);
   assertIncentivePreserved(source, url);
 
-  return { url: url.toString(), removed, mode: 'lp' };
+  /* 落とすものが無ければ、URLを組み立て直さず入力の文字列をそのまま返す。
+     URLSearchParams を経由すると並び順やパーセントエンコードが変わりうるため、
+     「公式のURLと1バイトも違わない」ことを保証するにはこの分岐が必要。 */
+  return { url: removed.length > 0 ? url.toString() : source.toString(), removed, mode: 'lp' };
 }
 
 export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
@@ -795,7 +798,7 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
 
   /* 招待LPのURLなら、OneLinkを組み立て直さずそのまま遷移先にする。
      公式リンクが着地するのはこの形だと実測で確認済み(ファイル冒頭のコメント参照)。 */
-  if (isInviteLpUrl(url)) return buildLpUrl(source, opts);
+  if (isInviteLpUrl(url)) return buildLpUrl(source);
 
   // OneLink でなければここで止まる
   url = assertOneLink(url);

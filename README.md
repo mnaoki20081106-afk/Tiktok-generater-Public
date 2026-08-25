@@ -82,18 +82,16 @@ is_inc_roma        = 1
 
 | 方式 | 条件 | 何をするか |
 |---|---|---|
-| **`lp`(既定・推奨)** | 土台が招待LPのURL(`isInviteLpUrl()`) | 描画用パラメータ(`INTERSTITIAL_PARAMS`)を落とし、`inc_target_url` のスキームを Lite へ差し替えるだけ。それ以外は一切触らない |
-| `onelink`(フォールバック) | 土台がOneLinkのURL | 従来どおり `4P4E` へ載せ替えて `af_dp` を組み立てる |
+| **`lp`（既定・推奨）** | 土台が招待LPのURL（`isInviteLpUrl()`） | **一切改変しない。** 公式リンクが着地したURLをそのまま遷移先にする |
+| `onelink`（フォールバック） | 土台がOneLinkのURL | 従来どおり `4P4E` へ載せ替えて `af_dp` を組み立てる |
 
 `BuildResult.mode` にどちらで生成したかが入り、結果画面にも表示される。
 
-- **スキームは消さずに差し替える**: `inc_target_url` が指す `aweme://` は**通常版TikTok**のスキームで、
-  通常版がインストール済みの端末ではそちらが起動する。ただしキーごと削除すると
-  「アプリを開く仕掛け」自体が失われてLPで止まる。そこで `toLiteScheme()` でスキーム部分だけを
-  `snssdk473824://` に差し替える。「誰の招待か」は LP のクエリ(`u_code` / `share_page_data`)が
-  運んでいて `inc_target_url` のクエリには乗っていないため、差し替えても招待情報は保たれる。
-  この差し替えは OneLink 方式の `af_dp`(`params_url`)側にも同じように適用する。
-  `INCENTIVE_PARAMS` の3キーが消えていないことは `assertIncentivePreserved()` で検証する。
+- **招待LPのURLは一切改変しない**（`buildLpUrl()`）。一度はここで「描画用パラメータ（`INTERSTITIAL_PARAMS`）を10件ほど削除」「`inc_target_url` のスキームを `aweme://` → `snssdk473824://` へ差し替え」を行っていたが、**どちらも推測に基づく改変で、実機で検証していなかった**。結果として公式リンクとの差分が11箇所ある状態でURLを配っており、実機で「アプリが起動せず、ただ招待LPがブラウザで開くだけ」になっていた。アプリを開くかどうかを決めているのはLP側のJSなので、そのJSが読む可能性のあるパラメータを消したり値を書き換えたりすれば、判断が変わっても不思議はない。
+  - 現在落とすのは**こちらが過去に付けたキーだけ**（`MANAGED_PARAMS` と `is_retargeting`）。TikTokが出すLPのURLにこれらが載ることはないので、公式のURLには影響しない。
+  - 落とすものが無ければ URL を組み立て直さず入力の文字列をそのまま返す。`URLSearchParams` を経由すると並び順やパーセントエンコードが変わりうるため、「公式のURLと1バイトも違わない」ことを保証するにはこの分岐が必要。
+  - `stripDeepLinks` / `useLiteOneLink` のオプションは `lp` 方式では効かない（常に無改変）。
+  - ジェネレーターの価値は「短縮リンクを展開して実体を取り出すこと」にあり、中身をいじることではない。展開だけでも、短縮リンクが通常版TikTokの Universal Link に横取りされる問題は解消する。
 - **短縮リンクは自前で展開する**(`followRedirects()` / `app/api/expand/route.ts`): 公式の招待リンクは
   ただのリダイレクトで招待LPへ着地するので、Puppeteer(Stealth API)を経由する必要がない。
   Stealth API は `universal-data` から「共有用のOneLink」を取り出す実装のため、公式リンクの実体である

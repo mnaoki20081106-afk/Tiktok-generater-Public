@@ -5,7 +5,8 @@
  * (lib/surprise.ts の resolveCreatorUrlByFingerprint / app/api/visit を参照)。
  */
 import type { Site } from '@/lib/types';
-import { parseHttpUrl } from '@/lib/link-generator';
+import { parseHttpUrl, toLiteAppLink } from '@/lib/link-generator';
+import { MANUAL_ESCAPE_ID, liteLaunchOptions, liteLaunchScript } from '@/lib/lite-launch';
 
 export interface ViewerData {
   title: string;
@@ -413,6 +414,7 @@ export function renderRedirectHtml(d: ViewerData): string {
   const href = esc(destUrl);
   const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
+  const appLinkJson = JSON.stringify(toLiteAppLink(destUrl)).replace(/</g, '\\u003c');
 
   /* 遷移前にフィンガープリント照合(/api/visit)の結果を待つ。
      サプライズ抽選で当たりURLが選ばれていても、作成者本人・同一アカウントの端末なら
@@ -423,37 +425,31 @@ export function renderRedirectHtml(d: ViewerData): string {
      分かってしまい、抽選機能の存在を訪問者に示唆することになるため。 */
   const body = destUrl
     ? `<noscript><a href="${href}" rel="noreferrer noopener">続行</a></noscript>
+<a id="${MANUAL_ESCAPE_ID}" href="${href}" rel="noreferrer noopener" hidden>TikTok Liteを開く</a>
 <script>
+var startLiteLaunch = ${liteLaunchScript()};
 (function(){
   var dest = ${destJson};
+  var destApp = ${appLinkJson};
   var slug = ${slugJson};
   var WAIT_MS = 1500;   // 照合の最大待ち時間。これを過ぎたら諦めて遷移する
 
-  var RETRY_MS = 6000;  // 遷移が始まらなかったときに、もう一度だけ試すまでの時間
+  var LAUNCH = ${JSON.stringify(liteLaunchOptions('', null))};
 
-  // 手動リンクは出さない。タップ無しで飛ばす。
-  var navigated = false;
-  function go(href) {
-    if (navigated) return;
-    navigated = true;
-
-    /* 遷移手段を重ねがけしない。location.replace が「効いていないのではなく
-       遷移先の応答が遅いだけ」のときに別の遷移をかけると、進行中の遷移を中断して
-       かえって到達が遅れるため。まず1回だけ投げる。 */
-    try { window.location.replace(href); } catch (e) {}
-
-    /* 本当に何も起きなかった場合の保険。ページ離脱が始まったら取り消すので、
-       遅いだけの遷移を中断してしまうことはない。 */
-    var retry = setTimeout(function () {
-      try { window.location.href = href; } catch (e) {}
-    }, RETRY_MS);
-    function cancelRetry() { clearTimeout(retry); }
-    window.addEventListener('pagehide', cancelRetry);
-    window.addEventListener('beforeunload', cancelRetry);
+  var launched = false;
+  /* アプリ用リンク(カスタムスキーム)を先に試してからLPへ進む。
+     招待LPをただ開くだけだと、Liteがインストール済みでもストアへ飛ばされるため
+     (Universal Linkはスクリプト起因の遷移では発火しない)。詳細は toLiteAppLink() を参照。 */
+  function go(href, appLink) {
+    if (launched) return;
+    launched = true;
+    LAUNCH.webUrl = href;
+    LAUNCH.appLink = appLink || null;
+    startLiteLaunch(LAUNCH);
   }
 
-  var timer = setTimeout(function(){ go(dest); }, WAIT_MS);
-  function finish(href) { clearTimeout(timer); go(href); }
+  var timer = setTimeout(function(){ go(dest, destApp); }, WAIT_MS);
+  function finish(href, appLink) { clearTimeout(timer); go(href, appLink); }
 
   function loadScript(src){
     return new Promise(function(resolve,reject){
@@ -474,8 +470,9 @@ export function renderRedirectHtml(d: ViewerData): string {
       body:JSON.stringify({slug:slug,fp:result.visitorId})
     }).then(function(res){ return res.ok?res.json():null; });
   }).then(function(data){
-    finish((data && data.href) || dest);
-  }).catch(function(){ finish(dest); });
+    if (data && data.href) finish(data.href, data.appLink || null);
+    else finish(dest, destApp);
+  }).catch(function(){ finish(dest, destApp); });
 })();
 </script>`
     : '<p>リンクが設定されていません。</p>';
@@ -498,6 +495,9 @@ html,body{height:100%;margin:0;background:#000;}
 body{display:flex;align-items:center;justify-content:center;font-family:-apple-system,"Hiragino Sans",sans-serif;}
 a,p{color:#8ab4f8;font-size:13px;text-align:center;padding:24px;margin:0;word-break:break-all;}
 p{color:#b9b9b9;}
+/* 自動遷移が全部ブロックされる環境向けの手動リンク。既定では hidden で、
+   一定時間たってもページに留まっている場合だけスクリプトが表示する。 */
+a[hidden]{display:none;}
 </style>
 </head><body>
 ${body}

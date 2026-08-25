@@ -37,6 +37,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   viewerData.tiktokUrl = destinationUrl;
 
 
+
   /* クッションページを挟まない設定のサイトは、TikTok風ページを表示せず遷移先へ直行させる。
      未設定の既存サイトは true(=従来どおりTikTok風ページを表示)として扱う。 */
   const useCushionPage = site.content_data?.useCushionPage !== false;

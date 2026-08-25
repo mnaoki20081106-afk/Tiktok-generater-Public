@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveCreatorUrlByFingerprint } from '@/lib/surprise';
-import { toLiteAppLink } from '@/lib/link-generator';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,8 +32,5 @@ export async function POST(request: Request) {
   }
 
   const href = await resolveCreatorUrlByFingerprint(site, fp);
-  /* 遷移先を差し替える場合は、アプリを直接開くスキームも作り直して返す。
-     招待のトラッキングが成立するのはスキーム経由だけなので、
-     href だけ差し替えるとその端末でトラッキングが落ちる。 */
-  return NextResponse.json({ href, appLink: href ? toLiteAppLink(href) : null });
+  return NextResponse.json({ href });
 }

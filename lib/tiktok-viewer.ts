@@ -5,7 +5,7 @@
  * (lib/surprise.ts の resolveCreatorUrlByFingerprint / app/api/visit を参照)。
  */
 import type { Site } from '@/lib/types';
-import { parseHttpUrl, toLiteAppLink } from '@/lib/link-generator';
+import { parseHttpUrl } from '@/lib/link-generator';
 import {
   ERROR_TEXT,
   ERROR_TEXT_ID,
@@ -125,9 +125,8 @@ export function renderViewerHtml(d: ViewerData): string {
   const ogp = esc(ogpImageUrl);
   const icon = esc(appIconUrl);
   /* クッションOFF版と同じ規則で出し分ける(アプリ内ブラウザはカスタムスキーム)。 */
-  /* クッションOFF版と同じく、アプリを直接開くカスタムスキームを入れる。
-     ここが Web の遷移先のままだと、タップしても生の招待LPが開くだけになる。 */
-  const tkUrl = esc(toLiteAppLink(tiktokUrl) || tiktokUrl);
+  /* クッションOFF版と同じく招待LPのURL(renderRedirectHtml のコメントを参照)。 */
+  const tkUrl = esc(tiktokUrl);
   const descHtml = renderDescription(description);
   const descJson = JSON.stringify(String(description || '')).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(slug || '')).replace(/</g, '\\u003c');
@@ -370,7 +369,7 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
     }).then(function(res){return res.ok?res.json():null;});
   }).then(function(data){
     if(!data||!data.href)return;
-    link.setAttribute('href',data.appLink||data.href);
+    link.setAttribute('href',data.href);
   }).catch(function(){});
   /* このリンクには click / touchstart のリスナーを一切張らない。
      タップにJSが紐づいていると、WKWebView がカスタムスキームをOSへ渡す判定に
@@ -424,10 +423,23 @@ export function renderRedirectHtml(d: ViewerData): string {
   const t = esc(d.title);
   const ogp = esc(d.ogpImageUrl);
   const pageUrl = esc(`${d.origin}/${d.slug}`);
-  /* <a href> に入れるのは、アプリを直接開くカスタムスキーム。
-     招待のトラッキングが成立するのはこの経路だけ(マージ#35 で実証)。
-     作れない場合(古い形式のURLなど)だけ Web の遷移先を入れる。 */
-  const href = esc(toLiteAppLink(destUrl) || destUrl);
+  /* ===== <a href> に入れるのは招待LPのURL =====
+
+     招待のトラッキングは「招待LPのページがブラウザで読み込まれ、**そのページから**
+     アプリに入ること」で成立する。実機で確認済み。
+
+       招待LPのURL → そのページからアプリへ … 「自身を招待できません」が出る(成立)
+       カスタムスキームで直接アプリを開く   … アプリは開くがトラッキングは消える
+       OneLinkラッパーで直接アプリを開く    … 同上
+
+     カスタムスキームは2種類を**それぞれバイト単位で再現**して試した
+     (公式HTMLの url_schemes と1バイト一致のもの / マージ#35 と1バイト一致のもの)。
+     どちらもアプリは開くがトラッキングは落ちた。ペイロードの中身の問題ではなく、
+     LPのページを経由するかどうかが分かれ目だった。
+
+     したがってアプリを開く役目はLP自身に任せる。こちらの仕事は、黒画面のタップ誘導で
+     利用者を確実にLPへ送り届けるところまで。 */
+  const href = esc(destUrl);
   const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
 
@@ -487,8 +499,7 @@ var startLiteLaunch = ${liteLaunchScript()};
     if (next === dest) return;
     var screen = document.getElementById(LAUNCH.iabScreenId);
     if (!screen) return;
-    /* 本人判定で遷移先が変わった場合だけ差し替える。スキームも作り直したものを使う。 */
-    screen.setAttribute('href', (data && data.appLink) || next);
+    screen.setAttribute('href', next);
   }).catch(function(){});
 })();
 </script>`

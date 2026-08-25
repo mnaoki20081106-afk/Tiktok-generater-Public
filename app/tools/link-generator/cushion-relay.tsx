@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import { ERROR_TEXT, ERROR_TEXT_ID, IAB_SCREEN_ID, liteLaunchOptions, startLiteLaunch } from '@/lib/lite-launch';
-import { toLiteAppLink } from '@/lib/link-generator';
 import styles from './cushion-relay.module.css';
 
 /**
@@ -42,7 +41,7 @@ export function CushionRelay({ to }: { to: string | null }) {
           {/* href はアプリを直接開くカスタムスキーム。トラッキングが成立するのはこの経路だけ。 */}
           <a
             id={IAB_SCREEN_ID}
-            href={toLiteAppLink(to) || to}
+            href={to}
             target="_top"
             rel="noreferrer noopener"
             className={styles.iabScreen}

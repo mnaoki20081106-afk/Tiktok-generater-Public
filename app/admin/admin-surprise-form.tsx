@@ -89,7 +89,7 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
           data-id="optimizedPrize"
           className={
             'flex flex-col gap-1.5 rounded-lg border p-3 ' +
-            (mode === 'wrapper' ? 'border-slate-200 bg-slate-50' : 'border-amber-300 bg-amber-50')
+            (mode === 'lp' ? 'border-slate-200 bg-slate-50' : 'border-amber-300 bg-amber-50')
           }
         >
           <span className="text-xs font-medium text-slate-900">最適化済みの当たりURL(実際に当選者へ渡されるURL)</span>
@@ -97,17 +97,17 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
 
           {/* どちらの形式で生成されたかを見せる。フォールバック側は実機で招待が
               成立しないことが分かっているため、気づけるように警告を出す。 */}
-          {mode === 'wrapper' && (
+          {mode === 'lp' && (
             <span data-id="prizeMode" className="text-xs text-emerald-700">
-              形式: ワンクリック招待（推奨）。TikTok Lite の Universal Link に招待ペイロードを載せた形で、
-              招待LPが内部で使っているものと構造が一致します。タップするとアプリが開きます。
+              形式: 招待LP直結（推奨）。公式の招待リンクが着地するURLと同じ形で、
+              招待トラッキングが成立するのはこの形式だけです。
             </span>
           )}
-          {mode === 'lp' && (
+          {mode === 'wrapper' && (
             <span data-id="prizeMode" className="text-xs leading-relaxed text-amber-800">
-              形式: <strong>招待LPのURLそのまま</strong>。
-              <strong>タップしてもアプリは起動しません</strong>（TikTok公式の招待リンクも同じ挙動）。
-              「保存する」を押し直して最適化版を作り直してください。
+              形式: <strong>OneLinkラッパー（撤回済みの形式）</strong>。
+              <strong>実機で「アプリは起動するが招待が成立しない」ことが確認されています。</strong>
+              「保存する」を押し直すと、中身の招待LPのURLを取り出して自動で復旧します。
             </span>
           )}
           {mode === 'onelink' && (

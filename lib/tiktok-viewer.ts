@@ -11,8 +11,6 @@ import {
   ERROR_TEXT_ID,
   IAB_SCREEN_ID,
   LITE_IAB_CSS,
-  PROGRESS_BAR_ID,
-  PROGRESS_WRAP_ID,
   liteLaunchOptions,
   liteLaunchScript,
 } from '@/lib/lite-launch';
@@ -433,10 +431,9 @@ export function renderRedirectHtml(d: ViewerData): string {
      分かってしまい、抽選機能の存在を訪問者に示唆することになるため。 */
   const body = destUrl
     ? `<noscript><a href="${href}" rel="noreferrer noopener">続行</a></noscript>
-<!-- アプリ内ブラウザ(X など)専用のローディング画面。画面全体が1枚のリンクになっていて、
+<!-- アプリ内ブラウザ(X など)専用の読み込み画面。画面全体が1枚のリンクになっていて、
      利用者のタップでUniversal Linkを発火させる。通常のブラウザでは表示されない。 -->
 <a id="${IAB_SCREEN_ID}" href="${href}" rel="noreferrer noopener" hidden>
-  <span id="${PROGRESS_WRAP_ID}"><span id="${PROGRESS_BAR_ID}"></span></span>
   <span id="${ERROR_TEXT_ID}" hidden>${ERROR_TEXT}</span>
 </a>
 <script>

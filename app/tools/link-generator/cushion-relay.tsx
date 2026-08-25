@@ -1,14 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import {
-  ERROR_TEXT,
-  ERROR_TEXT_ID,
-  IAB_SCREEN_ID,
-  isInAppBrowser,
-  liteLaunchOptions,
-  startLiteLaunch,
-} from '@/lib/lite-launch';
+import { ERROR_TEXT, ERROR_TEXT_ID, IAB_SCREEN_ID, liteLaunchOptions, startLiteLaunch } from '@/lib/lite-launch';
 import styles from './cushion-relay.module.css';
 
 /**
@@ -19,25 +12,17 @@ import styles from './cushion-relay.module.css';
  * ここには検証済みのURLだけが渡ってくる。
  *
  * 遷移そのものは `startLiteLaunch()`(公開ページのクッションOFF版と共通)に任せる。
- *  - 通常のブラウザ … 少し待ってから遷移先へそのまま飛ばす
- *  - アプリ内ブラウザ(X など) … 自動遷移は効かないので、画面全体を1枚のリンクにした
- *    黒い画面を出し、タップで遷移させる(Universal Link を発火させるため)
+ * 画面全体を1枚のリンクにした黒い画面を出し、利用者のタップで遷移させる
+ * (Universal Link はJS遷移では発火せず、タップを経由したときだけ効くため)。
  */
 export function CushionRelay({ to }: { to: string | null }) {
   useEffect(() => {
     if (!to) return;
 
-    /* アプリ内ブラウザでは自動遷移が効かないので、タップを待つ画面をすぐ出す。
-       通常のブラウザではクッションページらしく1〜2秒おいてから遷移する。 */
-    if (isInAppBrowser()) {
-      startLiteLaunch(liteLaunchOptions(to));
-      return;
-    }
-
-    const delay = 1000 + Math.random() * 1000;
-    const timer = setTimeout(() => startLiteLaunch(liteLaunchOptions(to)), delay);
-
-    return () => clearTimeout(timer);
+    /* タップを待つ画面はどの環境でもすぐ出す。遅らせると、その間のタップが
+       <a> に届かず取りこぼしになる(画面は hidden のままなので)。
+       通常のブラウザで誰もタップしなかった場合の自動遷移は startLiteLaunch 側が持つ。 */
+    startLiteLaunch(liteLaunchOptions(to));
   }, [to]);
 
   return (
@@ -49,9 +34,17 @@ export function CushionRelay({ to }: { to: string | null }) {
       )}
       {to && (
         <>
-          {/* アプリ内ブラウザ専用の読み込み画面。画面全体が1枚のリンクになっていて、
-              利用者のタップで Universal Link を発火させる。通常のブラウザでは表示されない。 */}
-          <a id={IAB_SCREEN_ID} href={to} rel="noreferrer noopener" hidden className={styles.iabScreen}>
+          {/* 読み込み画面。画面全体が1枚のリンクになっていて、
+              利用者のタップで Universal Link を発火させる。 */}
+          {/* href は最初から入れておき、JSからは書き換えない。target="_top" を付けるのは、
+              アプリ内ブラウザ(WKWebView)から最上位のコンテキストで辿らせるため。 */}
+          <a
+            id={IAB_SCREEN_ID}
+            href={to}
+            target="_top"
+            rel="noreferrer noopener"
+            className={styles.iabScreen}
+          >
             <span id={ERROR_TEXT_ID} hidden className={styles.errorText}>
               {ERROR_TEXT}
             </span>

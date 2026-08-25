@@ -347,9 +347,19 @@ export function LinkGeneratorForm() {
           </Check>
           <p className="mt-2 pl-6 text-xs leading-relaxed text-slate-500">
             {useCushion
-              ? 'ON: 1〜2秒のローディング画面(クッションページ)を経由するURLを出力します。SNSでシェアするとこのサイトのカードが表示されます。'
-              : 'OFF: クッションページを挟まず、サニタイズ処理を通過した最終的な直接遷移先URLをそのまま出力します。'}
+              ? 'ON(友達に送る用): 黒画面のローディング画面を経由するURLを出力します。タップでアプリを起動させる仕掛けはこの画面が持っています。SNSでシェアするとこのサイトのカードが表示されます。'
+              : 'OFF(サイトに貼る用): 招待LPのURLをそのまま出力します。サイト編集画面の「招待リンク」欄に入れる値がこれです。'}
           </p>
+          {/* OFFのURLは配布用ではない。踏んでもアプリは起動せずブラウザで招待LPが開くだけで、
+              過去にここを取り違えて「生のURLに飛ぶだけ」と判断された経緯がある。 */}
+          {!useCushion && (
+            <p className="mt-2 pl-6 text-xs leading-relaxed text-amber-700">
+              <strong>このURLを友達に送っても、アプリは起動しません。</strong>
+              ブラウザで招待LPが開くだけです(TikTok公式の招待リンクも同じ挙動)。アプリを起動させる
+              黒画面のタップ誘導は、クッションページON か 公開ページ(/slug) 側にあります。
+              配布用のリンクが欲しい場合はONにしてください。
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -374,7 +384,7 @@ export function LinkGeneratorForm() {
       {built && outputUrl && (
         <section className="rounded-xl border-2 border-emerald-500 bg-white p-6">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">
-            {useCushion ? '✅ 完了！友達に送る最強リンク(クッションページ経由)' : '✅ 完了！直接遷移リンク'}
+            {useCushion ? '✅ 完了！友達に送る最強リンク(クッションページ経由)' : '✅ 完了！サイトに貼る用の遷移先URL'}
           </h2>
 
           <pre
@@ -399,15 +409,12 @@ export function LinkGeneratorForm() {
           {/* どちらの経路で作ったか / 何を除去したかを見せる。原因追跡に必要。 */}
           <div className="mt-2 space-y-1">
             <p className="text-xs leading-relaxed text-slate-500">
-              {built.mode === 'lp'
-                ? '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLと同じで、u_code・share_page_data・描画用パラメータをすべて素のクエリのまま持っています。TikTokの関連ドメイン上のHTTPSリンクなので、利用者がタップすればそれ自体が Universal Link として発火します。'
-                : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
+              {built.mode === 'wrapper'
+                ? '生成方式: ワンクリック招待(推奨)。TikTok Lite の Universal Link(4P4E)に招待ペイロード(af_dp)を載せた形で、招待LPが内部で使っているものと構造が完全に一致します。タップでアプリが起動します。'
+                : built.mode === 'lp'
+                  ? '生成方式: 招待LP直結(Lite強制OFF)。比較・切り分け用です。タップしてもアプリは起動せず、ブラウザで招待LPが開くだけになります(TikTok公式の招待リンクも同じ挙動)。'
+                  : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
             </p>
-            {built.liteForced && (
-              <p className="text-xs leading-relaxed text-slate-500">
-                inc_target_url のスキームだけを Lite に差し替えています(公式のパラメータとの差分はこの1点だけ)。
-              </p>
-            )}
             <p className="text-xs leading-relaxed text-slate-500">
               {built.removed.length
                 ? '除去したパラメータ: ' + built.removed.join(', ')
@@ -445,8 +452,8 @@ export function LinkGeneratorForm() {
 
           <p className="mt-3 text-xs leading-relaxed text-slate-500">
             {useCushion
-              ? 'このリンクを踏むと、1〜2秒のローディング画面を挟んで直接App Storeが開きます。'
-              : 'このリンクを踏むと、ローディング画面を挟まずそのまま遷移先が開きます。'}
+              ? 'このリンクを踏むと黒い画面が出て、タップでアプリが起動します。'
+              : 'サイト編集画面の「TikTok Liteの招待リンク」欄に貼る値です。公開ページ側が黒画面のタップ誘導で包むので、この値を直接配る必要はありません。'}
           </p>
         </section>
       )}

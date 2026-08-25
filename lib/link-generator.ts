@@ -39,6 +39,8 @@ export const DEFAULT_WEB_DP_URL = '';
    UG_Referral_JP)であることを確認済み。 */
 export const LITE_ONELINK_ORIGIN = 'https://snssdk473824.onelink.me';
 export const LITE_ONELINK_PATH = '/4P4E';
+/* ラッパーが af_dp と一緒に必ず載せている値。実物のLPのHTMLから採取。 */
+export const WRAPPER_DOMAIN_SOURCE = 'tiktok';
 /* TikTok Lite を開くためのディープリンク。
    単なるスキーム(snssdk473824://)だけではアプリが起動するだけで、
    「誰の紹介か」がアプリに伝わらない。TikTok自身は af_dp を
@@ -148,12 +150,23 @@ export function isInviteLpUrl(url: URL): boolean {
    ==================================================================== */
 
 /** どの経路で組み立てたか */
-export type BuildMode = 'lp' | 'onelink';
+export type BuildMode = 'wrapper' | 'lp' | 'onelink';
+/** 保存済みURLの形から後追いで判定した結果 */
+export type DetectedBuildMode = BuildMode | 'unknown';
+
 /**
- * 保存済みURLの形から後追いで判定した結果。
- * `wrapper` は撤回済みの形式で、見つけたら再保存を促すためだけに存在する。
+ * 招待ペイロード(`af_dp`)に、TikTok自身と同じラッパーを被せる。
+ *
+ * 実物の招待LPが持っている `wrapper_url.url_fallback` と同じで、載せるのは
+ * `domain_source` と `af_dp` の2つだけ。ストアへの振り分けは AppsFlyer側
+ * (4P4Eテンプレート)のサーバー設定が持っているので、af_ios_url などは足さない。
  */
-export type DetectedBuildMode = BuildMode | 'wrapper' | 'unknown';
+export function buildLiteWrapperUrl(deepLink: string): string {
+  const wrapper = new URL(LITE_ONELINK_ORIGIN + LITE_ONELINK_PATH);
+  wrapper.searchParams.set('domain_source', WRAPPER_DOMAIN_SOURCE);
+  wrapper.searchParams.set('af_dp', deepLink);
+  return wrapper.toString();
+}
 
 /**
  * ラッパーURLの `af_dp` から、中に包まれている招待LPのURL(params_url)を取り出す。
@@ -169,8 +182,15 @@ export function wrapperPayloadUrl(rawUrl: string): URL | null {
   const at = deepLink.indexOf(marker);
   if (at < 0) return null;
 
+  /* params_url の後ろには兄弟キー(spark_page)が続く。`&` の手前で切らないと
+     それまで招待LPのURLの一部として取り込んでしまう。
+     URLSearchParams を使わないのは、値に含まれうる `+` を空白に変換されないため。 */
+  let raw = deepLink.slice(at + marker.length);
+  const amp = raw.indexOf('&');
+  if (amp >= 0) raw = raw.slice(0, amp);
+
   try {
-    return parseHttpUrl(decodeURIComponent(deepLink.slice(at + marker.length)));
+    return parseHttpUrl(decodeURIComponent(raw));
   } catch {
     return null;
   }
@@ -196,19 +216,25 @@ export function isLiteWrapperUrl(url: URL): boolean {
 /**
  * ラッパー形式のURLを、招待LPのURLへ戻す。
  *
- * `params_url` にはアプリ用ペイロードとして足したキー(LITE_DEEPLINK_CONTEXT と、
- * ロングリンク化で補完した `pid`)が混ざっている。招待LPのURLにこれらが載ることは
- * ないので、取り出すときに落とす。描画用パラメータ(LITE_INAPP_RENDER と同じキー)は
- * **落とさない**。こちらは招待LPが元から持っているクエリで、アプリ内で招待ページを
- * 描画するのに要る(INTERSTITIAL_PARAMS のコメント参照)。
+ * `params_url` に、過去の実装が足していたキー(`LEGACY_INJECTED_PARAMS`)が
+ * 混ざっている場合は取り除く。描画用パラメータ(`__status_bar` など)は**落とさない**。
+ * こちらは招待LPが元から持っているクエリで、アプリ内で招待ページを描画するのに要る。
  */
 export function unwrapLiteWrapperUrl(url: URL): URL | null {
   const payload = wrapperPayloadUrl(url.toString());
   if (!payload) return null;
 
-  for (const key of [...Object.keys(LITE_DEEPLINK_CONTEXT), 'pid']) {
+  for (const key of LEGACY_INJECTED_PARAMS) {
     payload.searchParams.delete(key);
   }
+
+  /* 古い実装は inc_target_url のスキームを Lite へ差し替えていた。TikTok は書き換えないので、
+     Lite のスキームが入っていればこちらが付けた跡。元(aweme://)へ戻す。 */
+  const target = payload.searchParams.get('inc_target_url') || '';
+  if (target.toLowerCase().startsWith(LITE_SCHEME)) {
+    payload.searchParams.set('inc_target_url', REGULAR_TIKTOK_SCHEMES[0] + target.slice(LITE_SCHEME.length));
+  }
+
   return payload;
 }
 
@@ -263,38 +289,32 @@ export const MANAGED_PARAMS = [
   'af_dp',
 ];
 
-/* TikTok自身が params_url に必ず載せている、アプリ内コンテナの設定値。
-   招待LPのクエリには含まれず、リンク生成側で付けている固定値なので、
-   実物のHTMLの af_dp から採取してそのまま再現する。
-   これが無いとアプリ側でインセンティブ用のページが開かない可能性がある。 */
-export const LITE_DEEPLINK_CONTEXT: Record<string, string> = {
-  spark_page: 'scan_code',
-  use_spark: '1',
-  bdhm_bid: 'incentive_campaign_hybrid',
-  needlaunchlog: '1',
-  ug_medium: 'fe_component',
-  disable_ttnet_proxy: '0',
-  use_mutable_context: '1',
-};
+/* かつて params_url へ足していたキー。**今は1つも足さない。**
 
-/* アプリ内WebView(Sparkコンテナ)の描画設定。値は Run A(公式の招待リンク)のまま。
-   Web側では INTERSTITIAL_PARAMS として除去している。ブラウザで踏んだときに
-   中間ページ然とした描画を誘発するためで、そこでは不要なもの。
-   一方**アプリ内では招待ページを描画するコンテナの設定そのもの**で、
-   これが無いと「アプリは起動するが招待ページへ画面が切り替わらない」状態になる(実機で確認)。
-   Web用のURLからアプリ用ペイロードを組み立てている都合で欠落するため、ここで補完する。
+   「TikTok自身が載せている固定値」だと考えて補完していたが、実物のLPのHTMLにある
+   TikTok自身のスキーム(url_schemes)と突き合わせたところ、params_url に載っているのは
+   招待LPのクエリ36キーちょうどで、これらは1つも含まれていなかった。
+   とくに spark_page は params_url の**中**ではなく**兄弟キー**として置くもので、
+   場所を間違えたまま値も入れていた。実機で「アプリは起動するが招待ページが開かない」
+   状態になった直接の原因がこれ。
 
-   og_desc_text / og_image / og_title_text は同じく除去しているが、こちらは
-   招待LPのOGPカード(SNSでシェアしたときの見た目)用でアプリ内の描画には関与しないため補完しない。 */
-export const LITE_INAPP_RENDER: Record<string, string> = {
-  __status_bar: 'true',
-  _pia_: '1',
-  _svg: '1',
-  enable_canvas: '1',
-  enable_canvas_optimize: '1',
-  hide_nav_bar: '1',
-  should_full_screen: '1',
-};
+   定義を残してあるのは、この実装で保存されてしまったURLから取り除くため
+   (`unwrapLiteWrapperUrl()`)。新しく足すことは二度としない。 */
+export const LEGACY_INJECTED_PARAMS = [
+  'spark_page',
+  'use_spark',
+  'bdhm_bid',
+  'needlaunchlog',
+  'ug_medium',
+  'disable_ttnet_proxy',
+  'use_mutable_context',
+  // ロングリンク化で補完していた。招待LPのクエリには元から無い
+  'pid',
+];
+
+/* かつて params_url へ補完していた描画用パラメータ(__status_bar / _svg など)。
+   これらは招待LPのクエリに**元から入っている**ので、LPのURLをそのまま params_url に
+   載せる今の実装では補完する必要がない。定義ごと削除した。 */
 
 /**
  * アプリへ渡すパラメータの元ネタを取り出す。
@@ -327,39 +347,73 @@ export function recoverAppParams(source: URL): URLSearchParams {
 }
 
 /**
- * TikTok Lite 向けのディープリンク(af_dp の値)を組み立てる。
+ * バラバラのクエリから、`params_url` に載せる招待LPのURLを組み立て直す。
  *
- * params_url に載せるのは「サニタイズ前」の元のクエリ。
- * サニタイズ(DEEPLINK_PARAMS / INTERSTITIAL_PARAMS の除去)はOneLink側の
- * Web遷移を制御するためのもので、アプリ内へ渡すペイロードとは文脈が違う。
- * 実物のHTMLでは TikTok自身が inc_target_url / is_inc_roma / incentive_redirect も
- * 含めて66件すべてをアプリへ渡しており、これらは招待インセンティブの識別子そのもの。
- * ここで削ると「Liteは開くが誰の紹介か分からない」状態になる。
- *
- * 除くのは is_retargeting(TikTokも渡していない)と、こちらが足したAppsFlyer用のキーだけ。
+ * OneLink を土台にした従来経路(招待LPのURLが取れなかった場合)でしか使わない。
+ * 招待LPのURLが手に入っているなら、組み立て直さずそのまま渡すこと。
  */
-export function buildLiteDeepLink(sourceParams: URLSearchParams, lpBase: string = INVITE_LP_URL): string {
+export function lpUrlFromParams(params: URLSearchParams, lpBase: string = INVITE_LP_URL): URL {
   const lp = new URL(lpBase);
   lp.search = '';
 
-  sourceParams.forEach((v, k) => {
+  params.forEach((v, k) => {
     if (k === 'is_retargeting') return;
     if (MANAGED_PARAMS.includes(k)) return;
-    // アプリ内で開く先も通常版ではなくLiteに向ける(キーは残す)
-    lp.searchParams.set(k, k === 'inc_target_url' ? toLiteScheme(v) : v);
+    lp.searchParams.set(k, v);
   });
 
-  // ロングリンク化と同じ規則で pid を補完する
-  if (!lp.searchParams.has('pid')) {
-    const mediaSource = lp.searchParams.get('media_source') || lp.searchParams.get('inc_pid');
-    if (mediaSource) lp.searchParams.set('pid', mediaSource);
-  }
+  return lp;
+}
 
-  for (const [k, v] of Object.entries({ ...LITE_DEEPLINK_CONTEXT, ...LITE_INAPP_RENDER })) {
-    if (!lp.searchParams.has(k)) lp.searchParams.set(k, v);
-  }
+/**
+ * TikTok Lite 向けのディープリンク(`af_dp` の値)を組み立てる。
+ *
+ * 実物の招待LPのHTMLに入っている TikTok自身のスキーム
+ * (`strategy.wrappers[].wrapper_url.url_schemes[0]`)と**同じ構造**にする。
+ *
+ *   snssdk473824://roma_redirect/?params_url=<招待LPのURL(36キーそのまま)>&spark_page=<scan_code>
+ *
+ * ポイントは3つで、いずれも過去の実装が外していた点。
+ *
+ *  1. `params_url` は招待LPのURLを**そのまま**載せる。並び順もエンコードも変えない。
+ *     TikTok の params_url に載っているのはLPのクエリ36キーちょうどで、
+ *     `use_spark` / `bdhm_bid` / `pid` のような値は1つも入っていない。
+ *  2. `spark_page` は `params_url` の**中ではなく兄弟キー**。TikTok のスキームでは
+ *     `&spark_page={{url}}` というプレースホルダになっていて、実行時に埋められる。
+ *     埋まる値は招待LPが `inc_target_url`(`aweme://roma_redirect/?spark_page=scan_code`)
+ *     として持っているものと同じなので、そこから取り出す。
+ *  3. `inc_target_url` は `aweme://` のまま触らない。TikTok も書き換えていない。
+ *     どのアプリが開くかは外側(OneLinkのホストとスキーム)で既に Lite に決まっており、
+ *     ここを書き換える必要はない。
+ *
+ * 過去に 1.〜3. をすべて外した状態で配ったところ、実機で
+ * 「アプリは起動するが招待ページが正しく開かず、アトリビューションも維持されない」
+ * 状態になった。TikTokが組み立てているものと構造が違えば、アプリ側が解釈できない。
+ */
+export function buildLiteDeepLink(lpUrl: URL): string {
+  let deepLink = LITE_DEEPLINK_BASE + '?params_url=' + encodeURIComponent(lpUrl.toString());
 
-  return LITE_DEEPLINK_BASE + '?params_url=' + encodeURIComponent(lp.toString());
+  const sparkPage = sparkPageOf(lpUrl);
+  if (sparkPage) deepLink += '&spark_page=' + encodeURIComponent(sparkPage);
+
+  return deepLink;
+}
+
+/**
+ * 招待LPの `inc_target_url` から `spark_page` を取り出す。
+ *
+ * `inc_target_url` は `aweme://roma_redirect/?spark_page=scan_code` の形で、
+ * 「アプリ内でどのページを開くか」を指している。キャンペーンが変われば
+ * `scan_code` 以外になりうるので、固定値にせず毎回ここから読む。
+ */
+export function sparkPageOf(lpUrl: URL): string | null {
+  const target = lpUrl.searchParams.get('inc_target_url');
+  if (!target) return null;
+
+  const at = target.indexOf('?');
+  if (at < 0) return null;
+
+  return new URLSearchParams(target.slice(at + 1)).get('spark_page');
 }
 
 /** クッションページが遷移先を受け取るクエリキー。単独版と同じ `to`。 */
@@ -431,18 +485,13 @@ export interface BuildResult {
   removed: string[];
   /**
    * どちらの経路で作ったか。
-   * - `lp`      … 招待LPのURLをそのまま使う(推奨・既定)。TikTokの関連ドメイン上の
-   *               HTTPSリンクなので、タップすればそれ自体が Universal Link として発火し、
-   *               招待の文脈を素のクエリのまま(エンコード層を増やさずに)アプリへ渡せる
+   * - `wrapper` … 招待LPのURLを TikTok自身と同じラッパー(4P4E + af_dp)で包む(推奨・既定)。
+   *               タップでアプリが起動することを実機で確認できている唯一の形
+   * - `lp`      … 招待LPのURLをそのまま使う(`forceLite` OFF。比較・切り分け用)。
+   *               タップしてもアプリは起動しない(X / Safari の両方で確認済み)
    * - `onelink` … AppsFlyerのOneLinkを組み立て直す(LPのURLが取れなかった場合の従来経路)
    */
   mode: BuildMode;
-  /**
-   * 公式のURLから `inc_target_url` のスキームだけを Lite に差し替えたかどうか。
-   * ここが公式との唯一の差分になるので、実機で挙動が変わったときに
-   * 原因を1変数に絞れるよう結果に持たせる。
-   */
-  liteForced?: boolean;
 }
 
 export function parseHttpUrl(raw: unknown): URL | null {
@@ -868,18 +917,19 @@ export function assertIncentivePreserved(before: URL, after: URL): void {
  *
  * ## これがアプリを開く経路として最良である理由
  *
- * 招待LPのURLは「ただのWebページ」ではない。TikTokの関連ドメイン上のHTTPSリンクなので、
- * **利用者がタップすればそれ自体が Universal Link として発火してアプリが開く。**
- * しかも招待の文脈(u_code / share_page_data / 描画用パラメータ)を素のクエリとして
- * 持っているため、アプリへ渡るまでにエンコード層が1つも増えない。
+ * 招待の文脈(u_code / share_page_data / 描画用パラメータ)を素のクエリとして持っているため、
+ * アプリへ渡るまでに**エンコード層が1つも増えない**。X のアプリ内ブラウザでは、
+ * このURLをタップするとアプリが起動して招待も成立することを実機で確認済み。
  *
  * 一度はこれを OneLink(4P4E)のラッパーで包んでみたが、実機で
  * 「アプリは起動するがアトリビューションが切れる」ことが判明して差し戻した。
  * 理由はファイル上部「実機で否定された案」を参照。
  *
- * JSから `location.href` で飛ばすと iOS が Universal Link を抑止する点には注意。
- * この形が効くのは**利用者のタップを経由したとき**で、だから遷移は
- * 画面全体を覆う <a> に任せている(`lib/lite-launch.ts`)。
+ * **このURLは「配ればアプリが開くリンク」ではない。** LINE / Instagram などでは
+ * 踏んでも招待LPがブラウザで開くだけになるが、**TikTok公式の招待リンクも同じ挙動**
+ * であることを実機で対照確認してある。つまりURLの作りの問題ではなく、その環境では
+ * TikTok自身も開けていない。アプリが開く可能性を作れるのは利用者のタップだけなので、
+ * 配布用のリンクには必ず黒画面のタップ誘導(`lib/lite-launch.ts`)を経由させること。
  *
  * ## 一切改変しない
  *
@@ -928,27 +978,43 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
      以前は これと同時に描画用パラメータ10件も削除しており、まとめて戻したため
      どちらが原因か切り分けられなかった。今は差分をこの1点だけに限定してあるので、
      万一また挙動が変わったら原因はここだと確定できる。 */
-  let liteForced = false;
-  if (opts.forceLite) {
-    const target = params.get('inc_target_url');
-    if (target) {
-      const lite = toLiteScheme(target);
-      if (lite !== target) {
-        params.set('inc_target_url', lite);
-        liteForced = true;
-      }
-    }
-  }
-
   assertTrackingPreserved(source, url);
   assertIncentivePreserved(source, url);
   assertOfficialParamsPreserved(source, url);
 
-  /* 何も変えていなければ、URLを組み立て直さず入力の文字列をそのまま返す。
-     URLSearchParams を経由すると並び順やパーセントエンコードが変わりうるため、
-     「公式のURLと1バイトも違わない」ことを保証するにはこの分岐が必要。 */
-  const untouched = removed.length === 0 && !liteForced;
-  return { url: untouched ? source.toString() : url.toString(), removed, mode: 'lp', liteForced };
+  if (!opts.forceLite) {
+    /* 比較・切り分け用。招待LPのURLをそのまま返す。
+       この形はタップしてもアプリが起動しないことが実機で確認されている
+       (X / Safari の両方。TikTok公式の招待リンクも同じ挙動)。 */
+    const untouched = removed.length === 0;
+    return { url: untouched ? source.toString() : url.toString(), removed, mode: 'lp' };
+  }
+
+  /* TikTok自身と同じラッパーを被せる。`4P4E` は TikTok Lite の Universal Link なので、
+     タップするとOSがアプリへ渡す。実機で「タップでアプリが起動する」ことを確認できている
+     唯一の形。招待LPのURLをそのまま配るとアプリは起動しない。
+
+     以前この形で「アプリは起動するが招待ページが開かない」状態になったのは、
+     中に入れるペイロードの構造がTikTokのものと違っていたため(buildLiteDeepLink 参照)。
+     今は url_schemes と同じ構造で組み立てている。 */
+  const wrapped = buildLiteWrapperUrl(buildLiteDeepLink(url));
+  assertOneClickPayload(source, wrapped);
+
+  return { url: wrapped, removed, mode: 'wrapper' };
+}
+
+/**
+ * ラッパーの中で、招待LPのパラメータが1つも欠けていないことを検証する。
+ *
+ * ラッパーを被せると計測用のキーは `af_dp` → `params_url` の内側へ移り、
+ * 目視でも `URL` の API でも直接は確認できなくなる。取り出して突き合わせる。
+ */
+export function assertOneClickPayload(before: URL, wrapperUrl: string): void {
+  const payload = wrapperPayloadUrl(wrapperUrl);
+  if (!payload) {
+    throw new Error('ワンクリック用のペイロード(af_dp の params_url)を組み立てられませんでした。');
+  }
+  assertOfficialParamsPreserved(before, payload);
 }
 
 /**
@@ -996,6 +1062,9 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   /* 撤回済みのラッパー形式(4P4E + af_dp)で保存されてしまったURLは、包み直すのではなく
      中の params_url を取り出して招待LPのURLへ戻す。この形式は実機でアトリビューションが
      切れることが判明しているので、再保存のたびに素の招待LPのURLへ復旧させる。 */
+  /* 既にラッパーが被っているURLは、中の params_url を取り出して組み立て直す。
+     古い実装が作ったものは params_url の構造が壊れている(捏造キーが混ざり、
+     spark_page の位置も違う)ので、そのまま通さず作り直すことで復旧させる。 */
   if (isLiteWrapperUrl(url)) {
     const unwrapped = unwrapLiteWrapperUrl(url);
     if (unwrapped) return buildLpUrl(unwrapped, opts);
@@ -1126,7 +1195,11 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
 
   managed.push([
     'af_dp',
-    opts.forceLite ? (keepSourceDeepLink ? sourceDeepLink : buildLiteDeepLink(recoverAppParams(source))) : '',
+    opts.forceLite
+      ? keepSourceDeepLink
+        ? sourceDeepLink
+        : buildLiteDeepLink(lpUrlFromParams(recoverAppParams(source)))
+      : '',
   ]);
 
   managed.forEach(([k, v]) => params.set(k, v));

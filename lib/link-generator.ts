@@ -303,8 +303,12 @@ export interface BuildOptions {
   androidUrl: string;
   /** PC(デスクトップ)から踏まれたときの遷移先。空なら af_web_dp を設定しない */
   webDpUrl: string;
-  /** ホストを TikTok Lite の OneLink に載せ替えるか。通常版が開くのを防ぐ唯一の手段 */
-  useLiteOneLink: boolean;
+  /**
+   * 通常版TikTokではなく TikTok Lite を開かせるか。
+   * - `lp` 方式 … `inc_target_url` のスキームだけを Lite に差し替える(他は公式のまま)
+   * - `onelink` 方式 … ホストを Lite の OneLink へ載せ替え、af_dp も Lite で組み立てる
+   */
+  forceLite: boolean;
   /* is_retargeting はオプションごと廃止した。付与すると招待報酬が付かなくなる恐れがあり、
      残しておくと「うっかりONにする」事故が起きるため(buildUrl は常に除去する)。 */
   stripDeepLinks: boolean;
@@ -321,6 +325,12 @@ export interface BuildResult {
    * - `onelink` … AppsFlyerのOneLinkを組み立て直す(LPのURLが取れなかった場合の従来経路)
    */
   mode: 'lp' | 'onelink';
+  /**
+   * `lp` 方式で、公式のURLから `inc_target_url` のスキームだけを Lite に
+   * 差し替えたかどうか。ここが公式との唯一の差分になるので、
+   * 実機で挙動が変わったときに原因を1変数に絞れるよう結果に持たせる。
+   */
+  liteForced?: boolean;
 }
 
 export function parseHttpUrl(raw: unknown): URL | null {
@@ -765,7 +775,7 @@ export function assertIncentivePreserved(before: URL, after: URL): void {
  *
  * したがってここで落とすのは、**こちらが過去に付けたキーだけ**にする。
  */
-export function buildLpUrl(source: URL): BuildResult {
+export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
   const url = new URL(source.toString());
   const params = url.searchParams;
   const removed: string[] = [];
@@ -780,13 +790,37 @@ export function buildLpUrl(source: URL): BuildResult {
     }
   });
 
+  /* ここだけが公式のURLと違ってよい唯一の点。
+     公式の `inc_target_url` は通常版TikTokのスキーム(aweme://)を指しているため、
+     通常版と Lite の両方が入った端末では通常版が開いてしまう。
+     Lite を開かせたいので、スキーム部分だけを差し替える。
+     「誰の招待か」は LP のクエリ(u_code / share_page_data)が運んでいて
+     inc_target_url のクエリには乗っていないため、招待の成立には影響しない。
+
+     パス・クエリには一切触らず、先頭のスキームだけを置換する(toLiteScheme)。
+     以前は これと同時に描画用パラメータ10件も削除しており、まとめて戻したため
+     どちらが原因か切り分けられなかった。今は差分をこの1点だけに限定してあるので、
+     万一また挙動が変わったら原因はここだと確定できる。 */
+  let liteForced = false;
+  if (opts.forceLite) {
+    const target = params.get('inc_target_url');
+    if (target) {
+      const lite = toLiteScheme(target);
+      if (lite !== target) {
+        params.set('inc_target_url', lite);
+        liteForced = true;
+      }
+    }
+  }
+
   assertTrackingPreserved(source, url);
   assertIncentivePreserved(source, url);
 
-  /* 落とすものが無ければ、URLを組み立て直さず入力の文字列をそのまま返す。
+  /* 何も変えていなければ、URLを組み立て直さず入力の文字列をそのまま返す。
      URLSearchParams を経由すると並び順やパーセントエンコードが変わりうるため、
      「公式のURLと1バイトも違わない」ことを保証するにはこの分岐が必要。 */
-  return { url: removed.length > 0 ? url.toString() : source.toString(), removed, mode: 'lp' };
+  const untouched = removed.length === 0 && !liteForced;
+  return { url: untouched ? source.toString() : url.toString(), removed, mode: 'lp', liteForced };
 }
 
 export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
@@ -798,7 +832,7 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
 
   /* 招待LPのURLなら、OneLinkを組み立て直さずそのまま遷移先にする。
      公式リンクが着地するのはこの形だと実測で確認済み(ファイル冒頭のコメント参照)。 */
-  if (isInviteLpUrl(url)) return buildLpUrl(source);
+  if (isInviteLpUrl(url)) return buildLpUrl(source, opts);
 
   // OneLink でなければここで止まる
   url = assertOneLink(url);
@@ -811,7 +845,7 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
      登録されている。通常版がインストールされた端末ではOSがURLを横取りして通常版を
      起動してしまうため、ホストとパスをLite側のOneLinkへ載せ替える。
      クエリ(u_code / share_page_data / media_source 等)はそのまま引き継ぐ。 */
-  if (opts.useLiteOneLink && url.origin !== LITE_ONELINK_ORIGIN) {
+  if (opts.forceLite && url.origin !== LITE_ONELINK_ORIGIN) {
     const lite = new URL(LITE_ONELINK_ORIGIN + LITE_ONELINK_PATH);
     url.searchParams.forEach((v, k) => lite.searchParams.set(k, v));
     url = lite;
@@ -851,7 +885,7 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
   /* inc_target_url は削除せず、スキームだけをLiteへ差し替える。
      削除すると「アプリを開く仕掛け」ごと失われるため(INCENTIVE_PARAMS のコメント参照)。 */
   const incTarget = params.get('inc_target_url');
-  if (opts.useLiteOneLink && incTarget) params.set('inc_target_url', toLiteScheme(incTarget));
+  if (opts.forceLite && incTarget) params.set('inc_target_url', toLiteScheme(incTarget));
 
   /* ===== 遷移先とフォールバック先を明示する =====
      フォールバック系は「削除するだけ」にしない。削除するとOneLinkテンプレート側
@@ -921,7 +955,7 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
 
   managed.push([
     'af_dp',
-    opts.useLiteOneLink ? (keepSourceDeepLink ? sourceDeepLink : buildLiteDeepLink(recoverAppParams(source))) : '',
+    opts.forceLite ? (keepSourceDeepLink ? sourceDeepLink : buildLiteDeepLink(recoverAppParams(source))) : '',
   ]);
 
   managed.forEach(([k, v]) => params.set(k, v));
@@ -975,7 +1009,7 @@ export async function generateDestinationUrl(
     iosUrl: DEFAULT_IOS_URL,
     androidUrl: DEFAULT_ANDROID_URL,
     webDpUrl: DEFAULT_WEB_DP_URL,
-    useLiteOneLink: true,
+    forceLite: true,
     stripDeepLinks: true,
     ...overrides,
   });

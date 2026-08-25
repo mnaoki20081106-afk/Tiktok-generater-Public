@@ -72,7 +72,7 @@ export function LinkGeneratorForm() {
         iosUrl: iosUrl.trim(),
         androidUrl: androidUrl.trim(),
         webDpUrl: webDpUrl.trim(),
-        useLiteOneLink: optLite,
+        forceLite: optLite,
         stripDeepLinks: optStrip,
       });
 
@@ -313,15 +313,20 @@ export function LinkGeneratorForm() {
             <span className="font-medium text-slate-900">TikTok Lite を強制する(通常版TikTokが開くのを防ぐ)</span>
             <span className="mt-1 block text-xs leading-relaxed text-slate-500">
               招待LPがアプリを開くときの飛び先(
-              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">inc_target_url</code>)は
-              通常版TikTokのスキーム(
+              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">inc_target_url</code>)は、
+              公式のリンクでは通常版TikTokのスキーム(
               <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">aweme://</code>
-              )を指しているため、通常版がインストール済みの端末では通常版が起動してしまいます。
-              Lite のスキーム(
+              )を指しています。両方インストールされた端末では通常版が開いてしまうため、
+              スキーム部分だけを Lite(
               <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">snssdk473824://</code>
-              )へ差し替えます。招待の宛先(<code className="rounded bg-slate-100 px-1 py-0.5 font-mono">u_code</code>)は
-              LPのクエリが運んでいるため、差し替えても引き継がれます。
-              OneLink形式のURLが入力された場合は、あわせてドメインもLite側へ載せ替えます。
+              )へ差し替えます。
+              <strong className="text-slate-700">
+                公式のURLと違うのはこの1点だけで、他のパラメータは1つも変えません。
+              </strong>
+              招待の宛先(<code className="rounded bg-slate-100 px-1 py-0.5 font-mono">u_code</code>)は
+              LPのクエリが運んでいるため、差し替えても招待は成立します。
+              {'\u000a'}
+              もし実機でアプリが起動しなくなった場合は、ここをOFFにすると公式と完全に同一のURLになります。
             </span>
           </Check>
           <Check checked={optStrip} onChange={setOptStrip}>
@@ -395,7 +400,9 @@ export function LinkGeneratorForm() {
           <div className="mt-2 space-y-1">
             <p className="text-xs leading-relaxed text-slate-500">
               {built.mode === 'lp'
-                ? '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLと同じものをそのまま使っています。'
+                ? built.liteForced
+                  ? '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLと同じで、inc_target_url のスキームだけを Lite に差し替えています(公式との差分はこの1点だけ)。'
+                  : '生成方式: 招待LP直結(推奨)。公式の招待リンクが着地するURLと1バイトも違いません。'
                 : '生成方式: OneLink再構築(フォールバック)。招待LPのURLが取得できなかったため、AppsFlyerのOneLinkを組み立て直しています。'}
             </p>
             <p className="text-xs leading-relaxed text-slate-500">

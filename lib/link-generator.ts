@@ -44,27 +44,25 @@ export const WRAPPER_DOMAIN_SOURCE = 'tiktok';
 /* TikTok Lite を開くためのディープリンク。
    実物の招待LPに埋まっている TikTok自身のスキーム(url_schemes)と同じ形にする。
 
-   18個ある wrapper のうち、このLPが使うのは `wrapper_incentive_share_gift`。
-   LPのクエリが `gameplay=scan_code_support`(＝友だちをサポートするギフトのフロー)で、
-   配列の先頭に置かれているのもこれ。
+     snssdk473824://roma_redirect/?params_url=<招待LPのURL>&spark_page=scan_code
 
-     snssdk473824://webview?params_url=<招待LPのURL>&url=<ギフト受け取りページ>?<LPのクエリ>
+   これは `wrapper_incentive_share_jump_to_roma` に対応する。テンプレート上は
+   `&spark_page={{url}}` というプレースホルダだが、埋まる値は招待LPが
+   `inc_target_url`(`aweme://roma_redirect/?spark_page=scan_code`)として持っているものと
+   同じなので、そこから読める(sparkPageOf)。**推測ではなくLP自身が答えを持っている。**
 
-   一度 `wrapper_incentive_share_jump_to_roma`(`snssdk473824://roma_redirect/?...&spark_page=scan_code`)
-   で組み立てたことがあるが、これは18個から取り違えて選んだもので、実機では
-   **アプリは起動し招待ページも描画されるが、招待が成立しない**(「自身を招待できません」が
-   出ない)状態になった。roma は招待キャンペーンのページを開くだけで、
-   「招待を受け取る」処理を行うページ(gift_giving.html)には行き着かないため。 */
-export const LITE_DEEPLINK_BASE = 'snssdk473824://webview';
+   一度 `wrapper_incentive_share_gift`(`snssdk473824://webview?params_url=<LP>&url=<gift_giving.html>?{{query}}`)
+   に変えたことがあるが、実機でアプリ内に「不明なエラーが発生しました」が出て止まった。
+   こちらの `{{query}}` は**LPのどこにも解決済みの実例が無く**、招待LPのクエリを
+   そのまま入れるというのはこちらの推測だった。加えて `url=` はパーセントエンコード
+   されない生の値なので、そこに `&` を含むクエリを入れると、以降がすべて
+   スキーム側のトップレベルのパラメータとして解釈されて構造が壊れる。
+   根拠の無い置き換えだったので撤回した。 */
+export const LITE_DEEPLINK_BASE = 'snssdk473824://roma_redirect/';
 
-/* アプリ内で「招待を受け取る」処理を行うページ。実物のHTMLから採取。
-   TikTok自身のスキームでは `&url=` の値としてそのまま(パーセントエンコードせずに)置かれ、
-   末尾の `{{query}}` が実行時に招待LPのクエリで埋められる。 */
-export const LITE_GIFT_PAGE_URL = 'https://inapp.tiktokv.com/falcon/incentive_campaign/gift_giving.html';
-
-/* 判定に使うスキームの候補。過去に roma で保存されたURLも「ラッパー形式」として
-   認識し、再保存で今の形へ復旧できるようにするため両方を見る。 */
-export const LITE_DEEPLINK_BASES = [LITE_DEEPLINK_BASE, 'snssdk473824://roma_redirect/'];
+/* 判定に使うスキームの候補。過去の形式で保存されたURLも「ラッパー形式」として
+   認識し、再保存で今の形へ復旧できるようにするため全部を見る。 */
+export const LITE_DEEPLINK_BASES = [LITE_DEEPLINK_BASE, 'snssdk473824://webview'];
 
 /* params_url が指す招待LPのURL。実物のHTMLから採取したもの。
    キャンペーンが変わるとパスも変わりうるため、定数として切り出しておく。 */
@@ -405,29 +403,41 @@ export function lpUrlFromParams(params: URLSearchParams, lpBase: string = INVITE
 /**
  * TikTok Lite 向けのディープリンク(`af_dp` の値)を組み立てる。
  *
- * 実物の招待LPに入っている TikTok自身のスキーム
- * (`strategy.wrappers[].wrapper_url.url_schemes[0]`)と**同じ構造**にする。
- *
- *   snssdk473824://webview?params_url=<招待LPのURL>&url=<ギフト受け取りページ>?<LPのクエリ>
+ *   snssdk473824://roma_redirect/?params_url=<招待LPのURL>&spark_page=scan_code
  *
  *  1. `params_url` は招待LPのURLを**そのまま**載せる。並び順もエンコードも変えない。
  *     TikTok の params_url に載っているのはLPのクエリ36キーちょうどで、
  *     `use_spark` / `bdhm_bid` / `pid` のような値は1つも入っていない。
- *  2. `url` は**パーセントエンコードしない**。TikTok自身の文字列でも生のまま置かれている。
- *     末尾の `{{query}}` は招待LPのクエリで埋める。
- *  3. `inc_target_url` は `aweme://` のまま触らない。TikTok も書き換えていない。
- *     どのアプリが開くかは外側(OneLinkのホストとスキーム)で既に Lite に決まっている。
+ *  2. `spark_page` は `params_url` の**中ではなく兄弟キー**。値は `sparkPageOf()` が
+ *     招待LPの `inc_target_url` から読む。
+ *
+ * 唯一 TikTok の文字列と違ってよいのが、`params_url` の中の `inc_target_url` の
+ * スキーム(`buildLpUrl` の `forceLite`)。理由はそちらのコメントを参照。
  */
 export function buildLiteDeepLink(lpUrl: URL): string {
-  return (
-    LITE_DEEPLINK_BASE +
-    '?params_url=' +
-    encodeURIComponent(lpUrl.toString()) +
-    '&url=' +
-    LITE_GIFT_PAGE_URL +
-    '?' +
-    lpUrl.search.slice(1)
-  );
+  let deepLink = LITE_DEEPLINK_BASE + '?params_url=' + encodeURIComponent(lpUrl.toString());
+
+  const sparkPage = sparkPageOf(lpUrl);
+  if (sparkPage) deepLink += '&spark_page=' + encodeURIComponent(sparkPage);
+
+  return deepLink;
+}
+
+/**
+ * 招待LPの `inc_target_url` から `spark_page` を取り出す。
+ *
+ * `inc_target_url` は `aweme://roma_redirect/?spark_page=scan_code` の形で、
+ * 「アプリ内でどのページを開くか」を指している。キャンペーンが変われば
+ * `scan_code` 以外になりうるので、固定値にせず毎回ここから読む。
+ */
+export function sparkPageOf(lpUrl: URL): string | null {
+  const target = lpUrl.searchParams.get('inc_target_url');
+  if (!target) return null;
+
+  const at = target.indexOf('?');
+  if (at < 0) return null;
+
+  return new URLSearchParams(target.slice(at + 1)).get('spark_page');
 }
 
 /** クッションページが遷移先を受け取るクエリキー。単独版と同じ `to`。 */
@@ -506,6 +516,12 @@ export interface BuildResult {
    * - `onelink` … AppsFlyerのOneLinkを組み立て直す(LPのURLが取れなかった場合の従来経路)
    */
   mode: BuildMode;
+  /**
+   * `params_url` の中の `inc_target_url` のスキームを Lite へ差し替えたかどうか。
+   * ここが TikTok の文字列との唯一の差分になるので、実機で挙動が変わったときに
+   * 原因を1変数に絞れるよう結果に持たせる。
+   */
+  liteForced?: boolean;
 }
 
 export function parseHttpUrl(raw: unknown): URL | null {
@@ -992,6 +1008,38 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
      以前は これと同時に描画用パラメータ10件も削除しており、まとめて戻したため
      どちらが原因か切り分けられなかった。今は差分をこの1点だけに限定してあるので、
      万一また挙動が変わったら原因はここだと確定できる。 */
+  /* ===== TikTokの文字列と違ってよい、唯一の1点 =====
+
+     `inc_target_url` は「アプリの中でどのページへ進むか」を指しており、公式の値は
+     通常版TikTokのスキーム(`aweme://roma_redirect/?spark_page=scan_code`)。
+     こちらが開かせたいのは Lite なので、**スキーム部分だけ**を差し替える。
+
+     実機の履歴がこの1点を名指ししている。
+
+       A) inc_target_url が Lite のスキーム … 「自身を招待できません」が出た
+                                              (＝招待のバインド処理が走った)
+       B) inc_target_url が aweme:// のまま … UIは完璧に描画されるがバインドは走らない
+
+     Lite の中でLPのJSが `inc_target_url` / `is_inc_roma` / `incentive_redirect` を読んで
+     招待の処理へ進む以上、その行き先が通常版TikTokを指していれば Lite 内では解決できず、
+     処理そのものが始まらない。A と B の差はここだけだった
+     (A のときは捏造キーが8個混ざっていて、そちらがUIを壊していた。今は入っていない)。
+
+     パス・クエリには触らず、先頭のスキームだけを置換する。「誰の招待か」は
+     LPのクエリ(u_code / share_page_data)が運んでいて inc_target_url には乗っていないので、
+     招待の成立に必要な情報はここでは動かない。 */
+  let liteForced = false;
+  if (opts.forceLite) {
+    const target = params.get('inc_target_url');
+    if (target) {
+      const lite = toLiteScheme(target);
+      if (lite !== target) {
+        params.set('inc_target_url', lite);
+        liteForced = true;
+      }
+    }
+  }
+
   assertTrackingPreserved(source, url);
   assertIncentivePreserved(source, url);
   assertOfficialParamsPreserved(source, url);
@@ -1014,7 +1062,7 @@ export function buildLpUrl(source: URL, opts: BuildOptions): BuildResult {
   const wrapped = buildLiteWrapperUrl(buildLiteDeepLink(url));
   assertOneClickPayload(source, wrapped);
 
-  return { url: wrapped, removed, mode: 'wrapper' };
+  return { url: wrapped, removed, mode: 'wrapper', liteForced };
 }
 
 /**

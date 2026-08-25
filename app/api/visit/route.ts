@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveCreatorUrlByFingerprint } from '@/lib/surprise';
+import { toLiteAppLink } from '@/lib/link-generator';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   const fp = typeof body?.fp === 'string' ? body.fp : null;
 
   if (!slug || !fp) {
-    return NextResponse.json({ href: null });
+    return NextResponse.json({ href: null, appLink: null });
   }
 
   // creator_device_id / creator_fingerprint はサプライズ抽選の判定にのみ使う非公開の値のため、
@@ -28,9 +29,11 @@ export async function POST(request: Request) {
   const supabase = createAdminClient();
   const { data: site } = await supabase.from('sites').select('*').eq('slug', slug).maybeSingle();
   if (!site) {
-    return NextResponse.json({ href: null });
+    return NextResponse.json({ href: null, appLink: null });
   }
 
   const href = await resolveCreatorUrlByFingerprint(site, fp);
-  return NextResponse.json({ href });
+  /* 差し替え後のURLに対応するアプリ起動用リンクも一緒に返す。
+     公開ページ側はJSしか持たないため、ここで組み立てないとアプリを直接起動できない。 */
+  return NextResponse.json({ href, appLink: href ? toLiteAppLink(href) : null });
 }

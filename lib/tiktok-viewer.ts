@@ -7,7 +7,6 @@
 import type { Site } from '@/lib/types';
 import { parseHttpUrl, schemeFromWrapperUrl } from '@/lib/link-generator';
 import {
-  APP_FALLBACK_MS,
   ERROR_TEXT,
   ERROR_TEXT_ID,
   IAB_SCREEN_ID,
@@ -133,8 +132,7 @@ export function renderViewerHtml(d: ViewerData): string {
   const ogp = esc(ogpImageUrl);
   const icon = esc(appIconUrl);
   /* クッションOFF版と同じ規則で出し分ける(アプリ内ブラウザはカスタムスキーム)。 */
-  const viewerLaunch = launchHref(d);
-  const tkUrl = esc(viewerLaunch.href);
+  const tkUrl = esc(launchHref(d));
   const descHtml = renderDescription(description);
   const descJson = JSON.stringify(String(description || '')).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(slug || '')).replace(/</g, '\\u003c');
@@ -358,8 +356,7 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
   var link=document.querySelector('.bo');
   if(!link)return;
   var slug=${slugJson};
-  var scheme=${JSON.stringify(!!viewerLaunch.storeFallback)};
-  var store=${JSON.stringify(viewerLaunch.storeFallback)};
+  var usesScheme=${JSON.stringify(!!d.inAppBrowser)};
   function loadScript(src){
     return new Promise(function(resolve,reject){
       var s=document.createElement('script');
@@ -380,22 +377,15 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
   }).then(function(data){
     if(!data||!data.href)return;
     /* カスタムスキームを使っている環境では、同じ規則で af_dp を取り出してから入れる。 */
-    if(scheme){
+    if(usesScheme){
       var m=/[?&]af_dp=([^&]*)/.exec(data.href);
-      if(m){link.setAttribute('href',decodeURIComponent(m[1]));store=data.href;return;}
+      if(m){link.setAttribute('href',decodeURIComponent(m[1]));return;}
     }
     link.setAttribute('href',data.href);
   }).catch(function(){});
-  /* 未インストール端末はカスタムスキームを踏んでも何も起きないので、
-     少し待って画面がまだ見えていれば https のラッパーへ逃がす(ストアへ振り分けられる)。
-     タップ自体には介入していない(preventDefault もしないし href も触らない)。 */
-  link.addEventListener('click',function(){
-    if(!store)return;
-    setTimeout(function(){
-      if(document.visibilityState==='hidden')return;
-      try{window.location.replace(store);}catch(e){}
-    },${APP_FALLBACK_MS});
-  });
+  /* このリンクには click / touchstart のリスナーを一切張らない。
+     タップにJSが紐づいていると、WKWebView がカスタムスキームをOSへ渡す判定に
+     割り込んでしまうため(未インストール端末向けの保険を入れて実機で不具合を出した)。 */
   /* ここで click を横取りして preventDefault() → location.href で飛ばしていた。
      照合の完了を待つためだったが、JS由来のナビゲーションになるため
      Universal Link が発火せず、アプリが起動しない原因になっていた。
@@ -445,33 +435,33 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
  * アプリ内ブラウザでは、利用者の物理タップがあれば WKWebView がカスタムスキームを
  * OSへ渡すので、確認ダイアログを挟まずアプリが開く。
  *
+ * **未インストール端末向けのフォールバックは持たない。** 一度「タップ後2.5秒で
+ * https のラッパーへ逃がす」保険を入れたが、アプリ起動の判定中にそれが発火して
+ * `onelink.me` で止まる不具合を実機で起こした。タップの純度を最優先する。
+ *
  * ## 通常のブラウザ(Safari など) … https のまま
  *
  * カスタムスキームを踏むとiOSが「"TikTok Lite"で開きますか？」の確認ダイアログを出し、
  * そこから開くとアトリビューションが切れることが実機で判明している。
  */
-export function launchHref(d: ViewerData): { href: string; storeFallback: string | null } {
+export function launchHref(d: ViewerData): string {
   const dest = parseHttpUrl(d.tiktokUrl);
   const httpsUrl = dest ? dest.toString() : '';
-  if (!httpsUrl || !d.inAppBrowser) return { href: httpsUrl, storeFallback: null };
+  if (!httpsUrl || !d.inAppBrowser) return httpsUrl;
 
-  const scheme = schemeFromWrapperUrl(httpsUrl);
   /* スキームを取り出せない(ラッパー形式でない古いURL)なら、従来どおり https を使う。 */
-  if (!scheme) return { href: httpsUrl, storeFallback: null };
-
-  /* 未インストール端末はスキームを踏んでも何も起きないので、https のラッパーへ逃がす。 */
-  return { href: scheme, storeFallback: httpsUrl };
+  return schemeFromWrapperUrl(httpsUrl) ?? httpsUrl;
 }
 
 export function renderRedirectHtml(d: ViewerData): string {
   const dest = parseHttpUrl(d.tiktokUrl);
   const destUrl = dest ? dest.toString() : '';
-  const launch = launchHref(d);
+  const launchUrl = launchHref(d);
 
   const t = esc(d.title);
   const ogp = esc(d.ogpImageUrl);
   const pageUrl = esc(`${d.origin}/${d.slug}`);
-  const href = esc(launch.href);
+  const href = esc(launchUrl);
   const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
   const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
 
@@ -501,7 +491,7 @@ var startLiteLaunch = ${liteLaunchScript()};
 
   var LAUNCH = ${JSON.stringify(liteLaunchOptions(''))};
   LAUNCH.webUrl = dest;
-  LAUNCH.storeFallbackUrl = ${JSON.stringify(launch.storeFallback)};
+  var usesScheme = ${JSON.stringify(!!d.inAppBrowser)};
 
   /* タイマー(2秒後のエラー文言 / 通常ブラウザの保険)を仕掛けるだけ。
      <a> の href はサーバー側でセット済みなので startLiteLaunch は触らない。 */
@@ -534,13 +524,9 @@ var startLiteLaunch = ${liteLaunchScript()};
        環境では、同じ規則で af_dp を取り出してから入れる。 */
     var screen = document.getElementById(LAUNCH.iabScreenId);
     if (!screen) return;
-    if (LAUNCH.storeFallbackUrl) {
+    if (usesScheme) {
       var m = /[?&]af_dp=([^&]*)/.exec(next);
-      if (m) {
-        screen.setAttribute('href', decodeURIComponent(m[1]));
-        LAUNCH.storeFallbackUrl = next;
-        return;
-      }
+      if (m) { screen.setAttribute('href', decodeURIComponent(m[1])); return; }
     }
     screen.setAttribute('href', next);
   }).catch(function(){});

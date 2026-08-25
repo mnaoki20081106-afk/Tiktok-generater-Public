@@ -55,13 +55,23 @@
  * **遷移は <a> のネイティブな挙動に任せる。** スクリプトで飛ばすとユーザー操作の
  * 文脈から外れ、Universal Link が発火しなくなるため。
  *
+ * ### アプリ内ブラウザでは、リンクにJSを一切紐づけない
+ *
+ * WKWebView がカスタムスキームをOSへ渡すのは「純粋な物理タップ」に対してだけ。
+ * リスナーもタップ由来のタイマーも張らない。
+ *
+ * 一度、未インストール端末向けに「タップ後2.5秒で https のラッパーへ逃がす」保険を
+ * 入れたことがあるが、**アプリ起動の判定中にそれが発火して `onelink.me` で止まる**
+ * という不具合を実機で起こした。保険ごと撤廃してある。未インストール端末は
+ * スキームを踏んでも何も起きないが、それは許容する。このツールは
+ * 「インストール済みの利用者を、招待の文脈を保ったままアプリへ渡す」ことに振り切って
+ * チューニングしてあり、そのためにタップの純度を最優先する。
+ *
  * ### 通常のブラウザだけ、最後の保険を持つ
  *
- * それでもタップされないまま時間が過ぎた場合に限り、`location.replace()` で
- * 遷移先へ送る。この経路ではアプリは開かず招待LPがブラウザで開くだけだが、
- * 黒い画面のまま放置されるよりはよい。アプリ内ブラウザではこの保険を使わない
- * (自動遷移そのものがブロックされるうえ、フォールバック先の招待LPが内部で
- * `onelink.me` へ飛ぼうとしてそこでも止まるため)。
+ * タップされないまま時間が過ぎた場合に限り、`location.replace()` で遷移先へ送る。
+ * この経路ではアプリは開かず招待LPがブラウザで開くだけだが、
+ * 黒い画面のまま放置されるよりはよい。
  */
 
 /** 通常のブラウザで、タップされないまま自動遷移させるまでの時間(最後の保険) */
@@ -70,8 +80,6 @@ export const WEB_FALLBACK_MS = 6000;
 /** アプリ内ブラウザで、何も出さずに待つ時間。これを過ぎたらエラー文言を出す */
 export const IAB_HOLD_MS = 2000;
 
-/** タップ後、アプリが起動しなかった(未インストール)と判断するまでの時間 */
-export const APP_FALLBACK_MS = 2500;
 
 /** アプリ内ブラウザ用の画面(画面全体を覆う <a>)のid */
 export const IAB_SCREEN_ID = 'lite-iab';
@@ -104,14 +112,6 @@ export interface LiteLaunchOptions {
   webUrl: string;
   /** 通常のブラウザで、タップされないまま自動遷移させるまでの時間 */
   fallbackMs: number;
-  /**
-   * アプリが起動しなかったとき(未インストール)に送る先のURL(https)。
-   * アプリ内ブラウザではカスタムスキームを直接タップさせるので、
-   * 未インストールだと何も起きない。その場合だけここへ送ってストアへ導く。
-   */
-  storeFallbackUrl?: string;
-  /** タップ後、アプリが起動しなかったと判断するまでの時間 */
-  appFallbackMs: number;
   /** アプリ内ブラウザ判定に使う正規表現。空文字なら判定しない */
   inAppBrowserPattern: string;
   /** 画面全体を覆う <a> のid */
@@ -157,44 +157,38 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
     if (errorText) errorText.removeAttribute('hidden');
   }, opts.holdMs);
 
-  /* 通常のブラウザだけが持つ最後の保険。タップされないまま時間が過ぎたら遷移先へ送る。
-     この経路ではアプリは開かない(JS遷移では Universal Link が発火しない)が、
-     黒い画面のまま放置されるよりはよい。
-     アプリ内ブラウザでは張らない。自動遷移がブロックされるうえ、
-     フォールバック先の招待LPが内部で onelink.me へ飛ぼうとしてそこでも止まるため。 */
-  var fallbackTimer: ReturnType<typeof setTimeout> | null = null;
-  if (!inApp) {
-    fallbackTimer = setTimeout(function () {
-      // 既にアプリへ移った(タップが効いた)なら何もしない
-      if (document.visibilityState === 'hidden') return;
-      try {
-        window.location.replace(opts.webUrl);
-      } catch (e) {}
-    }, opts.fallbackMs);
-  }
+  /* ===== アプリ内ブラウザ(X など)はここで終わり =====
+     **リンクには一切触らない。** リスナーも張らないし、タップに紐づくタイマーも持たない。
+     WKWebView がカスタムスキームをOSへ渡すのは「純粋な物理タップ」に対してだけで、
+     タップにJSが紐づいていると、アプリ起動の判定中にそのJSが割り込んで遷移を
+     奪ってしまう。実際、未インストール端末向けに「タップ後2.5秒でhttpsのラッパーへ
+     逃がす」保険を入れたところ、アプリ起動の判定中にそれが発火して onelink.me で
+     止まる、という実機の不具合を起こした。保険ごと撤廃してある。
 
-  /* タップされたら遷移が始まるので、その途中でエラー文言が出たり、
-     保険の自動遷移がタップを追い越したりしないように両方止める。
-     ここで preventDefault したり location を触ったりはしない。ユーザー操作の文脈から
-     外れると Universal Link が発火しなくなるため、遷移は <a> に任せる。 */
+     未インストール端末はスキームを踏んでも何も起きないが、それは許容する。
+     このツールは「インストール済みの利用者を、招待の文脈を保ったままアプリへ渡す」ことに
+     振り切ってチューニングしてあり、そのためにタップの純度を最優先する。
+
+     2秒後のエラー文言だけは出す(上の errorTimer)。これはリンクにもタップにも
+     紐づいておらず、<span> の hidden を外すだけなので遷移には影響しない。 */
+  if (inApp) return;
+
+  /* ===== 通常のブラウザ =====
+     タップされないまま時間が過ぎたときの保険。この経路ではアプリは開かない
+     (JS遷移では Universal Link が発火しない)が、黒い画面のまま放置されるよりはよい。 */
+  var fallbackTimer = setTimeout(function () {
+    // 既にアプリへ移った(タップが効いた)なら何もしない
+    if (document.visibilityState === 'hidden') return;
+    try {
+      window.location.replace(opts.webUrl);
+    } catch (e) {}
+  }, opts.fallbackMs);
+
+  /* タップされたら遷移が始まるので、その途中でエラー文言が出たり、保険の自動遷移が
+     タップを追い越したりしないように両方止める。preventDefault も location も触らない。 */
   function onTap() {
     clearTimeout(errorTimer);
-    if (fallbackTimer) clearTimeout(fallbackTimer);
-
-    /* カスタムスキームをタップした未インストール端末は、OSに渡した先で何も起きず
-       黒画面に取り残される。少し待って画面がまだ見えていれば、https のラッパーへ送る
-       (AppsFlyer がストアへ振り分け、ディファードディープリンクで招待も引き継がれる)。
-
-       タップ自体には一切介入していない(preventDefault もしないし href も触らない)。
-       これはネイティブの遷移が始まらなかった場合にだけ動く後処理。
-       アプリが開いていればページは hidden になるので何もしない。 */
-    if (!opts.storeFallbackUrl) return;
-    setTimeout(function () {
-      if (document.visibilityState === 'hidden') return;
-      try {
-        window.location.replace(opts.storeFallbackUrl as string);
-      } catch (e) {}
-    }, opts.appFallbackMs);
+    clearTimeout(fallbackTimer);
   }
   screen.addEventListener('touchstart', onTap, { passive: true });
   screen.addEventListener('click', onTap);
@@ -205,7 +199,6 @@ export function liteLaunchOptions(webUrl: string): LiteLaunchOptions {
   return {
     webUrl,
     fallbackMs: WEB_FALLBACK_MS,
-    appFallbackMs: APP_FALLBACK_MS,
     inAppBrowserPattern: IN_APP_BROWSER_PATTERN,
     iabScreenId: IAB_SCREEN_ID,
     errorTextId: ERROR_TEXT_ID,

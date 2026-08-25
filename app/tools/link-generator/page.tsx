@@ -82,7 +82,7 @@ export default async function LinkGeneratorPage({ searchParams }: { searchParams
     const httpsUrl = dest ? dest.toString() : null;
     const scheme = httpsUrl && isInAppBrowser(ua) ? schemeFromWrapperUrl(httpsUrl) : null;
 
-    return <CushionRelay to={scheme ?? httpsUrl} storeFallback={scheme ? httpsUrl : null} />;
+    return <CushionRelay to={scheme ?? httpsUrl} />;
   }
 
   // ===== ビルダーモード =====

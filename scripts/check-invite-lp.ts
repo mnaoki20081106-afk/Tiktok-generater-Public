@@ -33,7 +33,10 @@ import {
   TRACKING_PARAMS,
   buildUrl,
   isInviteLpUrl,
+  isLiteWrapperUrl,
+  lpToPrefetch,
   parseHttpUrl,
+  wrapperPayloadUrl,
 } from '../lib/link-generator.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -157,6 +160,72 @@ const again = buildUrl(built.url, {
   stripDeepLinks: true,
 });
 check('2回目の出力が1回目と一致する(再保存で削れない)', again.url === built.url);
+
+/* ===== 7. LPの画面を見せない形(hideLp) =====
+
+   遷移先はラッパーになり、招待LPは黒画面の裏で踏む。
+   ここで確かめるのは「踏み先が正しく取り出せること」と
+   「ラッパーの中でトラッキングが1件も欠けていないこと」。
+   **裏で踏むだけでバインドが立つかどうかは実機でしか分からない。** */
+console.log('\n7. hideLp: true(LPの画面を見せない形・実機で未検証)');
+const hidden = buildUrl(fixture.url, {
+  iosUrl: DEFAULT_IOS_URL,
+  androidUrl: DEFAULT_ANDROID_URL,
+  webDpUrl: DEFAULT_WEB_DP_URL,
+  forceLite: true,
+  stripDeepLinks: true,
+  hideLp: true,
+});
+const hiddenUrl = parseHttpUrl(hidden.url);
+if (!hiddenUrl) throw new Error('hideLp の出力が http(s) のURLになっていません');
+
+check('遷移先は https(Xのアプリ内ブラウザがタップを通す条件)', hiddenUrl.protocol === 'https:');
+check('遷移先は Lite の OneLink', isLiteWrapperUrl(hiddenUrl), hiddenUrl.toString().slice(0, 60));
+check('裏で踏むURLが返っている', !!hidden.prefetchUrl);
+check(
+  '裏で踏むURLは、LP直結のときの遷移先と同一',
+  hidden.prefetchUrl === built.url,
+  String(hidden.prefetchUrl).slice(0, 80)
+);
+check(
+  '保存済みURLからでも踏み先を復元できる(DBは1本のままでよい)',
+  lpToPrefetch(hidden.url) === hidden.prefetchUrl
+);
+
+/* ラッパーの中(af_dp の params_url)に、招待LPのURLが丸ごと入っていること */
+const payload = wrapperPayloadUrl(hidden.url);
+check('ラッパーの中から招待LPのURLを取り出せる', !!payload);
+if (payload) {
+  const payloadLost = TRACKING_PARAMS.filter(
+    (k) => source.searchParams.has(k) && payload.searchParams.get(k) !== source.searchParams.get(k)
+  );
+  check('ラッパーの中でもトラッキングが1件も欠けていない', payloadLost.length === 0, payloadLost.join(', '));
+  check('ラッパーの中の u_code が生きている', payload.searchParams.get('u_code') === source.searchParams.get('u_code'));
+}
+
+/* 再保存でラッパーが剥がれたり二重に被ったりしないこと */
+const hiddenAgain = buildUrl(hidden.url, {
+  iosUrl: DEFAULT_IOS_URL,
+  androidUrl: DEFAULT_ANDROID_URL,
+  webDpUrl: DEFAULT_WEB_DP_URL,
+  forceLite: true,
+  stripDeepLinks: true,
+  hideLp: true,
+});
+check('再保存してもラッパーが二重にならない', hiddenAgain.url === hidden.url);
+
+/* hideLp を切って再保存すれば、LP直結へ戻せること(退路) */
+const unwrapped = buildUrl(hidden.url, {
+  iosUrl: DEFAULT_IOS_URL,
+  androidUrl: DEFAULT_ANDROID_URL,
+  webDpUrl: DEFAULT_WEB_DP_URL,
+  forceLite: true,
+  stripDeepLinks: true,
+});
+check('hideLp を切って再保存すればLP直結へ戻せる', unwrapped.url === built.url, unwrapped.url.slice(0, 80));
+
+/* 既定(hideLp を渡さない)ではラッパーにならないこと */
+check('既定ではラッパーにならない(LP直結のまま)', !built.prefetchUrl && built.url === built.url && !isLiteWrapperUrl(out));
 
 console.log('');
 if (failed > 0) {

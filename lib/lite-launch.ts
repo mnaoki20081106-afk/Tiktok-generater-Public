@@ -115,6 +115,21 @@ export interface LiteLaunchOptions {
   errorTextId: string;
   /** 何も出さずに待つ時間 */
   holdMs: number;
+  /**
+   * 黒画面が出た瞬間に、**裏で踏んでおく**招待LPのURL(任意)。
+   *
+   * `hideLp` で生成したとき、遷移先はラッパー(タップするとアプリが直接開く)になり、
+   * 招待LPの画面は表示されない。トラッキングはブラウザがLPを読み込むことで立つので、
+   * 表示の代わりにここで踏んでおく。
+   *
+   * iframe と fetch の両方でやる。どちらが通るかは環境次第で、こちらからは確かめられない。
+   *  - iframe … LPのJSまで走るので最も忠実。X-Frame-Options / CSP で拒否されうる
+   *  - fetch  … JSは走らないが、リクエストは必ず飛ぶ(サーバー側でクリックが立つ形なら足りる)
+   *
+   * **タップとは無関係に、ページ読み込み時に走らせる。** タップの瞬間に何かを始めると
+   * ナビゲーションがスクリプト由来とみなされ、Universal Link が発火しなくなるため。
+   */
+  prefetchUrl?: string;
 }
 
 /**
@@ -136,6 +151,50 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
   if (!screen.getAttribute('href')) screen.setAttribute('href', opts.webUrl);
   screen.removeAttribute('hidden');
 
+  /* ===== 裏で招待LPを踏んでおく(hideLp のときだけ) =====
+
+     遷移先がラッパーの場合、タップするとアプリが直接開いて招待LPの画面は出ない。
+     トラッキングはブラウザがLPを読み込むことで立つので、表示の代わりにここで踏む。
+
+     iframe と fetch の両方をやる。どちらが通るかは環境次第。
+       iframe … LPのJSまで走る(最も忠実)。X-Frame-Options / CSP で拒否されうる
+       fetch  … JSは走らないがリクエストは飛ぶ。iframe が拒否されたときの受け皿
+
+     **タップには一切紐づけない。** ページ読み込み時に始めて、あとは放置する。
+     タップを待って何かを始めたり、完了を待って遷移させたりすると、
+     ナビゲーションがスクリプト由来とみなされて Universal Link が発火しなくなる。
+     間に合わなければ間に合わないまま。利用者のタップを1ミリ秒も遅らせない。 */
+  if (opts.prefetchUrl) {
+    try {
+      var frame = document.createElement('iframe');
+      frame.setAttribute('aria-hidden', 'true');
+      frame.setAttribute('tabindex', '-1');
+      frame.referrerPolicy = 'no-referrer';
+      /* 画面には出さないが display:none にはしない。表示されていないフレームの
+         読み込みを後回しにするブラウザがあるため、1pxで画面外に置く。 */
+      frame.style.cssText =
+        'position:fixed;left:-9999px;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
+      frame.src = opts.prefetchUrl;
+      document.body.appendChild(frame);
+    } catch (e) {
+      /* iframe を作れない環境でも黒画面は出し続ける。ここで止めない */
+    }
+
+    try {
+      if (typeof fetch === 'function') {
+        /* no-cors なのでレスポンスは読めないが、リクエストは飛ぶ。
+           credentials:'include' は、サードパーティCookieが通る環境でだけ効く。 */
+        fetch(opts.prefetchUrl, {
+          mode: 'no-cors',
+          credentials: 'include',
+          referrerPolicy: 'no-referrer',
+        })['catch'](function () {});
+      }
+    } catch (e) {
+      /* 同上。失敗しても黙って続ける */
+    }
+  }
+
   /* タップしても何も起きなかった利用者に、もう一度タップする手がかりを与える。
      リンクにもタップにも紐づいておらず、<span> の hidden を外すだけなので遷移には影響しない。 */
   var errorText = document.getElementById(opts.errorTextId);
@@ -144,13 +203,21 @@ export function startLiteLaunch(opts: LiteLaunchOptions): void {
   }, opts.holdMs);
 }
 
-/** 既定のタイミングでオプションを組み立てる */
-export function liteLaunchOptions(webUrl: string): LiteLaunchOptions {
+/**
+ * 既定のタイミングでオプションを組み立てる。
+ *
+ * `prefetchUrl` は `hideLp` で生成したときだけ渡す(裏で踏む招待LPのURL)。
+ * 呼び出し側は `lpToPrefetch()`(lib/link-generator.ts)で遷移先から求める。
+ * このファイルが link-generator を import しないのは、`startLiteLaunch()` を
+ * 文字列へ直列化する都合でモジュール依存を増やしたくないため。
+ */
+export function liteLaunchOptions(webUrl: string, prefetchUrl?: string): LiteLaunchOptions {
   return {
     webUrl,
     iabScreenId: IAB_SCREEN_ID,
     errorTextId: ERROR_TEXT_ID,
     holdMs: IAB_HOLD_MS,
+    prefetchUrl,
   };
 }
 

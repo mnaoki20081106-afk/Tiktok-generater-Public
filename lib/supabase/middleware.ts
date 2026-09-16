@@ -65,16 +65,33 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
+  // 認証確認で更新・削除されたCookieは、リダイレクト時にも必ず返す。
+  const redirectWithCookies = (pathname: string) => {
     const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
+    url.pathname = pathname;
+    url.search = '';
+    const response = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+    response.headers.set('Cache-Control', 'private, no-store');
+    return response;
+  };
+
+  // Cookieの存在だけでなく、Supabaseで確認した有効なログインを再利用する。
+  // Server ActionのPOSTを横取りしないよう、ページ表示時だけ移動する。
+  if (
+    user &&
+    (request.method === 'GET' || request.method === 'HEAD') &&
+    (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '/login')
+  ) {
+    return redirectWithCookies('/dashboard');
+  }
+
+  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
+    return redirectWithCookies('/login');
   }
 
   if (request.nextUrl.pathname.startsWith('/admin') && !isAdminEmail(user?.email)) {
-    const url = request.nextUrl.clone();
-    url.pathname = user ? '/dashboard' : '/login';
-    return NextResponse.redirect(url);
+    return redirectWithCookies(user ? '/dashboard' : '/login');
   }
 
   if (user && request.nextUrl.pathname.startsWith('/dashboard')) {

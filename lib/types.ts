@@ -7,6 +7,8 @@
  * - sites.image_url   -> プロフィールアバター画像
  */
 export interface SiteContentData {
+  /** 公開ページの見た目。未設定の既存データは tiktok として扱う。 */
+  templateMode?: 'news' | 'instagram' | 'instagram-live' | 'live' | 'x' | 'tiktok' | 'youtube' | 'file';
   links?: { label: string; url: string }[];
   theme?: string;
   username?: string;

@@ -13,14 +13,14 @@ export function StatCard({
   comparisonLabel: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <div className="mt-1.5 flex items-baseline gap-2">
-        <p className="text-2xl font-semibold text-slate-900">{value.toLocaleString()}</p>
+    <div className="analytics-stat rounded-2xl border border-cyan-300/15 bg-[#0c1b2d] p-4">
+      <p className="text-xs font-medium text-slate-400">{label}</p>
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
+        <p className="text-3xl font-semibold tabular-nums text-slate-100">{value.toLocaleString()}</p>
         {changePercent !== null && (
           <span
             className="flex items-center gap-0.5 text-xs font-medium"
-            style={{ color: changePercent >= 0 ? '#006300' : '#d03b3b' }}
+            style={{ color: changePercent >= 0 ? '#5eead4' : '#fda4af' }}
           >
             {changePercent >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
             {Math.abs(changePercent)}%

@@ -22,6 +22,7 @@ type BgTransform = {
 };
 
 type DraftJson = {
+  templateMode: string;
   slug: string;
   tiktokUrl: string;
   cushionToggle: boolean;
@@ -77,6 +78,16 @@ export function DashboardForm({
       root.querySelector<T>(`[data-id="${id}"]`)!;
 
     const bgArea = $('bgArea');
+    const phone = $('phone');
+    const templateMode = $<HTMLSelectElement>('templateMode');
+    const altPreview = $('altPreview');
+    const altBrand = $('altBrand');
+    const altBadge = $('altBadge');
+    const altTitle = $('altTitle');
+    const altDescription = $('altDescription');
+    const altUsername = $('altUsername');
+    const altStats = $('altStats');
+    const altAvatar = $('altAvatar');
     const bgImg = $<HTMLImageElement>('bgImg');
     const bgInput = $<HTMLInputElement>('bgInput');
     const bgChangeBtn = $('bgChangeBtn');
@@ -142,6 +153,7 @@ export function DashboardForm({
 
     function saveState() {
       const data: DraftJson = {
+        templateMode: templateMode.value,
         slug: slugInput.value,
         tiktokUrl: tiktokUrlInput.value,
         cushionToggle: cushionToggle.checked,
@@ -531,6 +543,7 @@ export function DashboardForm({
       avatarBox.appendChild(img);
       discImg.src = url;
       discImg.style.display = 'block';
+      altAvatar.style.backgroundImage = `url("${url.replace(/"/g, '%22')}")`;
     }
     avatarArea.addEventListener('click', () => avatarInput.click());
     avatarInput.addEventListener('change', async function () {
@@ -595,6 +608,36 @@ export function DashboardForm({
       saveState();
     });
 
+    // ===== 作成モード =====
+    const MODE_LABELS: Record<string, { brand: string; badge: string }> = {
+      news: { brand: 'NEWS NOW', badge: 'BREAKING NEWS' },
+      instagram: { brand: 'Instagram', badge: 'POST' },
+      'instagram-live': { brand: 'Instagram', badge: 'LIVE' },
+      live: { brand: 'LIVE STREAM', badge: 'LIVE' },
+      x: { brand: '𝕏', badge: 'POST' },
+      tiktok: { brand: 'TikTok', badge: '' },
+      youtube: { brand: 'YouTube', badge: 'VIDEO' },
+      file: { brand: 'Secure Share', badge: 'FILE' },
+    };
+
+    function syncAlternatePreview() {
+      const mode = templateMode.value || 'tiktok';
+      const labels = MODE_LABELS[mode] || MODE_LABELS.tiktok;
+      phone.dataset.mode = mode;
+      altPreview.dataset.mode = mode;
+      altBrand.textContent = labels.brand;
+      altBadge.textContent = labels.badge;
+      altTitle.textContent = ogpTitleInput.value.trim() || 'タイトルを入力してください';
+      altDescription.textContent = descText || '説明文を入力すると、ここに表示されます。';
+      altUsername.textContent = usernameEl.textContent?.trim() || 'username';
+      altStats.textContent = `${likeCountEl.textContent?.trim() || '0'}  ♡　${commentCountEl.textContent?.trim() || '0'}  ◯`;
+    }
+
+    templateMode.addEventListener('change', () => {
+      syncAlternatePreview();
+      saveState();
+    });
+
     // ===== クッションページの有無 =====
     /* ON  … 遷移先URLを一切加工せずそのまま保存する(従来どおりの挙動)。
              クッションページ経由にしたい場合は /tools/link-generator で生成したURLを貼る。
@@ -609,7 +652,7 @@ export function DashboardForm({
        使われなくなる。欄ごと消すと入力済みの内容が失われたように見えるため、
        暗くして操作だけを止める(値・画像・下書きはそのまま保持する)。
        pointer-events だけではキーボード操作で触れてしまうので disabled も併用する。 */
-    const previewInputs = [bgInput, avatarInput, iconInput, piToggle, piCount, floatToggle, descEdit];
+    const previewInputs = [bgInput, avatarInput, iconInput, piToggle, piCount, floatToggle, descEdit, templateMode];
     const previewEditables = [usernameEl, musicNameEl, likeCountEl, commentCountEl, shareCountEl];
 
     function applyCushionMode() {
@@ -663,6 +706,7 @@ export function DashboardForm({
           el.textContent = id === 'username' ? 'username' : id === 'musicName' ? 'オリジナル楽曲' : '0';
         }
         saveState();
+        syncAlternatePreview();
       });
     });
 
@@ -713,6 +757,7 @@ export function DashboardForm({
       descEdit.style.display = 'none';
       descWrap.style.display = 'block';
       renderDesc();
+      syncAlternatePreview();
       check();
       saveState();
     });
@@ -786,6 +831,7 @@ export function DashboardForm({
       $(id).addEventListener('input', () => {
         check();
         saveState();
+        syncAlternatePreview();
       });
     });
 
@@ -830,16 +876,16 @@ export function DashboardForm({
           throw new Error('公開URL(slug)は半角英小文字・数字・ハイフンのみ使用できます');
         }
 
-        /* 遷移先URLには必ずジェネレーター(展開＋サニタイズ)を適用する。
-           クッションページの有無は「公開ページを表示するかどうか」だけの話であり、
-           訪問者が最終的に踏むURLが未サニタイズでよい理由にはならないため、
-           ONでもOFFでも同じように最適化する。
+        /* 見た目のモードに関係なく、遷移先はTikTok Liteの招待リンクとして扱い、
+           ジェネレーター(短縮URLの展開＋招待パラメータ保全＋Lite向け起動先調整)を適用する。
+           カードからApp Storeへ直行させると招待LPが読み込まれず計測が切れるため、
+           必ず公式の招待LPを経由させる。クッションページの有無はこの判定に影響しない。
 
            画像のアップロードより先に実行するのは、ここで失敗したら保存自体を中断するため
            (未サニタイズのURLが公開されるのを防ぐ)。失敗しても画像をアップロードし終えた後だと
            Storageに不要なファイルだけが残ってしまう。 */
         let destinationUrl = tiktokUrlInput.value.trim();
-        setStatusMsg({ text: '遷移先URLを生成中... (数十秒かかる場合があります)' });
+        setStatusMsg({ text: '招待リンクを展開・最適化中... (数十秒かかる場合があります)' });
         try {
           const built = await generateDestinationUrl(destinationUrl);
           destinationUrl = built.url;
@@ -848,9 +894,9 @@ export function DashboardForm({
           saveState();
         } catch (e) {
           throw new Error(
-            '遷移先URLの生成に失敗したため保存を中断しました。' +
+            '招待リンクの生成に失敗したため保存を中断しました。' +
               (e instanceof Error ? e.message : String(e)) +
-              '\n入力したURLが TikTok Lite の招待リンク(https://lite.tiktok.com/t/... )かどうか確認してください。'
+              '\nTikTok Lite の招待リンク(https://lite.tiktok.com/t/... )を入力してください。'
           );
         }
         setStatusMsg({ text: '保存中... しばらくお待ちください' });
@@ -888,6 +934,7 @@ export function DashboardForm({
             description: descText,
             image_url: avatarUrl,
             content_data: {
+              templateMode: templateMode.value || 'tiktok',
               username: usernameEl.textContent?.trim() || slug,
               tiktokUrl: destinationUrl,
               useCushionPage: cushionToggle.checked,
@@ -943,6 +990,7 @@ export function DashboardForm({
       const images = (cd.images as { background?: string; ogpImage?: string; appIcon?: string } | undefined) ?? {};
 
       slugInput.value = saved?.slug || site.slug || '';
+      templateMode.value = saved?.templateMode || (cd.templateMode as string) || 'tiktok';
       tiktokUrlInput.value = saved?.tiktokUrl || (cd.tiktokUrl as string) || '';
       // 未設定の既存サイトはON(=遷移先URLを加工しない)として扱い、従来の挙動を保つ
       cushionToggle.checked = saved ? saved.cushionToggle : cd.useCushionPage !== false;
@@ -959,6 +1007,7 @@ export function DashboardForm({
       floatToggle.checked = saved?.floatToggle ?? false;
       floatPreview.classList.toggle(styles.visible, floatToggle.checked);
       renderDesc();
+      syncAlternatePreview();
       renderPageIndicatorPreview();
       if (saved) setRestoredFromDraft(true);
 
@@ -1038,7 +1087,7 @@ export function DashboardForm({
           <div className={styles.previewNote} data-id="previewNote">
             「クッションページを挟む」がOFFのため、公開ページは表示されません。ここの設定は使われないので入力不要です(入力済みの内容はそのまま保存されます)。
           </div>
-          <div className={styles.phone}>
+          <div className={styles.phone} data-id="phone" data-mode="tiktok">
             <div className={styles.bg} data-id="bgArea">
               <div className={styles.bgEmpty} data-id="bgEmpty">
                 タップして
@@ -1051,7 +1100,28 @@ export function DashboardForm({
               </button>
             </div>
 
-            <div className={styles.rail}>
+            <div className={styles.altPreview} data-id="altPreview" data-mode="tiktok">
+              <header className={styles.altHeader}>
+                <strong data-id="altBrand">TikTok</strong>
+                <span data-id="altBadge" />
+              </header>
+              <div className={styles.altTopline}>
+                <div className={styles.altAvatar} data-id="altAvatar" />
+                <div>
+                  <strong data-id="altUsername">username</strong>
+                  <small>おすすめ · 今</small>
+                </div>
+              </div>
+              <div className={styles.altHeroMark}>▶</div>
+              <section className={styles.altBody}>
+                <h2 data-id="altTitle">タイトルを入力してください</h2>
+                <p data-id="altDescription">説明文を入力すると、ここに表示されます。</p>
+                <div data-id="altStats" className={styles.altStats}>0 ♡　0 ◯</div>
+                <div className={styles.altCta}>リンクを開く</div>
+              </section>
+            </div>
+
+            <div className={`${styles.rail} ${styles.tiktokOnly}`}>
               <div className={styles.railAvatar} data-id="avatarArea">
                 <div className={styles.avatar} data-id="avatarBox">
                   ＋
@@ -1113,7 +1183,7 @@ export function DashboardForm({
               </div>
             </div>
 
-            <div className={styles.caption}>
+            <div className={`${styles.caption} ${styles.tiktokOnly}`}>
               <div className={styles.uname} contentEditable suppressContentEditableWarning data-id="username">
                 username
               </div>
@@ -1137,9 +1207,9 @@ export function DashboardForm({
               </div>
             </div>
 
-            <div className={styles.pageIndicator} data-id="pageIndicator" style={{ display: 'none' }} />
+            <div className={`${styles.pageIndicator} ${styles.tiktokOnly}`} data-id="pageIndicator" style={{ display: 'none' }} />
 
-            <div className={styles.navbar}>
+            <div className={`${styles.navbar} ${styles.tiktokOnly}`}>
               <div className={styles.navItem}>
                 <svg viewBox="0 0 48 48" fill="#fff">
                   <path
@@ -1210,7 +1280,7 @@ export function DashboardForm({
               </div>
             </div>
 
-            <div className={styles.pOv} data-id="floatPreview">
+            <div className={`${styles.pOv} ${styles.tiktokOnly}`} data-id="floatPreview">
               <div className={styles.pMc}>
                 <div className={styles.pMb}>
                   <div className={styles.pMi} data-id="previewIconArea">
@@ -1262,6 +1332,20 @@ export function DashboardForm({
           <div className={styles.card}>
             <div className={styles.sec}>公開設定</div>
             <div className={styles.field}>
+              <label className={styles.fl}>作成モード</label>
+              <select data-id="templateMode" defaultValue="tiktok" className={styles.modeSelect}>
+                <option value="news">ニュース風</option>
+                <option value="instagram">インスタ風</option>
+                <option value="instagram-live">インスタライブ風</option>
+                <option value="live">ライブ配信風</option>
+                <option value="x">X風</option>
+                <option value="tiktok">TikTok風</option>
+                <option value="youtube">YouTube風</option>
+                <option value="file">ファイル共有風</option>
+              </select>
+              <div className={styles.hint}>選択したモードは左のプレビューと公開ページへ即時反映されます。</div>
+            </div>
+            <div className={styles.field}>
               <label className={styles.fl}>公開URL(slug)</label>
               <input type="text" data-id="slug" placeholder="例: my-name" />
               <div className={styles.hint}>
@@ -1269,11 +1353,10 @@ export function DashboardForm({
               </div>
             </div>
             <div className={styles.field}>
-              <label className={styles.fl}>TikTok Liteの招待リンク(ボタンの遷移先)</label>
+              <label className={styles.fl}>TikTok Liteの招待リンク(タップ後に開くリンク)</label>
               <input type="url" data-id="tiktokUrl" placeholder="https://lite.tiktok.com/t/..." />
               <div className={styles.hint}>
-                保存時に必ずリンクジェネレーターを通します(短縮リンクを展開し、ディープリンク系パラメータを除去)。
-                招待リンク以外のURLは変換できないため保存できません。
+                すべての作成モードで短縮リンクを公式の招待LPへ展開し、招待情報を保持したままTikTok Lite／App Storeへ進める形に最適化します。
               </div>
               <div className={styles.checkRow}>
                 <input type="checkbox" data-id="cushionToggle" id="cushionToggle" />

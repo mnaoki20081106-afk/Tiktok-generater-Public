@@ -25,18 +25,18 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false });
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-6 py-12">
-      <div className="mb-8 flex items-center justify-between">
+    <main className="mx-auto min-h-screen max-w-5xl px-6 py-12">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">マイサイト</h1>
-          <p className="text-sm text-slate-500">{user.email}</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-100">マイサイト</h1>
+          <p className="text-sm text-slate-400">{user.email}</p>
         </div>
         <div className="flex items-center gap-3">
           {isAdminEmail(user.email) && (
             <Link
               href="/admin"
               title="サプライズ抽選設定"
-              className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50"
+              className="flex items-center gap-1 rounded-lg border border-cyan-300/15 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-[#0c1c2d]"
             >
               <Settings size={13} />
               抽選設定
@@ -51,7 +51,7 @@ export default async function DashboardPage() {
       </div>
 
       {!sites || sites.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-400">
+        <p className="rounded-xl border border-dashed border-cyan-300/20 px-4 py-10 text-center text-sm text-slate-400">
           まだサイトがありません。「新しいサイトを作成」から始めましょう。
         </p>
       ) : (
@@ -59,23 +59,23 @@ export default async function DashboardPage() {
           {sites.map((site) => (
             <li
               key={site.id}
-              className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+              className="flex flex-col gap-2 rounded-xl border border-cyan-300/15 bg-[#0c1b2d] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">{site.title || '(無題)'}</p>
+                <p className="truncate text-sm font-semibold text-slate-100">{site.title || '(無題)'}</p>
                 <p className="truncate text-xs text-slate-400">/{site.slug}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                 <Link
                   href={`/dashboard/${site.id}`}
-                  className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50"
+                  className="flex items-center gap-1 rounded-lg border border-cyan-300/15 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-[#0c1c2d]"
                 >
                   <Pencil size={13} />
                   編集
                 </Link>
                 <Link
                   href={`/dashboard/${site.id}/analytics`}
-                  className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50"
+                  className="flex items-center gap-1 rounded-lg border border-cyan-300/15 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-[#0c1c2d]"
                 >
                   <BarChart3 size={13} />
                   解析
@@ -84,7 +84,7 @@ export default async function DashboardPage() {
                   href={`/${site.slug}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50"
+                  className="flex items-center gap-1 rounded-lg border border-cyan-300/15 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-[#0c1c2d]"
                 >
                   <ExternalLink size={13} />
                   公開ページ

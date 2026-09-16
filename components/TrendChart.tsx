@@ -1,233 +1,115 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { X } from 'lucide-react';
 
 export interface TrendChartPoint {
-  /** 日次データは YYYY-MM-DD、時間単位データは YYYY-MM-DDTHH */
+  /** UTC: YYYY-MM-DD or YYYY-MM-DDTHH */
   date: string;
   value: number;
+  visitors?: number;
 }
 
-const WIDTH = 600;
-const HEIGHT = 160;
-const PAD_TOP = 12;
-const PAD_BOTTOM = 22;
-/** この距離(SVGユーザー単位)未満の移動はドラッグではなくタップ/ホバーとして扱う */
-const DRAG_THRESHOLD = 6;
+const WIDTH = 640;
+const HEIGHT = 280;
+const LEFT = 56;
+const RIGHT = 22;
+const TOP = 24;
+const BOTTOM = 40;
+const PLOT_WIDTH = WIDTH - LEFT - RIGHT;
+const PLOT_HEIGHT = HEIGHT - TOP - BOTTOM;
 
-function isHourly(key: string): boolean {
-  return key.includes('T');
+export function formatChartDate(key: string): string {
+  const [, month, day] = key.slice(0, 10).split('-');
+  return `${Number(month)}/${Number(day)}${key.includes('T') ? ` ${key.slice(11, 13)}:00` : ''}`;
 }
 
-function formatDateLabel(key: string): string {
-  if (isHourly(key)) {
-    const hour = key.slice(11, 13);
-    return `${Number(hour)}時`;
-  }
-  const [, m, d] = key.split('-');
-  return `${Number(m)}/${Number(d)}`;
+/** Integer tick spacing with headroom, including zero-only series. */
+export function chartScale(max: number) {
+  const raw = Math.max(1, max / 4);
+  const magnitude = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].find((n) => n * magnitude >= raw)! * magnitude;
+  const ceiling = Math.max(step, Math.ceil(max / step) * step);
+  return { ceiling, ticks: Array.from({ length: Math.round(ceiling / step) + 1 }, (_, i) => i * step) };
 }
 
-function formatRangeLabel(startKey: string, endKey: string): string {
-  if (startKey === endKey) return formatDateLabel(startKey);
-  return `${formatDateLabel(startKey)} 〜 ${formatDateLabel(endKey)}`;
-}
-
-/**
- * 推移を示す面グラフ(単一系列)。dataviz skillの仕様に沿い、2pxの線・薄い
- * グラデーション塗り・末端の丸マーカー・ホバー/タップ時のツールチップを持つ。
- * さらに、Cloudflareのメトリクス画面のように、グラフ上をドラッグで囲むと
- * その範囲の合計値を確認できる(スマホでは指でなぞって範囲選択できる)。
- */
-export function TrendChart({
-  data,
-  color = '#2a78d6',
-  valueLabel = '件',
-}: {
+export function TrendChart({ data, color = '#67e8f9', valueLabel = 'PV' }: {
   data: TrendChartPoint[];
   color?: string;
   valueLabel?: string;
 }) {
-  const gradientId = useId();
+  const id = useId();
   const svgRef = useRef<SVGSVGElement>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [drag, setDrag] = useState<{ startIdx: number; currentIdx: number; dragging: boolean } | null>(null);
-  const [selection, setSelection] = useState<{ startIdx: number; endIdx: number } | null>(null);
+  const [metric, setMetric] = useState<'both' | 'pv' | 'uu'>('both');
+  const [drag, setDrag] = useState<{ start: number; end: number } | null>(null);
+  const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
+  const hasVisitors = data.some((point) => point.visitors !== undefined);
+  const showPv = metric !== 'uu' || !hasVisitors;
+  const showUu = metric !== 'pv' && hasVisitors;
+  const { ceiling, ticks } = chartScale(Math.max(0, ...data.flatMap((d) => [showPv ? d.value : 0, showUu ? d.visitors ?? 0 : 0])));
+  const x = (i: number) => LEFT + (data.length > 1 ? (i / (data.length - 1)) * PLOT_WIDTH : PLOT_WIDTH / 2);
+  const y = (v: number) => TOP + PLOT_HEIGHT * (1 - v / ceiling);
+  const path = (field: 'value' | 'visitors') => data.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p[field] ?? 0)}`).join(' ');
+  const active = activeIndex === null ? null : data[activeIndex];
+  const range = drag && drag.start !== drag.end ? drag : selection;
+  const rangeStart = range ? Math.min(range.start, range.end) : 0;
+  const rangeEnd = range ? Math.max(range.start, range.end) : 0;
+  const validRange = range && data[rangeStart] && data[rangeEnd];
+  const rangePv = validRange ? data.slice(rangeStart, rangeEnd + 1).reduce((sum, d) => sum + d.value, 0) : 0;
+  const labelIndices = [...new Set(Array.from({ length: Math.min(5, data.length) }, (_, i) => Math.round(i * (data.length - 1) / Math.max(1, Math.min(5, data.length) - 1))))];
 
-  const innerHeight = HEIGHT - PAD_TOP - PAD_BOTTOM;
-  const maxValue = Math.max(1, ...data.map((d) => d.value));
-  const stepX = data.length > 1 ? WIDTH / (data.length - 1) : 0;
-
-  const points = data.map((d, i) => {
-    const x = data.length > 1 ? i * stepX : WIDTH / 2;
-    const y = PAD_TOP + innerHeight - (d.value / maxValue) * innerHeight;
-    return { x, y, ...d };
-  });
-
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const areaPath =
-    points.length > 0
-      ? `${linePath} L${points[points.length - 1].x.toFixed(1)},${PAD_TOP + innerHeight} ` +
-        `L${points[0].x.toFixed(1)},${PAD_TOP + innerHeight} Z`
-      : '';
-
-  const active = !selection && activeIndex !== null ? points[activeIndex] : null;
-  const lastPoint = points[points.length - 1];
-
-  // ラベルは詰まりすぎないよう間引く(最大6個程度)
-  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
-
-  function clientXToIndex(clientX: number): number {
-    const svg = svgRef.current;
-    if (!svg || points.length === 0) return 0;
-    const rect = svg.getBoundingClientRect();
-    const ratio = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
-    const x = ratio * WIDTH;
-    const idx = data.length > 1 ? Math.round(x / stepX) : 0;
-    return Math.min(Math.max(idx, 0), points.length - 1);
+  function indexAt(clientX: number) {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || !rect.width) return 0;
+    const ratio = (((clientX - rect.left) / rect.width) * WIDTH - LEFT) / PLOT_WIDTH;
+    return Math.max(0, Math.min(data.length - 1, Math.round(ratio * (data.length - 1))));
   }
 
-  function handlePointerDown(e: React.PointerEvent<SVGSVGElement>) {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const idx = clientXToIndex(e.clientX);
-    setDrag({ startIdx: idx, currentIdx: idx, dragging: false });
-    setSelection(null);
-    setActiveIndex(idx);
-  }
-
-  function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
-    if (!drag) {
-      if (e.pointerType === 'mouse') setActiveIndex(clientXToIndex(e.clientX));
-      return;
-    }
-    const idx = clientXToIndex(e.clientX);
-    const movedEnough = Math.abs(idx - drag.startIdx) * stepX >= DRAG_THRESHOLD || drag.dragging;
-    setDrag({ startIdx: drag.startIdx, currentIdx: idx, dragging: movedEnough });
-    setActiveIndex(idx);
-  }
-
-  function finishDrag() {
-    if (drag && drag.dragging) {
-      const startIdx = Math.min(drag.startIdx, drag.currentIdx);
-      const endIdx = Math.max(drag.startIdx, drag.currentIdx);
-      if (endIdx > startIdx) setSelection({ startIdx, endIdx });
-    }
-    setDrag(null);
-  }
-
-  const selRange = drag && drag.dragging ? { startIdx: Math.min(drag.startIdx, drag.currentIdx), endIdx: Math.max(drag.startIdx, drag.currentIdx) } : selection;
-  const selPoints = selRange ? points.slice(selRange.startIdx, selRange.endIdx + 1) : null;
-  const selTotal = selPoints ? selPoints.reduce((sum, p) => sum + p.value, 0) : null;
+  if (!data.length) return <p className="py-16 text-center text-sm text-slate-400">表示できる集計データがありません。</p>;
 
   return (
-    <div className="w-full select-none">
-      {selRange && selPoints && selTotal !== null ? (
-        <div className="mb-2 flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs">
-          <span className="text-slate-600">
-            {formatRangeLabel(selPoints[0].date, selPoints[selPoints.length - 1].date)}: 合計{' '}
-            <span className="font-semibold text-slate-900">{selTotal.toLocaleString()}</span> {valueLabel}
-          </span>
-          {selection && !drag && (
-            <button
-              type="button"
-              onClick={() => setSelection(null)}
-              className="flex items-center gap-0.5 text-slate-400 hover:text-slate-700"
-            >
-              <X size={12} />
-              選択解除
-            </button>
-          )}
+    <div className="min-w-0">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-4 text-xs font-medium">
+          <span className="flex items-center gap-2"><span className="h-0.5 w-5" style={{ background: color }} />閲覧数（{valueLabel}）</span>
+          {hasVisitors && <span className="flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-teal-300" />訪問者数（UU）</span>}
         </div>
-      ) : (
-        <p className="mb-2 text-[11px] text-slate-400">ドラッグ(スマホは指でなぞる)で範囲を囲むと合計が見られます</p>
-      )}
-
-      <div className="relative w-full">
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-          className="w-full touch-pan-y"
-          style={{ height: HEIGHT }}
-          preserveAspectRatio="none"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={finishDrag}
-          onPointerCancel={() => setDrag(null)}
-          onMouseLeave={() => {
-            if (!drag) setActiveIndex(null);
-          }}
-        >
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity={0.22} />
-              <stop offset="100%" stopColor={color} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-
-          {/* hairlineの基準線(0とmax) */}
-          <line x1={0} y1={PAD_TOP} x2={WIDTH} y2={PAD_TOP} stroke="#e1e0d9" strokeWidth={1} />
-          <line x1={0} y1={PAD_TOP + innerHeight} x2={WIDTH} y2={PAD_TOP + innerHeight} stroke="#c3c2b7" strokeWidth={1} />
-
-          {areaPath && <path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />}
-          {linePath && (
-            <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-          )}
-
-          {selRange && (
-            <rect
-              x={points[selRange.startIdx].x}
-              y={PAD_TOP}
-              width={Math.max(0, points[selRange.endIdx].x - points[selRange.startIdx].x)}
-              height={innerHeight}
-              fill={color}
-              fillOpacity={0.1}
-              stroke={color}
-              strokeOpacity={0.4}
-              strokeWidth={1}
-            />
-          )}
-
-          {lastPoint && !selRange && <circle cx={lastPoint.x} cy={lastPoint.y} r={4} fill={color} stroke="#fff" strokeWidth={2} />}
-          {active && activeIndex !== points.length - 1 && (
-            <circle cx={active.x} cy={active.y} r={4} fill={color} stroke="#fff" strokeWidth={2} />
-          )}
-          {active && (
-            <line x1={active.x} y1={PAD_TOP} x2={active.x} y2={PAD_TOP + innerHeight} stroke="#c3c2b7" strokeWidth={1} />
-          )}
-
-          {points.map((p, i) => {
-            if (i % labelEvery !== 0 && i !== points.length - 1) return null;
-            return (
-              <text
-                key={p.date}
-                x={Math.min(Math.max(p.x, 14), WIDTH - 14)}
-                y={HEIGHT - 4}
-                textAnchor="middle"
-                fontSize={11}
-                fill="#898781"
-              >
-                {formatDateLabel(p.date)}
-              </text>
-            );
-          })}
-        </svg>
-
-        {active && (
-          <div
-            className="pointer-events-none absolute top-0 -translate-x-1/2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-md"
-            style={{
-              left: `${(active.x / WIDTH) * 100}%`,
-              transform: `translateX(${active.x < 60 ? '0%' : active.x > WIDTH - 60 ? '-100%' : '-50%'})`,
-            }}
-          >
-            <p className="font-medium text-slate-900">{formatDateLabel(active.date)}</p>
-            <p className="text-slate-500">
-              {active.value.toLocaleString()} {valueLabel}
-            </p>
-          </div>
-        )}
+        {hasVisitors && <div className="flex gap-1 rounded-lg bg-[#061320] p-1" aria-label="表示する指標">
+          {(['both', 'pv', 'uu'] as const).map((m) => <button key={m} type="button" aria-pressed={metric === m} onClick={() => setMetric(m)} className={`rounded-md px-3 py-2 text-xs font-medium ${metric === m ? 'bg-gradient-to-r from-cyan-300 to-sky-400 text-slate-950 shadow-sm' : 'text-slate-400'}`}>{m === 'both' ? '両方' : m.toUpperCase()}</button>)}
+        </div>}
       </div>
+      <div className="mb-3 min-h-14 rounded-xl bg-[#0c1c2d] px-4 py-3 text-sm" aria-live="polite" aria-atomic="true">
+        {validRange ? <div className="flex flex-wrap items-center justify-between gap-2"><span>{formatChartDate(data[rangeStart].date)} ～ {formatChartDate(data[rangeEnd].date)} · <b>{rangePv.toLocaleString()} {valueLabel}</b></span><button type="button" className="text-xs text-cyan-300 underline" onClick={() => { setSelection(null); setDrag(null); }}>選択解除</button></div>
+          : active ? <span><b>{formatChartDate(active.date)}</b><span className="ml-4 tabular-nums" style={{ color }}>{active.value.toLocaleString()} {valueLabel}</span>{hasVisitors && <span className="ml-4 tabular-nums text-teal-300">{(active.visitors ?? 0).toLocaleString()} UU</span>}</span>
+          : <span className="text-slate-400">タップで日時ごとの数値を表示。PCではドラッグで範囲のPVを集計。</span>}
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-cyan-300/10">
+        <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="block w-full min-w-[560px] touch-auto" role="img" aria-label={`${valueLabel}${hasVisitors ? 'とUU' : ''}のアクセス推移。詳細は下の数値表で確認できます。`} tabIndex={0}
+          onKeyDown={(e) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+            e.preventDefault(); setSelection(null);
+            setActiveIndex(e.key === 'Home' ? 0 : e.key === 'End' ? data.length - 1 : Math.max(0, Math.min(data.length - 1, (activeIndex ?? 0) + (e.key === 'ArrowRight' ? 1 : -1))));
+          }}
+          onPointerDown={(e) => { if (e.button !== 0) return; const idx = indexAt(e.clientX); e.currentTarget.setPointerCapture(e.pointerId); setActiveIndex(idx); setSelection(null); setDrag({ start: idx, end: idx }); }}
+          onPointerMove={(e) => { const idx = indexAt(e.clientX); if (drag) { setDrag({ start: drag.start, end: idx }); setActiveIndex(idx); } else if (e.pointerType === 'mouse') setActiveIndex(idx); }}
+          onPointerUp={() => { if (drag && drag.start !== drag.end) setSelection(drag); setDrag(null); }}
+          onPointerCancel={() => setDrag(null)}>
+          <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".18" /><stop offset="100%" stopColor={color} stopOpacity=".01" /></linearGradient></defs>
+          {ticks.map((tick) => <g key={tick}><line x1={LEFT} x2={WIDTH - RIGHT} y1={y(tick)} y2={y(tick)} stroke="#20364c" strokeDasharray={tick ? '3 5' : undefined} /><text x={LEFT - 10} y={y(tick) + 4} textAnchor="end" fontSize="11" fill="#9fb4cd">{new Intl.NumberFormat('ja-JP', { notation: 'compact' }).format(tick)}</text></g>)}
+          {showPv && <><path d={`${path('value')} L${x(data.length - 1)},${y(0)} L${x(0)},${y(0)} Z`} fill={`url(#${id})`} /><path d={path('value')} stroke={color} fill="none" strokeWidth="2.5" strokeLinejoin="round" /></>}
+          {showUu && <path d={path('visitors')} stroke="#5eead4" fill="none" strokeWidth="2.5" strokeDasharray="6 4" strokeLinejoin="round" />}
+          {data.length === 1 && <>{showPv && <circle cx={x(0)} cy={y(data[0].value)} r="4" fill={color} />}{showUu && <circle cx={x(0)} cy={y(data[0].visitors ?? 0)} r="4" fill="#5eead4" />}</>}
+          {validRange && <rect x={x(rangeStart)} y={TOP} width={x(rangeEnd) - x(rangeStart)} height={PLOT_HEIGHT} fill={color} fillOpacity=".08" stroke={color} strokeOpacity=".3" />}
+          {active && activeIndex !== null && !validRange && <g><line x1={x(activeIndex)} x2={x(activeIndex)} y1={TOP} y2={y(0)} stroke="#94a3b8" strokeDasharray="4 4" />{showPv && <circle cx={x(activeIndex)} cy={y(active.value)} r="5" fill={color} stroke="#0c1b2d" strokeWidth="2" />}{showUu && <circle cx={x(activeIndex)} cy={y(active.visitors ?? 0)} r="5" fill="#5eead4" stroke="#0c1b2d" strokeWidth="2" />}</g>}
+          {labelIndices.map((i) => <text key={i} x={x(i)} y={HEIGHT - 14} textAnchor={i === 0 ? 'start' : i === data.length - 1 ? 'end' : 'middle'} fontSize="11" fill="#9fb4cd">{formatChartDate(data[i].date)}</text>)}
+        </svg>
+      </div>
+      {data.every((d) => d.value === 0 && !d.visitors) && <p className="mt-3 text-sm text-slate-400">この期間の記録は0件です。アクセスが記録されると推移が表示されます。</p>}
+      <p className="mt-3 text-xs leading-relaxed text-slate-400">日時はUTC。狭い画面では横スクロールできます。左右キーでも日時を選べます。{hasVisitors && ' UUは各時間・日ごとの重複を除いた訪問者数で、合算しても期間全体のUUにはなりません。'}</p>
+      <details className="mt-4 border-t border-cyan-300/10 pt-3">
+        <summary className="cursor-pointer text-sm font-medium text-cyan-100">数値表を表示</summary>
+        <div className="mt-3 max-h-72 overflow-auto"><table className="w-full text-right text-sm tabular-nums"><caption className="sr-only">日時別アクセス数（UTC）</caption><thead className="sticky top-0 bg-[#0c1c2d]"><tr><th scope="col" className="p-2 text-left">日時</th><th scope="col" className="p-2">{valueLabel}</th>{hasVisitors && <th scope="col" className="p-2">UU</th>}</tr></thead><tbody>{data.map((d) => <tr key={d.date} className="border-t border-cyan-300/10"><th scope="row" className="p-2 text-left font-normal">{formatChartDate(d.date)}</th><td className="p-2">{d.value.toLocaleString()}</td>{hasVisitors && <td className="p-2">{(d.visitors ?? 0).toLocaleString()}</td>}</tr>)}</tbody></table></div>
+      </details>
     </div>
   );
 }

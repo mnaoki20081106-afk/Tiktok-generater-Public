@@ -1,3 +1,4 @@
+import { Script } from 'node:vm';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -52,3 +53,16 @@ assert.ok(live.includes('border:2px solid #00aaff'));
 const video = renderAlternateViewerHtml({ ...base, templateMode: 'youtube', templateSettings: { youtube: { videoUrl: 'https://example.com/movie.mp4', loop: false, rows: [] } } });
 assert.ok(video.includes('<video class="yt-v"') && !video.includes(' playsinline loop'));
 console.log('7 reference layouts: CSS/DOM parity, editable content, invite links, preview isolation, and escaping passed');
+
+for (const templateMode of modes) {
+  const data = { ...base, templateMode, templateSettings: { [templateMode]: { heading: '', body: '</script><script>alert(1)</script>' } } };
+  const editing = renderAlternateViewerHtml(data, { preview: true, editorToken: 'test-session' });
+  const scripts = [...editing.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  assert.equal(scripts.length, 1, `${templateMode}: isolated editor runtime only`);
+  assert.doesNotThrow(() => new Script(scripts[0][1]), `${templateMode}: generated script parses`);
+  assert.ok(editing.includes('test-session') && editing.includes('data-edit-text'));
+  assert.ok(!editing.includes('/api/visit') && !editing.includes('function tick()'));
+  const published = renderAlternateViewerHtml(data);
+  assert.ok(!published.includes('template-editor') && !published.includes('data-edit-text'), 'editor never leaks to published pages');
+}
+console.log('Preview editor scripts: all modes parse, escaped input and public isolation passed');

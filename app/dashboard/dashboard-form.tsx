@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { getDraftImage, putDraftImage, clearDraftImages } from '@/lib/imageDraftDb';
 import { compressToTargetSize } from '@/lib/imageCompress';
 import { generateDestinationUrl } from '@/lib/link-generator';
+import { renderAlternateViewerHtml, defaultTemplateOptions, TEMPLATE_FIELDS, type TemplateMode, type TemplateSettings, type TemplateOptions, type TemplateRow } from '@/lib/template-viewer';
 import type { Site } from '@/lib/types';
 import styles from './editor.module.css';
 
@@ -22,6 +23,7 @@ type BgTransform = {
 };
 
 type DraftJson = {
+  templateSettings?: TemplateSettings;
   templateMode: string;
   slug: string;
   tiktokUrl: string;
@@ -80,14 +82,9 @@ export function DashboardForm({
     const bgArea = $('bgArea');
     const phone = $('phone');
     const templateMode = $<HTMLSelectElement>('templateMode');
-    const altPreview = $('altPreview');
-    const altBrand = $('altBrand');
-    const altBadge = $('altBadge');
-    const altTitle = $('altTitle');
-    const altDescription = $('altDescription');
-    const altUsername = $('altUsername');
-    const altStats = $('altStats');
-    const altAvatar = $('altAvatar');
+    const altFrame = $<HTMLIFrameElement>('altFrame');
+    const modeFields = $<HTMLFieldSetElement>('modeFields');
+    let templateSettings: TemplateSettings = {};
     const bgImg = $<HTMLImageElement>('bgImg');
     const bgInput = $<HTMLInputElement>('bgInput');
     const bgChangeBtn = $('bgChangeBtn');
@@ -154,6 +151,7 @@ export function DashboardForm({
     function saveState() {
       const data: DraftJson = {
         templateMode: templateMode.value,
+        templateSettings,
         slug: slugInput.value,
         tiktokUrl: tiktokUrlInput.value,
         cushionToggle: cushionToggle.checked,
@@ -409,6 +407,7 @@ export function DashboardForm({
       bgEmpty.style.display = 'none';
       bgArea.classList.add(styles.hasImage);
       bgChangeBtn.style.display = 'block';
+      syncAlternatePreview();
     }
 
     function loadBackgroundFile(
@@ -543,7 +542,7 @@ export function DashboardForm({
       avatarBox.appendChild(img);
       discImg.src = url;
       discImg.style.display = 'block';
-      altAvatar.style.backgroundImage = `url("${url.replace(/"/g, '%22')}")`;
+      syncAlternatePreview();
     }
     avatarArea.addEventListener('click', () => avatarInput.click());
     avatarInput.addEventListener('change', async function () {
@@ -609,33 +608,81 @@ export function DashboardForm({
     });
 
     // ===== 作成モード =====
-    const MODE_LABELS: Record<string, { brand: string; badge: string }> = {
-      news: { brand: 'NEWS NOW', badge: 'BREAKING NEWS' },
-      instagram: { brand: 'Instagram', badge: 'POST' },
-      'instagram-live': { brand: 'Instagram', badge: 'LIVE' },
-      live: { brand: 'LIVE STREAM', badge: 'LIVE' },
-      x: { brand: '𝕏', badge: 'POST' },
-      tiktok: { brand: 'TikTok', badge: '' },
-      youtube: { brand: 'YouTube', badge: 'VIDEO' },
-      file: { brand: 'Secure Share', badge: 'FILE' },
-    };
-
+    function modeData() {
+      return {
+        templateMode: (templateMode.value || 'tiktok') as TemplateMode,
+        templateSettings, title: ogpTitleInput.value.trim(), tiktokUrl: tiktokUrlInput.value,
+        slug: slugInput.value, username: usernameEl.textContent?.trim() || 'username', description: descText,
+        likeCount: likeCountEl.textContent?.trim() || '0', commentCount: commentCountEl.textContent?.trim() || '0',
+        shareCount: shareCountEl.textContent?.trim() || '0', avatarUrl: discImg.getAttribute('src') || '',
+        backgroundUrl: bgImg.getAttribute('src') || '', ogpImageUrl: state.ogp?.kind === 'existing' ? state.ogp.url : '', origin: siteUrlOrigin,
+      };
+    }
+    let previewTimer: ReturnType<typeof setTimeout> | undefined;
     function syncAlternatePreview() {
       const mode = templateMode.value || 'tiktok';
-      const labels = MODE_LABELS[mode] || MODE_LABELS.tiktok;
       phone.dataset.mode = mode;
-      altPreview.dataset.mode = mode;
-      altBrand.textContent = labels.brand;
-      altBadge.textContent = labels.badge;
-      altTitle.textContent = ogpTitleInput.value.trim() || 'タイトルを入力してください';
-      altDescription.textContent = descText || '説明文を入力すると、ここに表示されます。';
-      altUsername.textContent = usernameEl.textContent?.trim() || 'username';
-      altStats.textContent = `${likeCountEl.textContent?.trim() || '0'}  ♡　${commentCountEl.textContent?.trim() || '0'}  ◯`;
+      previewCol.dataset.mode = mode;
+      modeFields.hidden = mode === 'tiktok';
+      clearTimeout(previewTimer);
+      if (mode === 'tiktok') return;
+      previewTimer = setTimeout(() => { altFrame.srcdoc = renderAlternateViewerHtml(modeData(), { preview: true }); }, 120);
     }
 
+    function renderModeFields() {
+      modeFields.replaceChildren();
+      const mode = templateMode.value as TemplateMode;
+      modeFields.hidden = mode === 'tiktok';
+      if (mode === 'tiktok') return;
+      const options: TemplateOptions = { ...defaultTemplateOptions(mode, modeData()), ...templateSettings[mode] };
+      templateSettings[mode] = options;
+      const heading = document.createElement('legend'); heading.className = styles.sec; heading.textContent = '公開ページの内容'; modeFields.append(heading);
+      function field(label: string, value: string, change: (value: string) => void, multiline = false, placeholder = '') {
+        const wrap = document.createElement('label'); wrap.className = styles.field;
+        const caption = document.createElement('span'); caption.className = styles.fl; caption.textContent = label;
+        const input = document.createElement(multiline ? 'textarea' : 'input');
+        if (input instanceof HTMLInputElement) input.type = 'text'; else input.rows = 3;
+        input.value = value; input.placeholder = placeholder; input.maxLength = multiline ? 2000 : 600;
+        input.addEventListener('input', () => { change(input.value); saveState(); syncAlternatePreview(); });
+        wrap.append(caption, input); modeFields.append(wrap);
+      }
+      function toggle(key: 'tapAll' | 'loop' | 'play', label: string) {
+        const wrap = document.createElement('label'); wrap.className = styles.checkRow;
+        const input = document.createElement('input'); input.type = 'checkbox'; input.checked = options[key] !== false;
+        input.addEventListener('change', () => { options[key] = input.checked; saveState(); syncAlternatePreview(); });
+        wrap.append(input, document.createTextNode(label)); modeFields.append(wrap);
+      }
+      for (const f of TEMPLATE_FIELDS[mode] || []) field(f.label, String(options[f.key] ?? ''), v => { Object.assign(options, { [f.key]: v }); }, f.multiline, f.placeholder);
+      field('ボタンの文字', options.cta || '', v => { options.cta = v; }, false, mode === 'file' ? '空欄でファイル数を自動表示' : '');
+      const imageButton = document.createElement('button'); imageButton.type = 'button'; imageButton.className = styles.fileBtn; imageButton.textContent = '公開ページの画像を選ぶ'; imageButton.addEventListener('click', () => bgInput.click()); modeFields.append(imageButton);
+      const avatarButton = document.createElement('button'); avatarButton.type = 'button'; avatarButton.className = styles.fileBtn; avatarButton.textContent = 'プロフィール画像を選ぶ'; avatarButton.addEventListener('click', () => avatarInput.click()); modeFields.append(avatarButton);
+      if (['news', 'youtube', 'live', 'instagram-live'].includes(mode)) {
+        field('動画URL（任意・直接再生できるMP4など）', options.videoUrl || '', v => { options.videoUrl = v; }); toggle('loop', '動画を繰り返す');
+      }
+      if (mode !== 'file') {
+        toggle('play', '再生ボタンを表示する');
+        field(mode.includes('live') ? '視聴者数（表示用）' : 'いいね数（表示用）', likeCountEl.textContent || '0', v => { likeCountEl.textContent = v; });
+        field('コメント数（表示用）', commentCountEl.textContent || '0', v => { commentCountEl.textContent = v; });
+        if (mode === 'x') field('リポスト数（表示用）', shareCountEl.textContent || '0', v => { shareCountEl.textContent = v; });
+      }
+      if (mode === 'file' || mode === 'youtube') {
+        options.rows ??= [];
+        options.rows.forEach((row: TemplateRow, i: number) => {
+          field(`${i + 1}. ${mode === 'file' ? 'ファイル名' : '関連動画の見出し'}`, (mode === 'file' ? row.name : row.title) || '', v => { if (mode === 'file') row.name = v; else row.title = v; });
+          field(`${i + 1}. サムネイル画像URL（空欄で共通画像）`, row.image || '', v => { row.image = v; });
+          field(`${i + 1}. 個別のリンク先（空欄で招待リンク）`, row.url || '', v => { row.url = v; });
+          const remove = document.createElement('button'); remove.type = 'button'; remove.className = styles.fileBtn; remove.textContent = `${i + 1}件目を削除`;
+          remove.addEventListener('click', () => { options.rows!.splice(i, 1); renderModeFields(); saveState(); syncAlternatePreview(); }); modeFields.append(remove);
+        });
+        const add = document.createElement('button'); add.type = 'button'; add.className = styles.fileBtn; add.textContent = mode === 'file' ? 'ファイルを追加' : '関連動画を追加';
+        add.disabled = options.rows.length >= (mode === 'file' ? 12 : 6);
+        add.addEventListener('click', () => { options.rows!.push({ name: 'ファイル.JPG', title: '関連動画' }); renderModeFields(); saveState(); syncAlternatePreview(); }); modeFields.append(add);
+      }
+      toggle('tapAll', '画面のどこでもタップで移動');
+      const hint = document.createElement('p'); hint.className = styles.hint; hint.textContent = 'プレビュー内ではリンク先へ移動しません。コメントや反応数は見た目用の表示です。'; modeFields.append(hint);
+    }
     templateMode.addEventListener('change', () => {
-      syncAlternatePreview();
-      saveState();
+      renderModeFields(); syncAlternatePreview(); saveState(); check();
     });
 
     // ===== クッションページの有無 =====
@@ -644,7 +691,7 @@ export function DashboardForm({
        OFF … 保存時にジェネレーター(展開＋サニタイズ)を通したURLを保存する。 */
     function renderCushionHint() {
       cushionHint.textContent = cushionToggle.checked
-        ? 'ON: 公開ページ(TikTok風レイアウト)を表示し、ボタンのタップで遷移先へ移動します。'
+        ? 'ON: 選択した作成モードの公開ページを表示し、ボタンのタップで遷移先へ移動します。'
         : 'OFF: 公開ページは表示されず、アクセスした人は遷移先へ直接移動します。';
     }
 
@@ -659,6 +706,8 @@ export function DashboardForm({
       const off = !cushionToggle.checked;
       previewCol.classList.toggle(styles.previewDisabled, off);
       iconField.classList.toggle(styles.fieldDisabled, off);
+      modeFields.disabled = off;
+      modeFields.classList.toggle(styles.fieldDisabled, off);
       previewInputs.forEach((el) => {
         el.disabled = off;
       });
@@ -757,6 +806,7 @@ export function DashboardForm({
       descEdit.style.display = 'none';
       descWrap.style.display = 'block';
       renderDesc();
+      renderModeFields();
       syncAlternatePreview();
       check();
       saveState();
@@ -796,7 +846,7 @@ export function DashboardForm({
     const ALL_FIELDS: RequiredField[] = [
       { test: () => !!state.bg, label: '背景画像', el: () => bgArea, cushionOnly: true },
       { test: () => !!state.ogp, label: 'OGP画像', el: () => ogpLabel },
-      { test: () => !!state.icon, label: 'アプリアイコン画像', el: () => iconLabel, cushionOnly: true },
+      { test: () => templateMode.value !== 'tiktok' || !!state.icon, label: 'アプリアイコン画像', el: () => iconLabel, cushionOnly: true },
       { test: () => !!slugInput.value.trim(), label: '公開URL(slug)', el: () => slugInput },
       { test: () => !!tiktokUrlInput.value.trim(), label: 'TikTok Liteの招待リンク', el: () => tiktokUrlInput },
       { test: () => !!ogpTitleInput.value.trim(), label: 'OGPタイトル', el: () => ogpTitleInput },
@@ -876,16 +926,11 @@ export function DashboardForm({
           throw new Error('公開URL(slug)は半角英小文字・数字・ハイフンのみ使用できます');
         }
 
-        /* 見た目のモードに関係なく、遷移先はTikTok Liteの招待リンクとして扱い、
-           ジェネレーター(短縮URLの展開＋招待パラメータ保全＋Lite向け起動先調整)を適用する。
-           カードからApp Storeへ直行させると招待LPが読み込まれず計測が切れるため、
-           必ず公式の招待LPを経由させる。クッションページの有無はこの判定に影響しない。
-
-           画像のアップロードより先に実行するのは、ここで失敗したら保存自体を中断するため
-           (未サニタイズのURLが公開されるのを防ぐ)。失敗しても画像をアップロードし終えた後だと
-           Storageに不要なファイルだけが残ってしまう。 */
+        /* Lite公式の短縮招待リンクとOneLinkは加工せず保存する。その他は既存の生成処理を使う。
+           URL生成は画像アップロードより先に行い、失敗時の不要なファイル保存を防ぐ。
+           アプリが開くことと招待が成立することは別で、成果はTikTok側の条件による。 */
         let destinationUrl = tiktokUrlInput.value.trim();
-        setStatusMsg({ text: '招待リンクを展開・最適化中... (数十秒かかる場合があります)' });
+        setStatusMsg({ text: '招待リンクを確認中...' });
         try {
           const built = await generateDestinationUrl(destinationUrl);
           destinationUrl = built.url;
@@ -896,12 +941,12 @@ export function DashboardForm({
           throw new Error(
             '招待リンクの生成に失敗したため保存を中断しました。' +
               (e instanceof Error ? e.message : String(e)) +
-              '\nTikTok Lite の招待リンク(https://lite.tiktok.com/t/... )を入力してください。'
+              '\nTikTok Lite の招待リンク、または公式OneLink(https://snssdk473824.onelink.me/... )を入力してください。'
           );
         }
         setStatusMsg({ text: '保存中... しばらくお待ちください' });
 
-        const bakedBg = await bakeBackground();
+        const bakedBg = templateMode.value === 'tiktok' ? await bakeBackground() : null;
         const bgSlot: ImageSlot = bakedBg ? { kind: 'new', blob: bakedBg } : state.bg;
 
         const [backgroundUrl, avatarUrl, ogpUrl, iconUrl] = await Promise.all([
@@ -935,6 +980,7 @@ export function DashboardForm({
             image_url: avatarUrl,
             content_data: {
               templateMode: templateMode.value || 'tiktok',
+              templateSettings,
               username: usernameEl.textContent?.trim() || slug,
               tiktokUrl: destinationUrl,
               useCushionPage: cushionToggle.checked,
@@ -991,6 +1037,7 @@ export function DashboardForm({
 
       slugInput.value = saved?.slug || site.slug || '';
       templateMode.value = saved?.templateMode || (cd.templateMode as string) || 'tiktok';
+      templateSettings = saved?.templateSettings ?? cd.templateSettings ?? {};
       tiktokUrlInput.value = saved?.tiktokUrl || (cd.tiktokUrl as string) || '';
       // 未設定の既存サイトはON(=遷移先URLを加工しない)として扱い、従来の挙動を保つ
       cushionToggle.checked = saved ? saved.cushionToggle : cd.useCushionPage !== false;
@@ -1007,6 +1054,7 @@ export function DashboardForm({
       floatToggle.checked = saved?.floatToggle ?? false;
       floatPreview.classList.toggle(styles.visible, floatToggle.checked);
       renderDesc();
+      renderModeFields();
       syncAlternatePreview();
       renderPageIndicatorPreview();
       if (saved) setRestoredFromDraft(true);
@@ -1073,9 +1121,11 @@ export function DashboardForm({
         }
       }
 
+      syncAlternatePreview();
       check();
     }
     init();
+    return () => { clearTimeout(previewTimer); };
     // このuseEffectはマウント時に一度だけDOMへ直接イベントを配線する(旧docs/index.htmlのvanilla JSを踏襲)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1100,25 +1150,8 @@ export function DashboardForm({
               </button>
             </div>
 
-            <div className={styles.altPreview} data-id="altPreview" data-mode="tiktok">
-              <header className={styles.altHeader}>
-                <strong data-id="altBrand">TikTok</strong>
-                <span data-id="altBadge" />
-              </header>
-              <div className={styles.altTopline}>
-                <div className={styles.altAvatar} data-id="altAvatar" />
-                <div>
-                  <strong data-id="altUsername">username</strong>
-                  <small>おすすめ · 今</small>
-                </div>
-              </div>
-              <div className={styles.altHeroMark}>▶</div>
-              <section className={styles.altBody}>
-                <h2 data-id="altTitle">タイトルを入力してください</h2>
-                <p data-id="altDescription">説明文を入力すると、ここに表示されます。</p>
-                <div data-id="altStats" className={styles.altStats}>0 ♡　0 ◯</div>
-                <div className={styles.altCta}>リンクを開く</div>
-              </section>
+            <div className={styles.altPreview}>
+              <iframe data-id="altFrame" title="公開ページのプレビュー" className={styles.altFrame} sandbox="allow-scripts" referrerPolicy="no-referrer" />
             </div>
 
             <div className={`${styles.rail} ${styles.tiktokOnly}`}>
@@ -1320,7 +1353,7 @@ export function DashboardForm({
             </div>
           </div>
           <div className={styles.previewHint}>
-            背景はドラッグで位置調整・スライダーで拡大縮小、アイコンはタップして画像を選択、数値やテキストはタップして直接入力できます
+            TikTok風はプレビューを直接編集できます。追加モードは「公開ページの内容」で編集し、プレビュー内をスクロールして確認できます。
           </div>
         </div>
 
@@ -1330,7 +1363,6 @@ export function DashboardForm({
           )}
 
           <div className={styles.card}>
-            <div className={styles.sec}>公開設定</div>
             <div className={styles.field}>
               <label className={styles.fl}>作成モード</label>
               <select data-id="templateMode" defaultValue="tiktok" className={styles.modeSelect}>
@@ -1343,8 +1375,12 @@ export function DashboardForm({
                 <option value="youtube">YouTube風</option>
                 <option value="file">ファイル共有風</option>
               </select>
-              <div className={styles.hint}>選択したモードは左のプレビューと公開ページへ即時反映されます。</div>
+              <div className={styles.hint}>プレビューは公開ページと同じレイアウトです。内容は保存・公開ボタンで反映します。</div>
             </div>
+          </div>
+          <fieldset className={styles.card} data-id="modeFields" hidden />
+          <div className={styles.card}>
+            <div className={styles.sec}>公開設定</div>
             <div className={styles.field}>
               <label className={styles.fl}>公開URL(slug)</label>
               <input type="text" data-id="slug" placeholder="例: my-name" />
@@ -1356,7 +1392,7 @@ export function DashboardForm({
               <label className={styles.fl}>TikTok Liteの招待リンク(タップ後に開くリンク)</label>
               <input type="url" data-id="tiktokUrl" placeholder="https://lite.tiktok.com/t/..." />
               <div className={styles.hint}>
-                すべての作成モードで短縮リンクを公式の招待LPへ展開し、招待情報を保持したままTikTok Lite／App Storeへ進める形に最適化します。
+                TikTok Liteの短縮招待リンク（lite.tiktok.com/t/...）と公式OneLinkは、そのまま保存してタップ先に使います。アプリ起動・招待成立は端末環境とTikTok側の条件によります。
               </div>
               <div className={styles.checkRow}>
                 <input type="checkbox" data-id="cushionToggle" id="cushionToggle" />

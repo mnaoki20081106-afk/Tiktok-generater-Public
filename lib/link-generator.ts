@@ -165,7 +165,7 @@ export function isInviteLpUrl(url: URL): boolean {
    ==================================================================== */
 
 /** どの経路で組み立てたか */
-export type BuildMode = 'lp' | 'onelink';
+export type BuildMode = 'lp' | 'onelink' | 'original';
 /**
  * 保存済みURLの形から後追いで判定した結果。
  * `wrapper` は撤回済みの形式で、見つけたら再保存を促すためだけに存在する。
@@ -280,6 +280,7 @@ export function unwrapLiteWrapperUrl(url: URL): URL | null {
 export function detectBuildMode(rawUrl: string | null | undefined): DetectedBuildMode {
   const url = parseHttpUrl(rawUrl);
   if (!url) return 'unknown';
+  if (isTikTokLiteInviteShortLink(rawUrl || '')) return 'original';
   if (isLiteWrapperUrl(url)) return 'wrapper';
   if (isInviteLpUrl(url)) return 'lp';
   if (ONELINK_RE.test(url.hostname)) return 'onelink';
@@ -647,6 +648,7 @@ export interface BuildResult {
   removed: string[];
   /**
    * どちらの経路で作ったか。
+   * - `original` … 公式短縮招待URLを加工せず保持する
    * - `lp`      … 招待LPのURLをそのまま使う(推奨・既定)。ブラウザでLPが読み込まれ、
    *               そのJSが招待をバインドする。トラッキングが成立する唯一の形
    * - `onelink` … AppsFlyerのOneLinkを組み立て直す(LPのURLが取れなかった場合の従来経路)
@@ -1477,17 +1479,39 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
  * 土台にするURLは、公式リンクの実体にどれだけ近いかで決める。
  *  1. 入力がすでに招待LPのURLなら、展開せずそのまま使う
  *  2. 短縮リンクなら自前でリダイレクトを追って展開する(公式リンクは招待LPへ着地する)
- *  3. 入力が OneLink 形式なら、展開は不要なのでサニタイズだけ行う
+ *  3. Lite公式短縮リンク・OneLinkは、生成オプション未指定なら元URLを保持する
  *  4. どれにも当てはまらなければ Stealth API で抽出する(従来経路)
  *
  * 展開・サニタイズのいずれかに失敗した場合は例外を投げる(呼び出し側で保存を中断する)。
  */
+/** Known TikTok Lite OneLink host; this identifies the route, not referral eligibility. */
+export function isTikTokLiteOneLink(raw: string): boolean {
+  const url = parseHttpUrl(raw);
+  return !!url && url.protocol === 'https:' && url.hostname === 'snssdk473824.onelink.me'
+    && !url.username && !url.password && !url.port && url.pathname !== '/';
+}
+
+/** Preserve the official short invitation URL used by the inspected public page. */
+export function isTikTokLiteInviteShortLink(raw: string): boolean {
+  const url = parseHttpUrl(raw);
+  return !!url && url.protocol === 'https:' && url.hostname === 'lite.tiktok.com'
+    && !url.username && !url.password && !url.port && /^\/t\/[A-Za-z0-9_-]+\/?$/.test(url.pathname);
+}
+
 export async function generateDestinationUrl(
   rawUrl: string,
   overrides: Partial<BuildOptions> = {}
 ): Promise<BuildResult> {
   const input = parseHttpUrl(rawUrl);
   if (!input) throw new Error('遷移先URLが不正です。http(s):// で始まるURLを入力してください。');
+
+  // The inspected public page links directly to lite.tiktok.com/t/... using <a>.
+  // Preserve the original short URL or Lite OneLink, including all parameters.
+  // Do not rebuild it, visit it server-side, or substitute a generic store URL.
+  // Explicit build overrides still opt into the existing conversion workflow.
+  if ((isTikTokLiteOneLink(rawUrl) || isTikTokLiteInviteShortLink(rawUrl)) && Object.keys(overrides).length === 0) {
+    return { url: rawUrl.trim(), mode: isTikTokLiteInviteShortLink(rawUrl) ? 'original' : 'onelink', removed: [], liteForced: false };
+  }
 
   let source = input.toString();
 

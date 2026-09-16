@@ -49,134 +49,9 @@
 .phone:not([data-mode="tiktok"]) .tiktokOnly {
   display: none !important;
 }
-.altPreview {
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-  display: flex;
-  flex-direction: column;
-  color: #111;
-  background: transparent;
-  pointer-events: none;
-}
-.phone[data-mode="tiktok"] .altPreview {
-  display: none;
-}
-.altHeader {
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 13px;
-  background: #fff;
-  border-bottom: 1px solid #e9ebef;
-  font-size: 19px;
-}
-.altHeader span {
-  border-radius: 999px;
-  padding: 4px 8px;
-  background: #111;
-  color: #fff;
-  font-size: 9px;
-  font-weight: 800;
-}
-.altTopline {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 10px 13px;
-  background: #fff;
-  font-size: 12px;
-}
-.altTopline small {
-  display: block;
-  margin-top: 2px;
-  color: #777;
-  font-size: 9px;
-}
-.altAvatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ddd, #999);
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 1px #ddd;
-  background-size: cover;
-  background-position: center;
-}
-.altHeroMark {
-  flex: 1;
-  min-height: 205px;
-  display: grid;
-  place-items: center;
-  color: rgba(255, 255, 255, .9);
-  font-size: 44px;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, .5);
-}
-.altBody {
-  padding: 14px;
-  background: #fff;
-}
-.altBody h2 {
-  margin: 0;
-  font-size: 17px;
-  line-height: 1.35;
-}
-.altBody p {
-  margin: 7px 0 0;
-  color: #555;
-  font-size: 11px;
-  line-height: 1.55;
-  max-height: 52px;
-  overflow: hidden;
-}
-.altStats {
-  margin-top: 10px;
-  color: #777;
-  font-size: 10px;
-}
-.altCta {
-  margin-top: 12px;
-  padding: 10px;
-  border-radius: 8px;
-  background: #111;
-  color: #fff;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 800;
-}
-.altPreview[data-mode="news"] .altHeader strong { color: #df0a22; }
-.altPreview[data-mode="news"] .altHeader span { border-radius: 2px; background: #df0a22; }
-.altPreview[data-mode="news"] .altBody h2 { font-family: Georgia, "Yu Mincho", serif; font-size: 20px; }
-.altPreview[data-mode="news"] .altCta { background: #df0a22; }
-.altPreview[data-mode="instagram"] .altHeader strong,
-.altPreview[data-mode="instagram-live"] .altHeader strong { font-family: cursive; }
-.altPreview[data-mode="instagram"] .altHeader span,
-.altPreview[data-mode="instagram"] .altCta { background: linear-gradient(45deg, #f9ce34, #ee2a7b 52%, #6228d7); }
-.altPreview[data-mode="instagram-live"],
-.altPreview[data-mode="live"] { background: transparent; color: #fff; }
-.altPreview[data-mode="instagram-live"] .altHeader,
-.altPreview[data-mode="instagram-live"] .altTopline,
-.altPreview[data-mode="live"] .altHeader,
-.altPreview[data-mode="live"] .altTopline { background: rgba(0, 0, 0, .55); color: #fff; border: 0; }
-.altPreview[data-mode="instagram-live"] .altHeader span { background: #fa2b72; }
-.altPreview[data-mode="live"] .altHeader span { background: #ff7900; }
-.altPreview[data-mode="instagram-live"] .altBody,
-.altPreview[data-mode="live"] .altBody { background: rgba(0, 0, 0, .58); color: #fff; }
-.altPreview[data-mode="instagram-live"] .altBody p,
-.altPreview[data-mode="live"] .altBody p { color: rgba(255, 255, 255, .85); }
-.altPreview[data-mode="live"] .altCta { background: #ff7900; }
-.altPreview[data-mode="x"] .altHeader { justify-content: center; }
-.altPreview[data-mode="x"] .altHeader strong { font-size: 25px; }
-.altPreview[data-mode="youtube"] .altHeader strong { color: #f00; }
-.altPreview[data-mode="youtube"] .altHeader span,
-.altPreview[data-mode="youtube"] .altCta { background: #f00; }
-.altPreview[data-mode="file"] { background: #f3f7ff; justify-content: center; }
-.altPreview[data-mode="file"] .altHeader { position: absolute; inset: 0 0 auto; background: #155dfc; color: #fff; border: 0; }
-.altPreview[data-mode="file"] .altTopline { display: none; }
-.altPreview[data-mode="file"] .altHeroMark { flex: 0; min-height: 94px; color: #155dfc; text-shadow: none; font-size: 50px; }
-.altPreview[data-mode="file"] .altBody { margin: 0 18px; border-radius: 18px; box-shadow: 0 12px 35px rgba(30, 64, 175, .14); text-align: center; }
-.altPreview[data-mode="file"] .altCta { background: #155dfc; }
+.altPreview { position: absolute; inset: 0; z-index: 8; background: #000; }
+.phone[data-mode="tiktok"] .altPreview { display: none; }
+.altFrame { width: 390px; height: 845px; border: 0; transform: scale(0.7692307692); transform-origin: top left; background: #000; }
 .bg {
   position: absolute;
   inset: 0;
@@ -910,3 +785,15 @@
 .btnDeploy { background: linear-gradient(110deg, #67e8f9, #38bdf8); color: #042033; box-shadow: 0 4px 24px #22d3ee20; }
 .btnDeploy:hover:not(:disabled) { background: linear-gradient(110deg, #a5f3fc, #7dd3fc); }
 .phone { box-shadow: 0 0 0 8px #14273a, 0 20px 50px #00000080; }
+
+.card[hidden] { display: none; }
+.card textarea { width: 100%; padding: 12px; border-radius: 8px; background: #071320; color: #e2edf8; border: 1px solid #2b435a; font: inherit; resize: vertical; }
+.card textarea:focus { outline: 0; border-color: #67e8f9; }
+.card button.fileBtn { width: 100%; margin: 6px 0; }
+.card button.fileBtn:disabled { opacity: .4; cursor: default; }
+
+.previewCol:not([data-mode="tiktok"]) .zoomRow,
+.previewCol:not([data-mode="tiktok"]) .floatRow,
+.previewCol:not([data-mode="tiktok"]) .piRow { display: none !important; }
+
+fieldset.card { min-width: 0; margin: 0; }

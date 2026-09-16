@@ -1,3 +1,5 @@
+import type { TemplateSettings } from './template-viewer';
+
 /**
  * Supabaseの `sites` テーブルに対応する型定義。
  * content_data は将来のリンク集・レイアウト設定などを自由に追加できるよう JSONB で保持する。
@@ -9,6 +11,7 @@
 export interface SiteContentData {
   /** 公開ページの見た目。未設定の既存データは tiktok として扱う。 */
   templateMode?: 'news' | 'instagram' | 'instagram-live' | 'live' | 'x' | 'tiktok' | 'youtube' | 'file';
+  templateSettings?: TemplateSettings;
   links?: { label: string; url: string }[];
   theme?: string;
   username?: string;

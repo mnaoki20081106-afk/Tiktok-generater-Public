@@ -97,25 +97,21 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
 
           {/* どちらの形式で生成されたかを見せる。フォールバック側は実機で招待が
               成立しないことが分かっているため、気づけるように警告を出す。 */}
+          {mode === 'original' && (<span data-id="prizeMode" className="text-xs text-emerald-700">形式: 公式の短縮招待リンクをそのまま保持しています。招待の認定はTikTok側の条件によります。</span>)}
           {mode === 'lp' && (
             <span data-id="prizeMode" className="text-xs text-emerald-700">
-              形式: 招待LP直結（推奨）。公式の招待リンクが着地するURLと同じ形で、
-              招待トラッキングが成立するのはこの形式だけです。
+              形式: 招待LP直結。招待ページを開き、そこからTikTok側の案内に従って進みます。
             </span>
           )}
           {mode === 'wrapper' && (
             <span data-id="prizeMode" className="text-xs leading-relaxed text-amber-800">
               形式: <strong>OneLinkラッパー（撤回済みの形式）</strong>。
-              <strong>実機で「アプリは起動するが招待が成立しない」ことが確認されています。</strong>
-              「保存する」を押し直すと、中身の招待LPのURLを取り出して自動で復旧します。
+              以前生成したリンクの場合は、TikTokから取得した元の招待リンクを入力して保存し直してください。
             </span>
           )}
           {mode === 'onelink' && (
             <span data-id="prizeMode" className="text-xs leading-relaxed text-amber-800">
-              形式: <strong>OneLink再構築（フォールバック）</strong>。招待LPのURLを取得できなかったため、
-              AppsFlyerのOneLinkを組み立て直しています。
-              <strong>この形式は実機で「アプリは開くが招待が成立しない」ことが確認されています。</strong>
-              当たりURLを入れ直して保存し直すか、TikTokアプリからコピーし直した招待リンクを使ってください。
+              形式: <strong>OneLink</strong>。アプリ・ストアへの振り分けはリンク先の設定に従います。招待成立は未確認です。
             </span>
           )}
           {mode === 'unknown' && (

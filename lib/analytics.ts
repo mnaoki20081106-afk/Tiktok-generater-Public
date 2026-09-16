@@ -29,6 +29,7 @@ export interface DailyPoint {
   /** 日単位集計なら YYYY-MM-DD、時間単位集計なら YYYY-MM-DDTHH */
   date: string;
   pv: number;
+  uu: number;
 }
 
 export interface AnalyticsSummary {
@@ -46,17 +47,17 @@ type Granularity = 'day' | 'hour';
 function truncateToUnit(d: Date, granularity: Granularity): Date {
   const copy = new Date(d);
   if (granularity === 'day') {
-    copy.setHours(0, 0, 0, 0);
+    copy.setUTCHours(0, 0, 0, 0);
   } else {
-    copy.setMinutes(0, 0, 0);
+    copy.setUTCMinutes(0, 0, 0);
   }
   return copy;
 }
 
 function advance(d: Date, granularity: Granularity, amount: number): Date {
   const copy = new Date(d);
-  if (granularity === 'day') copy.setDate(copy.getDate() + amount);
-  else copy.setHours(copy.getHours() + amount);
+  if (granularity === 'day') copy.setUTCDate(copy.getUTCDate() + amount);
+  else copy.setUTCHours(copy.getUTCHours() + amount);
   return copy;
 }
 
@@ -66,14 +67,18 @@ function bucketKey(iso: string, granularity: Granularity): string {
 
 function buildSeries(rows: Row[], windowSize: number, now: Date, granularity: Granularity): DailyPoint[] {
   const counts = new Map<string, number>();
+  const visitors = new Map<string, Set<string>>();
   for (const row of rows) {
     const key = bucketKey(row.viewed_at, granularity);
     counts.set(key, (counts.get(key) ?? 0) + 1);
+    const devices = visitors.get(key) ?? new Set<string>();
+    devices.add(row.device_id);
+    visitors.set(key, devices);
   }
   const series: DailyPoint[] = [];
   for (let i = windowSize - 1; i >= 0; i--) {
     const key = bucketKey(advance(now, granularity, -i).toISOString(), granularity);
-    series.push({ date: key, pv: counts.get(key) ?? 0 });
+    series.push({ date: key, pv: counts.get(key) ?? 0, uu: visitors.get(key)?.size ?? 0 });
   }
   return series;
 }

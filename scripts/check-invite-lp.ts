@@ -33,6 +33,7 @@ import {
   TRACKING_PARAMS,
   buildUrl,
   isInviteLpUrl,
+  isExpandableUrl,
   isLiteWrapperUrl,
   lpToPrefetch,
   parseHttpUrl,
@@ -47,6 +48,8 @@ const fixture = JSON.parse(readFileSync(join(here, '../lib/__fixtures__/invite-l
 };
 
 let failed = 0;
+
+const suppliedShortUrl = new URL('https://lite.tiktok.com/t/ZS9STpGp6kK2T-HhDaj/');
 
 function check(name: string, ok: boolean, detail = ''): void {
   if (ok) {
@@ -63,8 +66,11 @@ if (!source) throw new Error('フィクスチャのURLが不正です');
 console.log('実物の招待LPのペイロードで検証します');
 console.log('  キー数 ' + [...source.searchParams.keys()].length + ' / URL長 ' + fixture.url.length + '\n');
 
+console.log('0. 実際に入力される短縮URL');
+check('提示された lite.tiktok.com/t/... を安全な展開対象として認識する', isExpandableUrl(suppliedShortUrl));
+
 /* ===== 1. 入力が招待LPのURLとして認識されるか ===== */
-console.log('1. 入力の判定');
+console.log('\n1. 入力の判定');
 check('招待LPのURLとして認識される', isInviteLpUrl(source));
 check('u_code を持っている', source.searchParams.has('u_code'));
 

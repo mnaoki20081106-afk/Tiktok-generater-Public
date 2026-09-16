@@ -32,15 +32,15 @@ export default async function EditSitePage({ params }: { params: Promise<{ id: s
     <main className="mx-auto min-h-screen max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <Link href="/dashboard" className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+          <Link href="/dashboard" className="flex items-center gap-1 text-sm text-slate-400 hover:text-cyan-100">
             <ArrowLeft size={14} />
             マイサイト一覧に戻る
           </Link>
-          <h1 className="mt-2 text-xl font-semibold text-slate-900">サイトを編集</h1>
+          <h1 className="mt-2 text-xl font-semibold text-slate-100">サイトを編集</h1>
         </div>
         <Link
           href={`/dashboard/${site.id}/analytics`}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-50"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-300/15 bg-[#0c1b2d] px-3 py-2 text-sm text-slate-300 transition hover:bg-[#0c1c2d]"
         >
           <BarChart3 size={15} />
           アクセス解析

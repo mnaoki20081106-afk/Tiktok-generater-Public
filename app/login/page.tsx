@@ -32,6 +32,11 @@ export default async function LoginPage({
           </button>
         </form>
 
+        <p className="mt-4 text-xs leading-5 text-slate-500">
+          ログイン状態はこのブラウザに保存され、次回は自動で管理画面を開きます。
+          ログアウトや保存データの削除、セッションの失効後は再ログインが必要です。
+        </p>
+
         <Link
           href="/"
           className="mt-6 block text-center text-sm text-slate-400 hover:text-slate-600"

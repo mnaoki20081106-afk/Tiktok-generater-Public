@@ -10,3 +10,46 @@ body {
   background-color: #f8fafc;
   color: #0f172a;
 }
+
+/* Authoring UI: dark navy surfaces, cool cyan accents. Public templates keep their own theme. */
+.studio-shell {
+  color-scheme: dark;
+  min-height: 100vh;
+  color: #e2e8f0;
+  background: radial-gradient(ellipse at 85% 0%, #0b34504d, transparent 55%),
+    radial-gradient(ellipse at 0% 40%, #07598520, transparent 50%), #050c16;
+}
+.studio-shell :focus-visible, .analytics-console :focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 4px;
+}
+.studio-shell form button {
+  color: #cbd5e1;
+  border-color: #244056;
+}
+.studio-shell form button:hover { background: #13283b; }
+.analytics-console {
+  color-scheme: dark;
+  color: #e2e8f0;
+  background: radial-gradient(ellipse at 100% 0%, #0e749025, transparent 55%), #07111f;
+  border: 1px solid #203950;
+  box-shadow: 0 24px 80px #00000020;
+}
+.analytics-stat {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(125deg, #102b40, #0b192a 65%);
+}
+.analytics-stat::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, #67e8f9, #38bdf8 45%, transparent);
+}
+.analytics-stat:nth-child(2)::before {
+  background: linear-gradient(90deg, #5eead4, #67e8f9 45%, transparent);
+}
+.analytics-surface { box-shadow: inset 0 1px 0 #ffffff05, 0 12px 40px #00000015; }
+.analytics-console ::selection { background: #0e7490; color: white; }
+.analytics-console { scrollbar-color: #24516a #081523; }

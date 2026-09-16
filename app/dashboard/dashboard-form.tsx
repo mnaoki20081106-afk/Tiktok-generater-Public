@@ -6,6 +6,7 @@ import { getDraftImage, putDraftImage, clearDraftImages } from '@/lib/imageDraft
 import { compressToTargetSize } from '@/lib/imageCompress';
 import { generateDestinationUrl } from '@/lib/link-generator';
 import { renderAlternateViewerHtml, defaultTemplateOptions, TEMPLATE_FIELDS, type TemplateMode, type TemplateSettings, type TemplateOptions, type TemplateRow } from '@/lib/template-viewer';
+import { PREVIEW_TEXT_TARGETS } from '@/lib/template-preview-editor';
 import type { Site } from '@/lib/types';
 import styles from './editor.module.css';
 
@@ -618,6 +619,50 @@ export function DashboardForm({
         backgroundUrl: bgImg.getAttribute('src') || '', ogpImageUrl: state.ogp?.kind === 'existing' ? state.ogp.url : '', origin: siteUrlOrigin,
       };
     }
+    let editorToken = '';
+    let disposed = false;
+    const rowObjectUrls: string[] = [];
+    const rowBlobs = new Map<string, Blob>();
+    async function handlePreviewMessage(event: MessageEvent) {
+      const m = event.data;
+      const mode = templateMode.value as TemplateMode;
+      if (disposed || !cushionToggle.checked || event.source !== altFrame.contentWindow || !m || m.source !== 'template-editor' || m.token !== editorToken || m.mode !== mode) return;
+      const options = templateSettings[mode];
+      if (!options) return;
+      const row = Number.isInteger(m.index) && m.index >= 0 ? options.rows?.[m.index] : undefined;
+      if (m.type === 'text' && typeof m.value === 'string') {
+        if (row && ['title', 'name'].includes(m.key)) Object.assign(row, { [m.key]: m.value.slice(0, 600) });
+        else if (m.index === undefined && Object.hasOwn(PREVIEW_TEXT_TARGETS[mode] || {}, m.key)) {
+          const counts: Record<string, HTMLElement> = { likeCount: likeCountEl, commentCount: commentCountEl, shareCount: shareCountEl };
+          if (Object.hasOwn(counts, m.key)) counts[m.key].textContent = m.value.slice(0, 30);
+          else Object.assign(options, { [m.key]: m.value.slice(0, 2000) });
+        }
+        else return;
+        saveState(); renderModeFields();
+      } else if (m.type === 'commit') {
+        // Keep the iframe alive: reloading on blur breaks the next tap/file picker.
+        saveState();
+      } else if (m.type === 'image' && m.file instanceof Blob && m.file.type.startsWith('image/')) {
+        if (m.file.size > 20 * 1024 * 1024) { setStatusMsg({ text: '画像は20MB以下を選んでください', type: 'err' }); return; }
+        try {
+          const blob = await resizeImageBlob(m.file, 1600);
+          if (disposed) return;
+          if (m.kind === 'row' && row) {
+            const key = row.draftImageKey || `template-${crypto.randomUUID()}`;
+            rowBlobs.set(key, blob);
+            await putDraftImage(scopeKey, key, blob);
+            row.draftImageKey = key;
+            row.image = URL.createObjectURL(blob); rowObjectUrls.push(row.image);
+          } else if (m.kind === 'background') { loadBackgroundFile(blob); }
+          else if (m.kind === 'avatar') {
+            state.avatar = { kind: 'new', blob }; applyAvatarPreview(URL.createObjectURL(blob));
+            await putDraftImage(scopeKey, 'avatar', blob);
+          } else return;
+          saveState(); renderModeFields(); syncAlternatePreview(); check();
+        } catch { setStatusMsg({ text: '画像を読み込めませんでした。別の画像を選んでください', type: 'err' }); }
+      }
+    }
+    window.addEventListener('message', handlePreviewMessage);
     let previewTimer: ReturnType<typeof setTimeout> | undefined;
     function syncAlternatePreview() {
       const mode = templateMode.value || 'tiktok';
@@ -626,7 +671,7 @@ export function DashboardForm({
       modeFields.hidden = mode === 'tiktok';
       clearTimeout(previewTimer);
       if (mode === 'tiktok') return;
-      previewTimer = setTimeout(() => { altFrame.srcdoc = renderAlternateViewerHtml(modeData(), { preview: true }); }, 120);
+      previewTimer = setTimeout(() => { editorToken = crypto.randomUUID(); altFrame.srcdoc = renderAlternateViewerHtml(modeData(), { preview: true, editorToken }); }, 120);
     }
 
     function renderModeFields() {
@@ -669,7 +714,7 @@ export function DashboardForm({
         options.rows ??= [];
         options.rows.forEach((row: TemplateRow, i: number) => {
           field(`${i + 1}. ${mode === 'file' ? 'ファイル名' : '関連動画の見出し'}`, (mode === 'file' ? row.name : row.title) || '', v => { if (mode === 'file') row.name = v; else row.title = v; });
-          field(`${i + 1}. サムネイル画像URL（空欄で共通画像）`, row.image || '', v => { row.image = v; });
+          field(`${i + 1}. サムネイル画像URL（空欄で共通画像）`, row.image || '', v => { row.image = v; delete row.draftImageKey; });
           field(`${i + 1}. 個別のリンク先（空欄で招待リンク）`, row.url || '', v => { row.url = v; });
           const remove = document.createElement('button'); remove.type = 'button'; remove.className = styles.fileBtn; remove.textContent = `${i + 1}件目を削除`;
           remove.addEventListener('click', () => { options.rows!.splice(i, 1); renderModeFields(); saveState(); syncAlternatePreview(); }); modeFields.append(remove);
@@ -971,6 +1016,16 @@ export function DashboardForm({
           ),
         ]);
 
+        const publishedSettings: TemplateSettings = structuredClone(templateSettings);
+        for (const options of Object.values(publishedSettings)) {
+          for (const row of options.rows || []) {
+            if (!row.draftImageKey) continue;
+            const blob = rowBlobs.get(row.draftImageKey) || await getDraftImage(scopeKey, row.draftImageKey);
+            if (!blob) throw new Error('サムネイルをもう一度選択してください');
+            row.image = await uploadImageSlot({ kind: 'new', blob }, `${userId}/${site.id}/${row.draftImageKey}-${Date.now()}.jpg`, 'サムネイル', blob.type) || undefined;
+            delete row.draftImageKey;
+          }
+        }
         const { error } = await supabase
           .from('sites')
           .update({
@@ -980,7 +1035,7 @@ export function DashboardForm({
             image_url: avatarUrl,
             content_data: {
               templateMode: templateMode.value || 'tiktok',
-              templateSettings,
+              templateSettings: publishedSettings,
               username: usernameEl.textContent?.trim() || slug,
               tiktokUrl: destinationUrl,
               useCushionPage: cushionToggle.checked,
@@ -1014,7 +1069,7 @@ export function DashboardForm({
         } catch {
           // noop
         }
-        await clearDraftImages(scopeKey, [...IMAGE_NAMES]);
+        await clearDraftImages(scopeKey, [...IMAGE_NAMES, ...Object.values(templateSettings).flatMap(o => (o.rows || []).flatMap(r => r.draftImageKey ? [r.draftImageKey] : []))]);
       } catch (err) {
         setStatusMsg({ text: 'エラー: ' + (err instanceof Error ? err.message : '保存に失敗しました'), type: 'err' });
       } finally {
@@ -1038,6 +1093,13 @@ export function DashboardForm({
       slugInput.value = saved?.slug || site.slug || '';
       templateMode.value = saved?.templateMode || (cd.templateMode as string) || 'tiktok';
       templateSettings = saved?.templateSettings ?? cd.templateSettings ?? {};
+      for (const options of Object.values(templateSettings)) {
+        for (const row of options.rows || []) {
+          if (!row.draftImageKey) continue;
+          const blob = rowBlobs.get(row.draftImageKey) || await getDraftImage(scopeKey, row.draftImageKey);
+          if (blob) { row.image = URL.createObjectURL(blob); rowObjectUrls.push(row.image); }
+        }
+      }
       tiktokUrlInput.value = saved?.tiktokUrl || (cd.tiktokUrl as string) || '';
       // 未設定の既存サイトはON(=遷移先URLを加工しない)として扱い、従来の挙動を保つ
       cushionToggle.checked = saved ? saved.cushionToggle : cd.useCushionPage !== false;
@@ -1125,7 +1187,7 @@ export function DashboardForm({
       check();
     }
     init();
-    return () => { clearTimeout(previewTimer); };
+    return () => { disposed = true; clearTimeout(previewTimer); window.removeEventListener('message', handlePreviewMessage); rowObjectUrls.forEach(url => URL.revokeObjectURL(url)); };
     // このuseEffectはマウント時に一度だけDOMへ直接イベントを配線する(旧docs/index.htmlのvanilla JSを踏襲)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1353,7 +1415,7 @@ export function DashboardForm({
             </div>
           </div>
           <div className={styles.previewHint}>
-            TikTok風はプレビューを直接編集できます。追加モードは「公開ページの内容」で編集し、プレビュー内をスクロールして確認できます。
+            文字や画像をタップして直接編集できます。水色の枠は編集箇所の目印です。空欄の入力は任意で、目印は公開ページには表示されません。
           </div>
         </div>
 

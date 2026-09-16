@@ -1,7 +1,8 @@
+import { previewEditorHtml } from './template-preview-editor.ts';
 import { TEMPLATE_LAYOUTS } from './template-layouts.ts';
 
 export type TemplateMode = 'news' | 'instagram' | 'instagram-live' | 'live' | 'x' | 'tiktok' | 'youtube' | 'file';
-export type TemplateRow = { title?: string; name?: string; image?: string; url?: string };
+export type TemplateRow = { title?: string; name?: string; image?: string; url?: string; draftImageKey?: string };
 export type TemplateOptions = {
   heading?: string; publisher?: string; body?: string; headline?: string; cta?: string;
   channel?: string; handle?: string; duration?: string; ago?: string; teaser?: string;
@@ -56,7 +57,7 @@ function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => values[key] ?? '');
 }
 
-export function renderAlternateViewerHtml(d: TemplateData, { preview = false }: { preview?: boolean } = {}): string {
+export function renderAlternateViewerHtml(d: TemplateData, { preview = false, editorToken = '' }: { preview?: boolean; editorToken?: string } = {}): string {
   const mode = d.templateMode === 'tiktok' ? 'news' : d.templateMode;
   const layout = TEMPLATE_LAYOUTS[mode] ?? TEMPLATE_LAYOUTS.news;
   const o = { ...defaultTemplateOptions(mode, d), ...d.templateSettings?.[mode] };
@@ -66,7 +67,7 @@ export function renderAlternateViewerHtml(d: TemplateData, { preview = false }: 
   const values: Record<string, string> = {};
   for (const [key, value] of Object.entries(o)) if (typeof value === 'string') values[key] = esc(value).replace(/\n/g, '<br>');
   Object.assign(values, {
-    title: esc(o.heading || d.title), href: esc(destination), image: esc(image), avatar: esc(avatar),
+    title: esc(o.heading ?? d.title), href: esc(destination), image: esc(image), avatar: esc(avatar),
     handle: esc((o.handle || d.username).replace(/^@/, '')),
     likeCount: esc(d.likeCount || '0'), commentCount: esc(d.commentCount || '0'), shareCount: esc(d.shareCount || '0'),
   });
@@ -88,7 +89,7 @@ export function renderAlternateViewerHtml(d: TemplateData, { preview = false }: 
     values.comments = comments.map((comment, index) => fill(commentRows[index % commentRows.length] || '', { commentOne: esc(comment), commentTwo: esc(comment) })).join('');
   }
   let bodyTemplate: string = layout.body;
-  if (!o.badge) bodyTemplate = bodyTemplate.replace(/<[^>]+class="a-badge"[^>]*>.*?<\/[^>]+>/g, '');
+  if (!o.badge && !(preview && editorToken)) bodyTemplate = bodyTemplate.replace(/<[^>]+class="a-badge"[^>]*>.*?<\/[^>]+>/g, '');
   if (o.play === false) bodyTemplate = bodyTemplate.replace(/<(span|div)[^>]*class="(?:v|ig|il|lv|x|yt)-play"[^>]*>[\s\S]*?<\/\1>/g, '');
   if (mode === 'youtube') bodyTemplate = bodyTemplate.replace('<b>コメント</b><span>60</span>', '<b>コメント</b><span>{{commentCount}}</span>');
   const video = safeUrl(o.videoUrl);
@@ -101,7 +102,7 @@ export function renderAlternateViewerHtml(d: TemplateData, { preview = false }: 
   if (o.tapAll !== false) body += `<a class="lc-go lc-tapall" href="${esc(destination)}" target="_top" rel="noreferrer noopener" aria-label="リンク先を開く"></a>`;
   const css = mode === 'live' && /^#[\da-f]{6}$/i.test(o.accent || '') ? layout.css.replace(/#FF7A00/g, o.accent!) : layout.css;
   const slugJson = JSON.stringify(d.slug).replace(/</g, '\\u003c');
-  const animation = ['live', 'instagram-live'].includes(mode) ? `<script>(function(){
+  const animation = !preview && ['live', 'instagram-live'].includes(mode) ? `<script>(function(){
     if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
     var prefix=${JSON.stringify(mode === 'live' ? 'lv' : 'il')};
     var feed=document.querySelector('.'+prefix+'-feed-in');if(!feed||feed.children.length<2)return;
@@ -118,5 +119,5 @@ export function renderAlternateViewerHtml(d: TemplateData, { preview = false }: 
   })();</script>`;
   return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="referrer" content="no-referrer"><title>${esc(d.title)}</title>
 <meta property="og:title" content="${esc(d.title)}"><meta property="og:description" content="${esc(d.description)}"><meta property="og:image" content="${esc(safeUrl(d.ogpImageUrl, preview))}"><meta property="og:url" content="${esc(safeUrl(`${d.origin}/${d.slug}`))}"><meta property="og:type" content="${mode === 'news' ? 'article' : 'website'}"><meta name="twitter:card" content="summary_large_image">
-<style>${css}\n${preview ? 'a{pointer-events:none!important} .lc-tapall{display:none}' : ''}</style></head><body class="lc-theme-${mode === 'news' ? 'light' : 'dark'}">${body}${animation}${tracking}</body></html>`;
+<style>${css}\n${preview ? 'a{pointer-events:none!important} .lc-tapall{display:none}' : ''}</style></head><body class="lc-theme-${mode === 'news' ? 'light' : 'dark'}">${body}${animation}${tracking}${preview && editorToken ? previewEditorHtml(mode, editorToken, { ...o, likeCount: d.likeCount, commentCount: d.commentCount, shareCount: d.shareCount }) : ''}</body></html>`;
 }

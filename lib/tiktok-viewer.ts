@@ -5,7 +5,7 @@
  * (lib/surprise.ts の resolveCreatorUrlByFingerprint / app/api/visit を参照)。
  */
 import type { Site } from '@/lib/types';
-import { renderAlternateViewerHtml, type TemplateMode } from '@/lib/template-viewer';
+import { renderAlternateViewerHtml, type TemplateMode, type TemplateSettings } from '@/lib/template-viewer';
 import { lpToPrefetch, parseHttpUrl } from '@/lib/link-generator';
 import {
   ERROR_TEXT,
@@ -18,6 +18,7 @@ import {
 
 export interface ViewerData {
   templateMode: TemplateMode;
+  templateSettings?: TemplateSettings;
   title: string;
   tiktokUrl: string;
   slug: string;
@@ -56,6 +57,7 @@ export function siteToViewerData(site: Site, origin: string): ViewerData {
 
   return {
     templateMode: (cd.templateMode as TemplateMode) || 'tiktok',
+    templateSettings: cd.templateSettings as TemplateSettings | undefined,
     title: site.title || 'TikTok',
     tiktokUrl: (cd.tiktokUrl as string) || '#',
     slug: site.slug,

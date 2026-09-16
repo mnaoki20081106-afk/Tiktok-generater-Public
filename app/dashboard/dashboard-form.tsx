@@ -137,6 +137,27 @@ export function DashboardForm({
       ogp: null,
       icon: null,
     };
+    // The editor iframe is intentionally sandboxed without same-origin access.
+    // Parent-created blob: URLs therefore cannot be read inside it, so new local
+    // images get a data URL used only by the alternate-mode preview.
+    let alternateBackgroundUrl = '';
+    let alternateAvatarUrl = '';
+    function dataUrlFor(blob: Blob): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    }
+    async function cacheAlternatePreviewImage(kind: 'background' | 'avatar', blob: Blob) {
+      const value = await dataUrlFor(blob);
+      const slot = kind === 'background' ? state.bg : state.avatar;
+      if (slot?.kind !== 'new' || slot.blob !== blob) return;
+      if (kind === 'background') alternateBackgroundUrl = value;
+      else alternateAvatarUrl = value;
+      syncAlternatePreview();
+    }
 
     const bgTransform: BgTransform = {
       naturalW: 0,
@@ -416,6 +437,8 @@ export function DashboardForm({
       opts: { savedTransform?: { zoom: number; offsetX: number; offsetY: number } | null; persist?: boolean } = {}
     ) {
       state.bg = { kind: 'new', blob: file };
+      alternateBackgroundUrl = '';
+      void cacheAlternatePreviewImage('background', file);
       const url = URL.createObjectURL(file);
       bgImg.onload = () => {
         const rect = bgArea.getBoundingClientRect();
@@ -550,6 +573,8 @@ export function DashboardForm({
       if (this.files && this.files.length > 0) {
         const file = await resizeImageBlob(this.files[0], 800);
         state.avatar = { kind: 'new', blob: file };
+        alternateAvatarUrl = '';
+        void cacheAlternatePreviewImage('avatar', file);
         applyAvatarPreview(URL.createObjectURL(file));
         putDraftImage(scopeKey, 'avatar', file);
         saveState();
@@ -615,8 +640,10 @@ export function DashboardForm({
         templateSettings, title: ogpTitleInput.value.trim(), tiktokUrl: tiktokUrlInput.value,
         slug: slugInput.value, username: usernameEl.textContent?.trim() || 'username', description: descText,
         likeCount: likeCountEl.textContent?.trim() || '0', commentCount: commentCountEl.textContent?.trim() || '0',
-        shareCount: shareCountEl.textContent?.trim() || '0', avatarUrl: discImg.getAttribute('src') || '',
-        backgroundUrl: bgImg.getAttribute('src') || '', ogpImageUrl: state.ogp?.kind === 'existing' ? state.ogp.url : '', origin: siteUrlOrigin,
+        shareCount: shareCountEl.textContent?.trim() || '0',
+        backgroundUrl: alternateBackgroundUrl || bgImg.getAttribute('src') || '',
+        avatarUrl: alternateAvatarUrl || discImg.getAttribute('src') || '',
+        ogpImageUrl: state.ogp?.kind === 'existing' ? state.ogp.url : '', origin: siteUrlOrigin,
       };
     }
     let editorToken = '';
@@ -655,7 +682,9 @@ export function DashboardForm({
             row.image = URL.createObjectURL(blob); rowObjectUrls.push(row.image);
           } else if (m.kind === 'background') { loadBackgroundFile(blob); }
           else if (m.kind === 'avatar') {
-            state.avatar = { kind: 'new', blob }; applyAvatarPreview(URL.createObjectURL(blob));
+            state.avatar = { kind: 'new', blob }; alternateAvatarUrl = '';
+            void cacheAlternatePreviewImage('avatar', blob);
+            applyAvatarPreview(URL.createObjectURL(blob));
             await putDraftImage(scopeKey, 'avatar', blob);
           } else return;
           saveState(); renderModeFields(); syncAlternatePreview(); check();

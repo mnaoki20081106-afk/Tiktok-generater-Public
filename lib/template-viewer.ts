@@ -46,8 +46,10 @@ function esc(value: unknown): string {
 // URLs appear in both HTML attributes and quoted CSS url(). Restrict schemes and
 // encode syntax characters before HTML escaping. blob: is allowed only in the editor.
 function safeUrl(value: unknown, preview = false): string {
+  const raw = String(value ?? '');
+  if (preview && /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z\d+/=]+$/i.test(raw)) return raw;
   try {
-    const url = new URL(String(value));
+    const url = new URL(raw);
     if (!['https:', 'http:', ...(preview ? ['blob:'] : [])].includes(url.protocol)) return '';
     return url.href.replace(/[\s'"<>\\(){}]/g, c => encodeURIComponent(c).replace(/'/g, '%27').replace(/\(/g, '%28').replace(/\)/g, '%29'));
   } catch { return ''; }

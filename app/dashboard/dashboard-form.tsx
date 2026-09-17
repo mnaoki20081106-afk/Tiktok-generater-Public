@@ -7,6 +7,7 @@ import { compressToTargetSize } from '@/lib/imageCompress';
 import { generateDestinationUrl } from '@/lib/link-generator';
 import { renderAlternateViewerHtml, defaultTemplateOptions, TEMPLATE_FIELDS, type TemplateMode, type TemplateSettings, type TemplateOptions, type TemplateRow } from '@/lib/template-viewer';
 import { PREVIEW_TEXT_TARGETS } from '@/lib/template-preview-editor';
+import { createTikTokEngagementCounts, formatTikTokCount, likeCountToSlider, parseTikTokCount, sliderToLikeCount } from '@/lib/tiktok-engagement';
 import type { YouTubeEditorVideo } from '@/lib/youtube-trending';
 import type { Site } from '@/lib/types';
 import styles from './editor.module.css';
@@ -36,6 +37,7 @@ type DraftJson = {
   musicName: string;
   likeCount: string;
   commentCount: string;
+  saveCount: string;
   shareCount: string;
   piToggle: boolean;
   piCount: string;
@@ -99,6 +101,7 @@ export function DashboardForm({
     const discImg = $<HTMLImageElement>('discImg');
     const likeCountEl = $('likeCount');
     const commentCountEl = $('commentCount');
+    const saveCountEl = $('saveCount');
     const shareCountEl = $('shareCount');
     const usernameEl = $('username');
     const musicNameEl = $('musicName');
@@ -131,6 +134,17 @@ export function DashboardForm({
     const ogpTitleInput = $<HTMLInputElement>('ogpTitle');
     const deployBtn = $<HTMLButtonElement>('deployBtn');
     const missingWarning = $('missingWarning');
+    const engagementEditor = $('engagementEditor');
+    const engagementSlider = $<HTMLInputElement>('engagementSlider');
+    const engagementValue = $('engagementValue');
+    const engagementAuto = $('engagementAuto');
+    const engagementManual = $('engagementManual');
+    const engagementAutoPanel = $('engagementAutoPanel');
+    const engagementManualPanel = $('engagementManualPanel');
+    const manualLikeCount = $<HTMLInputElement>('manualLikeCount');
+    const manualCommentCount = $<HTMLInputElement>('manualCommentCount');
+    const manualSaveCount = $<HTMLInputElement>('manualSaveCount');
+    const manualShareCount = $<HTMLInputElement>('manualShareCount');
 
     const state: { bg: ImageSlot; avatar: ImageSlot; ogp: ImageSlot; icon: ImageSlot } = {
       bg: null,
@@ -184,6 +198,7 @@ export function DashboardForm({
         musicName: musicNameEl.textContent?.trim() ?? '',
         likeCount: likeCountEl.textContent?.trim() ?? '',
         commentCount: commentCountEl.textContent?.trim() ?? '',
+        saveCount: saveCountEl.textContent?.trim() ?? '',
         shareCount: shareCountEl.textContent?.trim() ?? '',
         piToggle: piToggle.checked,
         piCount: piCount.value,
@@ -641,6 +656,7 @@ export function DashboardForm({
         templateSettings, title: ogpTitleInput.value.trim(), tiktokUrl: tiktokUrlInput.value,
         slug: slugInput.value, username: usernameEl.textContent?.trim() || 'username', description: descText,
         likeCount: likeCountEl.textContent?.trim() || '0', commentCount: commentCountEl.textContent?.trim() || '0',
+        saveCount: saveCountEl.textContent?.trim() || '0',
         shareCount: shareCountEl.textContent?.trim() || '0',
         backgroundUrl: alternateBackgroundUrl || bgImg.getAttribute('src') || '',
         avatarUrl: alternateAvatarUrl || discImg.getAttribute('src') || '',
@@ -863,8 +879,8 @@ export function DashboardForm({
        使われなくなる。欄ごと消すと入力済みの内容が失われたように見えるため、
        暗くして操作だけを止める(値・画像・下書きはそのまま保持する)。
        pointer-events だけではキーボード操作で触れてしまうので disabled も併用する。 */
-    const previewInputs = [bgInput, avatarInput, iconInput, piToggle, piCount, floatToggle, descEdit, templateMode];
-    const previewEditables = [usernameEl, musicNameEl, likeCountEl, commentCountEl, shareCountEl];
+    const previewInputs = [bgInput, avatarInput, iconInput, piToggle, piCount, floatToggle, descEdit, templateMode, engagementSlider, manualLikeCount, manualCommentCount, manualSaveCount, manualShareCount];
+    const previewEditables = [usernameEl, musicNameEl];
 
     function applyCushionMode() {
       const off = !cushionToggle.checked;
@@ -898,8 +914,77 @@ export function DashboardForm({
       iconInput.click();
     });
 
-    // ===== 数値・テキストのタップ編集(contenteditable) =====
-    (['likeCount', 'commentCount', 'shareCount', 'username', 'musicName'] as const).forEach((id) => {
+    // ===== TikTok反応数の一括編集 =====
+    const countElements = { likes: likeCountEl, comments: commentCountEl, saves: saveCountEl, shares: shareCountEl };
+    const manualInputs = { likes: manualLikeCount, comments: manualCommentCount, saves: manualSaveCount, shares: manualShareCount };
+
+    function syncManualEngagementInputs() {
+      manualLikeCount.value = String(parseTikTokCount(likeCountEl.textContent));
+      manualCommentCount.value = String(parseTikTokCount(commentCountEl.textContent));
+      manualSaveCount.value = String(parseTikTokCount(saveCountEl.textContent));
+      manualShareCount.value = String(parseTikTokCount(shareCountEl.textContent));
+    }
+
+    function setEngagementCounts(counts: { likes: number; comments: number; saves: number; shares: number }) {
+      (Object.keys(countElements) as Array<keyof typeof countElements>).forEach((key) => {
+        countElements[key].textContent = formatTikTokCount(counts[key]);
+      });
+      engagementValue.textContent = `${counts.likes.toLocaleString('ja-JP')} いいね`;
+      syncManualEngagementInputs();
+      saveState();
+    }
+
+    function openEngagementEditor() {
+      const likes = Math.min(1_000_000, parseTikTokCount(likeCountEl.textContent));
+      engagementSlider.value = String(likeCountToSlider(likes));
+      engagementValue.textContent = `${likes.toLocaleString('ja-JP')} いいね`;
+      syncManualEngagementInputs();
+      engagementEditor.hidden = false;
+      engagementEditor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    root.querySelectorAll<HTMLElement>('[data-id="engagementTrigger"]').forEach((trigger) => {
+      trigger.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openEngagementEditor();
+      });
+      trigger.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openEngagementEditor();
+        }
+      });
+    });
+    $('engagementClose').addEventListener('click', () => { engagementEditor.hidden = true; });
+
+    function setEngagementInputMode(mode: 'auto' | 'manual') {
+      const auto = mode === 'auto';
+      engagementAuto.classList.toggle(styles.engagementTabActive, auto);
+      engagementManual.classList.toggle(styles.engagementTabActive, !auto);
+      engagementAutoPanel.hidden = !auto;
+      engagementManualPanel.hidden = auto;
+      if (!auto) syncManualEngagementInputs();
+    }
+    engagementAuto.addEventListener('click', () => setEngagementInputMode('auto'));
+    engagementManual.addEventListener('click', () => setEngagementInputMode('manual'));
+    engagementSlider.addEventListener('input', () => {
+      setEngagementCounts(createTikTokEngagementCounts(sliderToLikeCount(Number(engagementSlider.value))));
+    });
+    (Object.keys(manualInputs) as Array<keyof typeof manualInputs>).forEach((key) => {
+      manualInputs[key].addEventListener('input', () => {
+        const value = Math.max(0, Math.round(Number(manualInputs[key].value) || 0));
+        countElements[key].textContent = formatTikTokCount(value);
+        if (key === 'likes') {
+          engagementSlider.value = String(likeCountToSlider(Math.min(value, 1_000_000)));
+          engagementValue.textContent = `${value.toLocaleString('ja-JP')} いいね`;
+        }
+        saveState();
+      });
+    });
+
+    // ===== テキストのタップ編集(contenteditable) =====
+    (['username', 'musicName'] as const).forEach((id) => {
       const el = $(id);
       el.addEventListener('focus', () => {
         const range = document.createRange();
@@ -1161,6 +1246,7 @@ export function DashboardForm({
               musicName: musicNameEl.textContent?.trim() || 'オリジナル楽曲',
               likeCount: likeCountEl.textContent?.trim() || '0',
               commentCount: commentCountEl.textContent?.trim() || '0',
+              saveCount: saveCountEl.textContent?.trim() || '0',
               shareCount: shareCountEl.textContent?.trim() || '0',
               showPageIndicator: piToggle.checked,
               pageIndicatorCount: piCount.value.trim() || '3',
@@ -1229,6 +1315,7 @@ export function DashboardForm({
       musicNameEl.textContent = saved?.musicName || (cd.musicName as string) || 'オリジナル楽曲';
       likeCountEl.textContent = saved?.likeCount || (cd.likeCount as string) || '0';
       commentCountEl.textContent = saved?.commentCount || (cd.commentCount as string) || '0';
+      saveCountEl.textContent = saved?.saveCount || (cd.saveCount as string) || '0';
       shareCountEl.textContent = saved?.shareCount || (cd.shareCount as string) || '0';
       piToggle.checked = saved ? saved.piToggle : Boolean(cd.showPageIndicator);
       piCount.value = saved?.piCount || (cd.pageIndicatorCount as string) || '3';
@@ -1355,18 +1442,18 @@ export function DashboardForm({
                   />
                 </svg>
               </div>
-              <div className={styles.railItem}>
+              <div className={styles.railItem} data-id="engagementTrigger" role="button" tabIndex={0} aria-label="反応数をまとめて設定">
                 <svg viewBox="0 0 48 48">
                   <path
                     fill="#fff"
                     d="M24 9.44c3.2-4.03 7.61-5.56 12-4.67 2.31.47 5.59 2.28 7.75 5.48 2.26 3.32 3.21 7.99.98 13.85-1.75 4.57-5.5 8.83-9.28 12.2a56.6 56.6 0 0 1-10.52 7.47l-.93.49-.93-.49a56.6 56.6 0 0 1-10.52-7.47c-3.78-3.37-7.53-7.63-9.28-12.2-2.24-5.86-1.28-10.53.98-13.85C6.4 7.05 9.69 5.24 12 4.77c4.39-.9 8.8.64 12 4.67Z"
                   />
                 </svg>
-                <span contentEditable suppressContentEditableWarning data-id="likeCount">
+                <span data-id="likeCount">
                   3.1k
                 </span>
               </div>
-              <div className={styles.railItem}>
+              <div className={styles.railItem} data-id="engagementTrigger" role="button" tabIndex={0} aria-label="反応数をまとめて設定">
                 <svg viewBox="0 0 48 48">
                   <path
                     fill="#fff"
@@ -1375,11 +1462,22 @@ export function DashboardForm({
                     d="M38.5 35.31c4.1-4.11 6.5-8.4 6.5-13.38C45 11.8 35.73 3.6 24.3 3.6S3.6 11.8 3.6 21.93C3.6 32.05 13.17 39 24.6 39v3.36c0 1.06 1.1 1.75 2.04 1.24 2.92-1.58 8.33-4.76 11.85-8.29ZM14.23 19.46a2.95 2.95 0 0 1 2.96 2.93 2.95 2.95 0 0 1-2.96 2.94 2.95 2.95 0 0 1-2.95-2.94 2.95 2.95 0 0 1 2.95-2.93Zm13.02 2.93a2.95 2.95 0 0 0-2.96-2.93 2.95 2.95 0 0 0-2.96 2.93 2.95 2.95 0 0 0 2.96 2.94 2.95 2.95 0 0 0 2.96-2.94Zm7.1-2.93a2.95 2.95 0 0 1 2.95 2.93 2.95 2.95 0 0 1-2.96 2.94 2.95 2.95 0 0 1-2.95-2.94 2.95 2.95 0 0 1 2.95-2.93Z"
                   />
                 </svg>
-                <span contentEditable suppressContentEditableWarning data-id="commentCount">
+                <span data-id="commentCount">
                   686
                 </span>
               </div>
-              <div className={styles.railItem}>
+              <div className={styles.railItem} data-id="engagementTrigger" role="button" tabIndex={0} aria-label="反応数をまとめて設定">
+                <svg viewBox="0 0 48 48">
+                  <path
+                    fill="#fff"
+                    fillRule="evenodd"
+                    clipRule="evenodd"
+                    d="M12 5h24a3 3 0 0 1 3 3v34.2a1.8 1.8 0 0 1-2.9 1.43L24 34.25l-12.1 9.38A1.8 1.8 0 0 1 9 42.2V8a3 3 0 0 1 3-3Zm1 4v28.71l11-8.53 11 8.53V9H13Z"
+                  />
+                </svg>
+                <span data-id="saveCount">2.5k</span>
+              </div>
+              <div className={styles.railItem} data-id="engagementTrigger" role="button" tabIndex={0} aria-label="反応数をまとめて設定">
                 <svg viewBox="0 0 48 48">
                   <path
                     fill="#fff"
@@ -1388,7 +1486,7 @@ export function DashboardForm({
                     d="M25.56 4.07a1.98 1.98 0 0 0-2.15-.42 1.95 1.95 0 0 0-1.21 1.8v8.34c-5.4.35-10.04 2.2-13.43 5.68C4.97 23.35 3 29.03 3 36.19c0 .79.48 1.5 1.22 1.8.73.3 1.58.13 2.14-.42 3.34-3.31 7.65-4.56 11.25-4.95 1.8-.2 3.37-.18 4.5-.1h.09v9.03c0 .78.46 1.48 1.18 1.79.72.3 1.56.16 2.13-.37l18.87-17.49a1.94 1.94 0 0 0 .04-2.8L25.56 4.07Z"
                   />
                 </svg>
-                <span contentEditable suppressContentEditableWarning data-id="shareCount">
+                <span data-id="shareCount">
                   2.8k
                 </span>
               </div>
@@ -1510,6 +1608,46 @@ export function DashboardForm({
                   <div className={styles.pBl}>後で</div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className={styles.engagementEditor} data-id="engagementEditor" hidden>
+            <div className={styles.engagementHeader}>
+              <div>
+                <strong>反応数をまとめて設定</strong>
+                <span>プレビューを隠さず、この下で調整できます</span>
+              </div>
+              <button type="button" data-id="engagementClose" aria-label="閉じる">×</button>
+            </div>
+            <div className={styles.engagementTabs}>
+              <button type="button" className={styles.engagementTabActive} data-id="engagementAuto">伸び率バー</button>
+              <button type="button" data-id="engagementManual">手動入力</button>
+            </div>
+            <div className={styles.engagementAutoPanel} data-id="engagementAutoPanel">
+              <div className={styles.engagementValueRow}>
+                <span>伸び率</span>
+                <output data-id="engagementValue">0 いいね</output>
+              </div>
+              <input
+                className={styles.engagementSlider}
+                data-id="engagementSlider"
+                type="range"
+                min="0"
+                max="1000"
+                step="1"
+                defaultValue="0"
+                aria-label="伸び率"
+              />
+              <div className={styles.engagementScale}>
+                <span>0</span><span>細かく調整</span><span>100万</span>
+              </div>
+              <p>いいね数を基準に、コメント0.8〜1.2%・保存80〜120%・シェア5〜7%の範囲で自動生成します。</p>
+            </div>
+            <div className={styles.engagementManualGrid} data-id="engagementManualPanel" hidden>
+              <label><span>いいね</span><input type="number" min="0" step="1" inputMode="numeric" data-id="manualLikeCount" /></label>
+              <label><span>コメント</span><input type="number" min="0" step="1" inputMode="numeric" data-id="manualCommentCount" /></label>
+              <label><span>保存</span><input type="number" min="0" step="1" inputMode="numeric" data-id="manualSaveCount" /></label>
+              <label><span>シェア</span><input type="number" min="0" step="1" inputMode="numeric" data-id="manualShareCount" /></label>
             </div>
           </div>
 

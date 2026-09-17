@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types scripts/check-invite-lp.ts && node --experimental-strip-types scripts/check-template-modes.ts && node scripts/check-session.mjs && node --experimental-strip-types scripts/check-official-onelink.ts && node --experimental-strip-types scripts/check-official-lite-launch.ts && node --experimental-strip-types scripts/check-request-identity.ts && node scripts/check-surprise-availability.mjs && node --experimental-strip-types scripts/check-youtube-trending.ts"
+    "test": "node --experimental-strip-types scripts/check-invite-lp.ts && node --experimental-strip-types scripts/check-template-modes.ts && node scripts/check-session.mjs && node --experimental-strip-types scripts/check-official-onelink.ts && node --experimental-strip-types scripts/check-official-lite-launch.ts && node --experimental-strip-types scripts/check-request-identity.ts && node scripts/check-surprise-availability.mjs && node --experimental-strip-types scripts/check-youtube-trending.ts && node --experimental-strip-types scripts/check-tiktok-engagement.ts"
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs": "^5.2.0",

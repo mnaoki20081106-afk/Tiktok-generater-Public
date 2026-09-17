@@ -27,6 +27,7 @@ export interface ViewerData {
   musicName: string;
   likeCount: string;
   commentCount: string;
+  saveCount: string;
   shareCount: string;
   showPageIndicator: boolean;
   pageIndicatorCount: string;
@@ -66,6 +67,7 @@ export function siteToViewerData(site: Site, origin: string): ViewerData {
     musicName: (cd.musicName as string) || 'オリジナル楽曲',
     likeCount: (cd.likeCount as string) || '0',
     commentCount: (cd.commentCount as string) || '0',
+    saveCount: (cd.saveCount as string) || '0',
     shareCount: (cd.shareCount as string) || '0',
     showPageIndicator: Boolean(cd.showPageIndicator),
     pageIndicatorCount: (cd.pageIndicatorCount as string) || '3',
@@ -111,6 +113,7 @@ export function renderViewerHtml(d: ViewerData): string {
     musicName,
     likeCount,
     commentCount,
+    saveCount,
     shareCount,
     showPageIndicator,
     pageIndicatorCount,
@@ -125,6 +128,7 @@ export function renderViewerHtml(d: ViewerData): string {
   const m = esc(musicName);
   const lc = esc(likeCount);
   const cc = esc(commentCount);
+  const sv = esc(saveCount);
   const sc = esc(shareCount);
   const bg = esc(backgroundUrl);
   const av = esc(avatarUrl);
@@ -245,6 +249,10 @@ html,body{height:100%;width:100%;background:#000;font-family:-apple-system,"Hira
     <div class="rail-item">
       <svg viewBox="0 0 48 48"><path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M38.5 35.31c4.1-4.11 6.5-8.4 6.5-13.38C45 11.8 35.73 3.6 24.3 3.6S3.6 11.8 3.6 21.93C3.6 32.05 13.17 39 24.6 39v3.36c0 1.06 1.1 1.75 2.04 1.24 2.92-1.58 8.33-4.76 11.85-8.29ZM14.23 19.46a2.95 2.95 0 0 1 2.96 2.93 2.95 2.95 0 0 1-2.96 2.94 2.95 2.95 0 0 1-2.95-2.94 2.95 2.95 0 0 1 2.95-2.93Zm13.02 2.93a2.95 2.95 0 0 0-2.96-2.93 2.95 2.95 0 0 0-2.96 2.93 2.95 2.95 0 0 0 2.96 2.94 2.95 2.95 0 0 0 2.96-2.94Zm7.1-2.93a2.95 2.95 0 0 1 2.95 2.93 2.95 2.95 0 0 1-2.96 2.94 2.95 2.95 0 0 1-2.95-2.94 2.95 2.95 0 0 1 2.95-2.93Z"></path></svg>
       <span>${cc}</span>
+    </div>
+    <div class="rail-item">
+      <svg viewBox="0 0 48 48"><path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M12 5h24a3 3 0 0 1 3 3v34.2a1.8 1.8 0 0 1-2.9 1.43L24 34.25l-12.1 9.38A1.8 1.8 0 0 1 9 42.2V8a3 3 0 0 1 3-3Zm1 4v28.71l11-8.53 11 8.53V9H13Z"></path></svg>
+      <span>${sv}</span>
     </div>
     <div class="rail-item">
       <svg viewBox="0 0 48 48"><path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M25.56 4.07a1.98 1.98 0 0 0-2.15-.42 1.95 1.95 0 0 0-1.21 1.8v8.34c-5.4.35-10.04 2.2-13.43 5.68C4.97 23.35 3 29.03 3 36.19c0 .79.48 1.5 1.22 1.8.73.3 1.58.13 2.14-.42 3.34-3.31 7.65-4.56 11.25-4.95 1.8-.2 3.37-.18 4.5-.1h.09v9.03c0 .78.46 1.48 1.18 1.79.72.3 1.56.16 2.13-.37l18.87-17.49a1.94 1.94 0 0 0 .04-2.8L25.56 4.07Z"></path></svg>

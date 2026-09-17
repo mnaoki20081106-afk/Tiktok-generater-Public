@@ -7,6 +7,7 @@ import { compressToTargetSize } from '@/lib/imageCompress';
 import { generateDestinationUrl } from '@/lib/link-generator';
 import { renderAlternateViewerHtml, defaultTemplateOptions, TEMPLATE_FIELDS, type TemplateMode, type TemplateSettings, type TemplateOptions, type TemplateRow } from '@/lib/template-viewer';
 import { PREVIEW_TEXT_TARGETS } from '@/lib/template-preview-editor';
+import type { YouTubeEditorVideo } from '@/lib/youtube-trending';
 import type { Site } from '@/lib/types';
 import styles from './editor.module.css';
 
@@ -726,6 +727,89 @@ export function DashboardForm({
         input.addEventListener('change', () => { options[key] = input.checked; saveState(); syncAlternatePreview(); });
         wrap.append(input, document.createTextNode(label)); modeFields.append(wrap);
       }
+      if (mode === 'youtube') {
+        const choice = document.createElement('div'); choice.className = styles.inputModeChoice;
+        const choiceTitle = document.createElement('span'); choiceTitle.className = styles.fl; choiceTitle.textContent = '入力方法';
+        const choiceButtons = document.createElement('div'); choiceButtons.className = styles.inputModeButtons;
+        const inputMode = options.youtubeInputMode === 'detail' ? 'detail' : 'auto';
+        (['auto', 'detail'] as const).forEach(value => {
+          const button = document.createElement('button'); button.type = 'button';
+          button.className = `${styles.inputModeButton} ${inputMode === value ? styles.inputModeButtonActive : ''}`;
+          button.textContent = value === 'auto' ? '自動入力' : '詳細入力';
+          button.addEventListener('click', () => {
+            options.youtubeInputMode = value;
+            saveState(); renderModeFields(); syncAlternatePreview();
+          });
+          choiceButtons.append(button);
+        });
+        choice.append(choiceTitle, choiceButtons); modeFields.append(choice);
+
+        if (inputMode === 'auto') {
+          const autoPanel = document.createElement('div'); autoPanel.className = styles.youtubeAutoPanel;
+          const autoTitle = document.createElement('strong'); autoTitle.textContent = '日本の人気動画から関連動画を作成';
+          const autoText = document.createElement('p'); autoText.textContent = 'YouTube公式の人気動画からランダムに選び、タイトル・サムネイル・視聴回数・経過日数をまとめて入力します。';
+          const actions = document.createElement('div'); actions.className = styles.youtubeAutoActions;
+          const countLabel = document.createElement('label'); countLabel.textContent = '件数';
+          const count = document.createElement('select');
+          for (let i = 1; i <= 6; i++) {
+            const option = document.createElement('option'); option.value = String(i); option.textContent = `${i}件`;
+            count.append(option);
+          }
+          count.value = String(Math.min(6, Math.max(1, Number(options.youtubeAutoCount) || 3)));
+          count.addEventListener('change', () => { options.youtubeAutoCount = Number(count.value); saveState(); });
+          countLabel.append(count);
+          const fetchButton = document.createElement('button'); fetchButton.type = 'button'; fetchButton.className = styles.fileBtn;
+          fetchButton.textContent = options.rows?.length ? '人気動画をランダムに入れ直す' : '人気動画を自動入力する';
+          fetchButton.addEventListener('click', async () => {
+            fetchButton.disabled = true; fetchButton.textContent = 'YouTubeから取得中...';
+            setStatusMsg({ text: 'YouTubeの人気動画を取得中...' });
+            try {
+              const response = await fetch('/api/youtube/trending', { method: 'GET', cache: 'no-store' });
+              const data = await response.json().catch(() => null) as { videos?: YouTubeEditorVideo[]; error?: string } | null;
+              if (!response.ok || !Array.isArray(data?.videos)) throw new Error(data?.error || '人気動画を取得できませんでした。');
+              const pool = [...data.videos];
+              for (let i = pool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pool[i], pool[j]] = [pool[j], pool[i]];
+              }
+              const wanted = Math.min(Number(count.value) || 3, pool.length);
+              options.youtubeAutoCount = wanted;
+              options.rows = pool.slice(0, wanted).map(video => ({
+                title: video.title,
+                image: video.thumbnail,
+                channel: video.channel,
+                viewCount: video.viewCount,
+                ago: video.ago,
+                duration: video.duration,
+              }));
+              saveState(); renderModeFields(); syncAlternatePreview();
+              setStatusMsg({ text: `${wanted}件の人気動画を関連動画へ入力しました`, type: 'ok' });
+            } catch (error) {
+              fetchButton.disabled = false; fetchButton.textContent = '人気動画を自動入力する';
+              setStatusMsg({ text: `エラー: ${error instanceof Error ? error.message : '人気動画を取得できませんでした。'}`, type: 'err' });
+            }
+          });
+          actions.append(countLabel, fetchButton); autoPanel.append(autoTitle, autoText, actions);
+          if (options.rows?.length) {
+            const list = document.createElement('div'); list.className = styles.youtubeAutoList;
+            options.rows.forEach((row, index) => {
+              const item = document.createElement('div'); item.className = styles.youtubeAutoItem;
+              if (row.image) { const img = document.createElement('img'); img.src = row.image; img.alt = ''; item.append(img); }
+              const copy = document.createElement('span');
+              const title = document.createElement('b'); title.textContent = row.title || `関連動画 ${index + 1}`;
+              const meta = document.createElement('small'); meta.textContent = [row.channel, row.viewCount, row.ago].filter(Boolean).join('・');
+              copy.append(title, meta); item.append(copy); list.append(item);
+            });
+            autoPanel.append(list);
+          }
+          modeFields.append(autoPanel);
+          toggle('tapAll', '画面のどこでもタップで移動');
+          const autoHint = document.createElement('p'); autoHint.className = styles.hint;
+          autoHint.textContent = 'メイン動画の文字や画像はプレビューを直接タップして編集できます。関連動画を個別修正する場合は「詳細入力」へ切り替えてください。';
+          modeFields.append(autoHint);
+          return;
+        }
+      }
       for (const f of TEMPLATE_FIELDS[mode] || []) field(f.label, String(options[f.key] ?? ''), v => { Object.assign(options, { [f.key]: v }); }, f.multiline, f.placeholder);
       field('ボタンの文字', options.cta || '', v => { options.cta = v; }, false, mode === 'file' ? '空欄でファイル数を自動表示' : '');
       const imageButton = document.createElement('button'); imageButton.type = 'button'; imageButton.className = styles.fileBtn; imageButton.textContent = '公開ページの画像を選ぶ'; imageButton.addEventListener('click', () => bgInput.click()); modeFields.append(imageButton);
@@ -743,6 +827,12 @@ export function DashboardForm({
         options.rows ??= [];
         options.rows.forEach((row: TemplateRow, i: number) => {
           field(`${i + 1}. ${mode === 'file' ? 'ファイル名' : '関連動画の見出し'}`, (mode === 'file' ? row.name : row.title) || '', v => { if (mode === 'file') row.name = v; else row.title = v; });
+          if (mode === 'youtube') {
+            field(`${i + 1}. チャンネル名`, row.channel || '', v => { row.channel = v; });
+            field(`${i + 1}. 視聴回数`, row.viewCount || '', v => { row.viewCount = v; }, false, '例: 12万回視聴');
+            field(`${i + 1}. 公開からの経過`, row.ago || '', v => { row.ago = v; }, false, '例: 3日前');
+            field(`${i + 1}. 動画の長さ`, row.duration || '', v => { row.duration = v; }, false, '例: 8:24');
+          }
           field(`${i + 1}. サムネイル画像URL（空欄で共通画像）`, row.image || '', v => { row.image = v; delete row.draftImageKey; });
           field(`${i + 1}. 個別のリンク先（空欄で招待リンク）`, row.url || '', v => { row.url = v; });
           const remove = document.createElement('button'); remove.type = 'button'; remove.className = styles.fileBtn; remove.textContent = `${i + 1}件目を削除`;

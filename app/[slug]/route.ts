@@ -1,17 +1,19 @@
 import { cookies } from 'next/headers';
 import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { renderRedirectHtml, renderViewerHtml, siteToViewerData } from '@/lib/tiktok-viewer';
 import { resolveDestinationUrl } from '@/lib/surprise';
 import { recordPageView } from '@/lib/analytics';
 import { DEVICE_COOKIE } from '@/lib/device';
+import { hashClientIp } from '@/lib/request-identity';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  // creator_device_id / creator_fingerprint はサプライズ抽選の判定にのみ使う非公開の値のため、
-  // 匿名ロール(anon)には公開していない。Service Roleクライアントで読み取る。
+  // 作成者識別シグナルはサプライズ抽選の本人除外にだけ使う。公開REST APIへ出さず、
+  // Service Roleで非公開のsite_owner_signalsも照合する。
   const supabase = createAdminClient();
 
   const { data: site } = await supabase.from('sites').select('*').eq('slug', slug).maybeSingle();
@@ -28,7 +30,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const origin = new URL(request.url).origin;
   const cookieStore = await cookies();
   const deviceId = cookieStore.get(DEVICE_COOKIE)?.value ?? null;
-  const destinationUrl = await resolveDestinationUrl(site, deviceId);
+  const ipHash = hashClientIp(request.headers);
+  let visitorUserId: string | null = null;
+  const hasAuthCookie = cookieStore.getAll().some(cookie => cookie.name.startsWith('sb-') && cookie.name.includes('auth-token'));
+  if (hasAuthCookie) {
+    try {
+      const auth = await createClient();
+      const { data: { user } } = await auth.auth.getUser();
+      visitorUserId = user?.id ?? null;
+    } catch {
+      // 認証基盤が一時的に応答しなくても、端末・指紋・IPの照合は継続する。
+    }
+  }
+  const destinationUrl = await resolveDestinationUrl(site, { deviceId, ipHash, userId: visitorUserId });
 
   // PV/UU集計用の記録はレスポンス送信をブロックしないよう、応答後に実行する
   after(() => recordPageView(supabase, site.id, deviceId, request.headers.get('user-agent')));

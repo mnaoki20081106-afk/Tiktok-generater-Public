@@ -10,6 +10,11 @@
  * 引数で受け取る形にしてある点だけ。
  */
 
+import {
+  extractOfficialLiteLaunchUrl,
+  validateOfficialLiteLaunchUrl,
+} from './official-lite-launch.ts';
+
 export const BTN_LABEL = 'URLを抽出＆自動生成';
 
 /** Stealth APIのホスト。環境変数で差し替えられるようにしてあるが、既定値は単独版と同一。 */
@@ -280,7 +285,7 @@ export function unwrapLiteWrapperUrl(url: URL): URL | null {
 export function detectBuildMode(rawUrl: string | null | undefined): DetectedBuildMode {
   const url = parseHttpUrl(rawUrl);
   if (!url) return 'unknown';
-  if (isTikTokLiteInviteShortLink(rawUrl || '')) return 'original';
+  if (isTikTokLiteInviteShortLink(rawUrl || '') || validateOfficialLiteLaunchUrl(rawUrl || '')) return 'original';
   if (isLiteWrapperUrl(url)) return 'wrapper';
   if (isInviteLpUrl(url)) return 'lp';
   if (ONELINK_RE.test(url.hostname)) return 'onelink';
@@ -765,6 +770,7 @@ export const IOS_USER_AGENT =
 export const EXPAND_TIMEOUT_MS = 15000;
 export const EXPAND_MAX_HOPS = 10;
 export const EXPAND_ENDPOINT = '/api/expand';
+export const INVITE_HTML_MAX_BYTES = 4 * 1024 * 1024;
 
 /* 展開を許可するホスト。任意のURLを取りに行かせない(SSRF対策)。
    ブラウザから /api/expand 経由でも呼ばれるため、サーバー側でも同じ判定を通す。 */
@@ -843,6 +849,84 @@ export async function expandShortUrl(raw: string): Promise<string | null> {
     return typeof data?.url === 'string' ? data.url : null;
   } catch {
     return null;
+  }
+}
+
+export interface OfficialLiteInviteResolution {
+  landingUrl: string;
+  launchUrl: string;
+}
+
+async function readLimitedHtml(res: Response): Promise<string> {
+  if (!res.ok) throw new Error(`招待ページがHTTP ${res.status}を返しました。`);
+  const declared = Number(res.headers.get('content-length') || 0);
+  if (declared > INVITE_HTML_MAX_BYTES) throw new Error('招待ページが大きすぎます。');
+  if (!res.body) return await res.text();
+
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > INVITE_HTML_MAX_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw new Error('招待ページが大きすぎます。');
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * 公式短縮リンクを招待LPまで展開し、LP自身が使うアプリ/ストア分岐URLを抽出する。
+ * ブラウザではSSRF対策済みの同一オリジンAPIを経由する。
+ */
+export async function resolveOfficialLiteInviteUrl(raw: string): Promise<OfficialLiteInviteResolution> {
+  if (!isTikTokLiteInviteShortLink(raw)) throw new Error('TikTok Liteの公式短縮招待リンクではありません。');
+
+  if (typeof window !== 'undefined') {
+    const res = await fetch(EXPAND_ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: raw.trim(), includeLaunchUrl: true }),
+    });
+    const data = await res.json().catch(() => null) as { url?: unknown; launchUrl?: unknown; error?: unknown } | null;
+    if (typeof data?.url !== 'string' || typeof data?.launchUrl !== 'string'
+      || !validateOfficialLiteLaunchUrl(data.launchUrl)) {
+      throw new Error(typeof data?.error === 'string' ? data.error : 'TikTok公式のアプリ/ストア分岐リンクを取得できませんでした。');
+    }
+    return { landingUrl: data.url, launchUrl: data.launchUrl };
+  }
+
+  const landingUrl = await followRedirects(raw.trim());
+  const landing = parseHttpUrl(landingUrl);
+  if (!landing || !isInviteLpUrl(landing)) throw new Error('短縮リンクの着地先がTikTokの招待ページではありません。');
+
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), EXPAND_TIMEOUT_MS) : null;
+  try {
+    const res = await fetch(landingUrl, {
+      method: 'GET',
+      redirect: 'error',
+      cache: 'no-store',
+      headers: { 'user-agent': IOS_USER_AGENT, accept: 'text/html,application/xhtml+xml' },
+      signal: ctrl?.signal,
+    });
+    const launchUrl = extractOfficialLiteLaunchUrl(await readLimitedHtml(res));
+    if (!launchUrl || !validateOfficialLiteLaunchUrl(launchUrl)) {
+      throw new Error('招待ページ内にTikTok公式のアプリ/ストア分岐情報が見つかりませんでした。');
+    }
+    return { landingUrl, launchUrl };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -1478,9 +1562,9 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
  *
  * 土台にするURLは、公式リンクの実体にどれだけ近いかで決める。
  *  1. 入力がすでに招待LPのURLなら、展開せずそのまま使う
- *  2. 短縮リンクなら自前でリダイレクトを追って展開する(公式リンクは招待LPへ着地する)
- *  3. Lite公式短縮リンク・OneLinkは、生成オプション未指定なら元URLを保持する
- *  4. どれにも当てはまらなければ Stealth API で抽出する(従来経路)
+ *  2. Lite公式短縮リンクは、招待LPのHTMLから公式ダウンロードボタンのURLを抽出する
+ *  3. 検証済みの公式分岐URL・OneLinkは、生成オプション未指定なら元URLを保持する
+ *  4. その他の短縮リンクは自前で展開し、必要な場合だけStealth APIで抽出する
  *
  * 展開・サニタイズのいずれかに失敗した場合は例外を投げる(呼び出し側で保存を中断する)。
  */
@@ -1498,6 +1582,10 @@ export function isTikTokLiteInviteShortLink(raw: string): boolean {
     && !url.username && !url.password && !url.port && /^\/t\/[A-Za-z0-9_-]+\/?$/.test(url.pathname);
 }
 
+export function isOfficialTikTokLiteLaunchUrl(raw: string): boolean {
+  return validateOfficialLiteLaunchUrl(raw);
+}
+
 export async function generateDestinationUrl(
   rawUrl: string,
   overrides: Partial<BuildOptions> = {}
@@ -1505,12 +1593,20 @@ export async function generateDestinationUrl(
   const input = parseHttpUrl(rawUrl);
   if (!input) throw new Error('遷移先URLが不正です。http(s):// で始まるURLを入力してください。');
 
-  // The inspected public page links directly to lite.tiktok.com/t/... using <a>.
-  // Preserve the original short URL or Lite OneLink, including all parameters.
-  // Do not rebuild it, visit it server-side, or substitute a generic store URL.
-  // Explicit build overrides still opt into the existing conversion workflow.
-  if ((isTikTokLiteOneLink(rawUrl) || isTikTokLiteInviteShortLink(rawUrl)) && Object.keys(overrides).length === 0) {
-    return { url: rawUrl.trim(), mode: isTikTokLiteInviteShortLink(rawUrl) ? 'original' : 'onelink', removed: [], liteForced: false };
+  // 保存済みの公式分岐URLとOneLinkは再加工しない。短縮招待リンクは、公式LP自身が
+  // ダウンロードボタンに設定する lite_redirect へ変換する。これにより、インストール済みは
+  // redirect_url、新規端末はshort_dlを通り、どちらも同じ招待コンテキストを保持する。
+  if (Object.keys(overrides).length === 0) {
+    if (isOfficialTikTokLiteLaunchUrl(rawUrl)) {
+      return { url: rawUrl.trim(), mode: 'original', removed: [], liteForced: false };
+    }
+    if (isTikTokLiteOneLink(rawUrl)) {
+      return { url: rawUrl.trim(), mode: 'onelink', removed: [], liteForced: false };
+    }
+    if (isTikTokLiteInviteShortLink(rawUrl)) {
+      const resolved = await resolveOfficialLiteInviteUrl(rawUrl);
+      return { url: resolved.launchUrl, mode: 'original', removed: [], liteForced: false };
+    }
   }
 
   let source = input.toString();

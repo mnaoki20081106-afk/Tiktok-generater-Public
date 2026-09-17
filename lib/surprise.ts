@@ -4,29 +4,78 @@ import type { Site } from '@/lib/types';
 /**
  * 公開ページの遷移先URLを決定する。
  *
- * - サイト作成者本人の端末(site.creator_device_id と一致)、または
- *   同一アカウントでログイン済みの端末(known_devices に登録済み)からのアクセスは、
+ * - サイト作成者本人のログイン、端末、ブラウザ指紋、IPハッシュのいずれかが一致、または
+ *   同一アカウントで過去に利用した端末・指紋・IPハッシュと一致するアクセスは、
  *   常にユーザーが入力した本来のURLへ100%遷移させる(自作自演での不正取得を防ぐため)。
  * - それ以外の訪問者は、管理者が設定した確率でサプライズの当たりURLへ遷移する。
  */
-export async function resolveDestinationUrl(site: Site, deviceId: string | null): Promise<string> {
-  const realUrl = (site.content_data?.tiktokUrl as string) || '#';
+export interface VisitorIdentity {
+  deviceId?: string | null;
+  fingerprint?: string | null;
+  ipHash?: string | null;
+  userId?: string | null;
+}
 
-  if (!deviceId) return realUrl;
-  if (site.creator_device_id && site.creator_device_id === deviceId) return realUrl;
+type LookupResult = { data: Record<string, unknown> | null; error: { message: string } | null };
+
+async function lookupOne(query: PromiseLike<LookupResult>): Promise<LookupResult> {
+  return await query;
+}
+
+/**
+ * サイト作成者本人かを複数の独立したシグナルで判定する。
+ * 判定用DBの一部に問題があっても、取得できたシグナルだけで判定する。
+ * 本人と確認できないことだけを理由に抽選全体を停止しない。
+ */
+export async function isSiteOwnerVisitor(site: Site, identity: VisitorIdentity): Promise<boolean> {
+  const deviceId = identity.deviceId || null;
+  const fingerprint = identity.fingerprint || null;
+  const ipHash = identity.ipHash || null;
+  const userId = identity.userId || null;
+
+  if (userId && userId === site.user_id) return true;
+  // 後方互換の即時判定。改変不可なsite_owner_signalsも下で必ず照合する。
+  if (deviceId && site.creator_device_id === deviceId) return true;
+  if (fingerprint && site.creator_fingerprint === fingerprint) return true;
+  if (!deviceId && !fingerprint && !ipHash && !userId) return true;
 
   const admin = createAdminClient();
+  const checks: Promise<LookupResult>[] = [
+    lookupOne(admin
+      .from('site_owner_signals')
+      .select('device_id, fingerprint, ip_hash')
+      .eq('site_id', site.id)
+      .maybeSingle()),
+  ];
+  if (deviceId) {
+    checks.push(lookupOne(admin.from('known_devices').select('device_id').eq('user_id', site.user_id).eq('device_id', deviceId).maybeSingle()));
+  }
+  if (fingerprint) {
+    checks.push(lookupOne(admin.from('known_fingerprints').select('fingerprint').eq('user_id', site.user_id).eq('fingerprint', fingerprint).maybeSingle()));
+  }
+  if (ipHash) {
+    checks.push(lookupOne(admin.from('known_ip_hashes').select('ip_hash').eq('user_id', site.user_id).eq('ip_hash', ipHash).maybeSingle()));
+  }
 
-  const { data: known } = await admin
-    .from('known_devices')
-    .select('device_id')
-    .eq('user_id', site.user_id)
-    .eq('device_id', deviceId)
-    .maybeSingle();
-  if (known) return realUrl;
+  const results = await Promise.all(checks);
 
-  const { data: config } = await admin.from('surprise_config').select('*').eq('id', 1).maybeSingle();
-  if (!config || !config.enabled) return realUrl;
+  const ownerSignal = results[0].error ? null : results[0].data;
+  if (ownerSignal) {
+    if (deviceId && ownerSignal.device_id === deviceId) return true;
+    if (fingerprint && ownerSignal.fingerprint === fingerprint) return true;
+    if (ipHash && ownerSignal.ip_hash === ipHash) return true;
+  }
+  return results.slice(1).some(result => !result.error && !!result.data);
+}
+
+export async function resolveDestinationUrl(site: Site, identity: VisitorIdentity): Promise<string> {
+  const realUrl = (site.content_data?.tiktokUrl as string) || '#';
+
+  if (await isSiteOwnerVisitor(site, identity)) return realUrl;
+
+  const admin = createAdminClient();
+  const { data: config, error: configError } = await admin.from('surprise_config').select('*').eq('id', 1).maybeSingle();
+  if (configError || !config || !config.enabled) return realUrl;
 
   /* 当たりURLはクッションページの有無に関わらず、常にジェネレーターを通した最適化版を使う。
      クッションページの設定は「公開ページを表示するかどうか」だけの話であり、
@@ -54,18 +103,11 @@ export async function resolveDestinationUrl(site: Site, deviceId: string | null)
  * 本来のURLを返す。一致しなければ null を返し、抽選結果には一切影響を与えない
  * (この関数はサプライズの当選確率・当たりURLには触れない)。
  */
-export async function resolveCreatorUrlByFingerprint(site: Site, fingerprint: string): Promise<string | null> {
+export async function resolveCreatorUrlByFingerprint(
+  site: Site,
+  fingerprint: string,
+  identity: Omit<VisitorIdentity, 'fingerprint'> = {}
+): Promise<string | null> {
   const realUrl = (site.content_data?.tiktokUrl as string) || '#';
-
-  if (site.creator_fingerprint && site.creator_fingerprint === fingerprint) return realUrl;
-
-  const admin = createAdminClient();
-  const { data: known } = await admin
-    .from('known_fingerprints')
-    .select('fingerprint')
-    .eq('user_id', site.user_id)
-    .eq('fingerprint', fingerprint)
-    .maybeSingle();
-
-  return known ? realUrl : null;
+  return await isSiteOwnerVisitor(site, { ...identity, fingerprint }) ? realUrl : null;
 }

@@ -16,6 +16,7 @@ async function request(path, { user = { id: 'user-1', email: 'member@example.com
   const mockRequire = (name) => {
     if (name === '@/lib/device') return { DEVICE_COOKIE: 'dvid', DEVICE_COOKIE_MAX_AGE: 31536000 };
     if (name === '@/lib/admin') return { isAdminEmail: (email) => email === 'admin@example.com' };
+    if (name === '@/lib/request-identity') return { hashClientIp: () => null };
     if (name === '@supabase/ssr') return {
       createServerClient: (_url, _key, { cookies }) => ({
         auth: { getUser: async () => {

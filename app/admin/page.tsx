@@ -7,6 +7,7 @@ import { isAdminEmail } from '@/lib/admin';
 import { getGlobalAnalytics, getGlobalAnalyticsHourly } from '@/lib/analytics';
 import { AnalyticsPanel } from '@/components/AnalyticsPanel';
 import { AdminSurpriseForm } from './admin-surprise-form';
+import { isIpHashingConfigured } from '@/lib/request-identity';
 
 export default async function AdminPage() {
   const supabase = await createClient();
@@ -59,9 +60,17 @@ export default async function AdminPage() {
       <h2 className="mb-2 text-xl font-semibold text-slate-900">サプライズ抽選設定</h2>
       <p className="mb-8 text-sm leading-relaxed text-slate-500">
         訪問者が公開ページの「TikTokを開く」ボタンをタップした際、指定した確率でユーザー入力のURLの代わりに
-        当たりURLへ遷移させます。サイト作成者本人の端末・同一アカウントでログイン済みの端末からのアクセスは、
-        常にユーザーが入力した本来のURLへ遷移します(自作自演での不正取得を防ぐため)。
+        当たりURLへ遷移させます。サイト作成者本人のログイン、端末Cookie、ブラウザ指紋、秘密鍵付きIPハッシュの
+        いずれかが一致するアクセスは、常にユーザーが入力した本来のURLへ遷移します。
       </p>
+      {!isIpHashingConfigured() && (
+        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
+          <strong>IPによる作成者除外が未設定です。</strong><br />
+          GitHub／ホスティング環境のSecretに、32文字以上のランダムな
+          <code className="mx-1 font-mono">IP_HASH_SECRET</code>を追加してください。
+          Cookie・ログイン・ブラウザ指紋による除外は引き続き動作します。
+        </div>
+      )}
       <AdminSurpriseForm config={config} />
     </main>
   );

@@ -181,6 +181,47 @@ create policy "users can view their own fingerprints"
   on public.known_fingerprints for select
   using (auth.uid() = user_id);
 
+-- 5-5) 作成者本人を抽選から除外するための、改変不可な非公開シグナル
+-- sites上のcreator_*列は後方互換のため残すが、サイト所有者自身にUPDATE権限がある。
+-- そのため抽選判定では、Service Role以外から読み書きできないこの表も必ず照合する。
+-- IPアドレスは生値を保存せず、IP_HASH_SECRETを鍵にしたHMAC-SHA256だけを保存する。
+create table if not exists public.site_owner_signals (
+  site_id uuid primary key references public.sites (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  device_id text,
+  fingerprint text,
+  ip_hash text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists site_owner_signals_user_id_idx on public.site_owner_signals (user_id);
+create index if not exists site_owner_signals_ip_hash_idx on public.site_owner_signals (ip_hash);
+alter table public.site_owner_signals enable row level security;
+
+-- 既存サイトは、現在保存されている端末情報を一度だけ非公開表へ退避する。
+insert into public.site_owner_signals (site_id, user_id, device_id, fingerprint)
+select id, user_id, creator_device_id, creator_fingerprint from public.sites
+on conflict (site_id) do nothing;
+
+-- 同一Googleアカウントでダッシュボードを開いた回線のHMACを記録する。
+-- INSERTのみ本人に許可し、SELECT/UPDATE/DELETEはService Roleだけに限定する。
+create table if not exists public.known_ip_hashes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  ip_hash text not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, ip_hash)
+);
+
+create index if not exists known_ip_hashes_user_id_idx on public.known_ip_hashes (user_id);
+create index if not exists known_ip_hashes_ip_hash_idx on public.known_ip_hashes (ip_hash);
+alter table public.known_ip_hashes enable row level security;
+
+drop policy if exists "users can register their own ip hashes" on public.known_ip_hashes;
+create policy "users can register their own ip hashes"
+  on public.known_ip_hashes for insert
+  with check (auth.uid() = user_id);
+
 -- 6) ページビュー記録(サイト作成者向けのPV/UU分析・管理者向けの利用状況に使う)
 --    公開ページ(/[slug])が閲覧されるたびに1行記録する。書き込みはService Roleクライアント
 --    (app/[slug]/route.ts)からのみ行うため、anon/authenticatedへの書き込みポリシーは追加しない。

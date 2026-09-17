@@ -1,11 +1,13 @@
 'use server';
 
 import { randomUUID } from 'crypto';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { DEVICE_COOKIE } from '@/lib/device';
+import { hashClientIp } from '@/lib/request-identity';
 
 function randomSlug() {
   return `site-${randomUUID().slice(0, 8)}`;
@@ -32,6 +34,7 @@ export async function createSite(fingerprint?: string | null) {
 
   const cookieStore = await cookies();
   const creatorDeviceId = cookieStore.get(DEVICE_COOKIE)?.value ?? null;
+  const creatorIpHash = hashClientIp(await headers());
 
   const { data, error } = await supabase
     .from('sites')
@@ -50,6 +53,18 @@ export async function createSite(fingerprint?: string | null) {
   if (error || !data) {
     throw new Error('サイトの作成に失敗しました: ' + (error?.message ?? '不明なエラー'));
   }
+
+  // サイト所有者が直接変更できるsites行とは別に、Service Role専用表へ作成時点の
+  // 本人確認シグナルを保存する。非公開表が一時的に利用できなくても、sites上の従来の
+  // device/fingerprint判定は残るため、サイト作成そのものは取り消さない。
+  const admin = createAdminClient();
+  await admin.from('site_owner_signals').insert({
+    site_id: data.id,
+    user_id: user.id,
+    device_id: creatorDeviceId,
+    fingerprint: fingerprint || null,
+    ip_hash: creatorIpHash,
+  });
 
   revalidatePath('/dashboard');
   redirect(`/dashboard/${data.id}`);

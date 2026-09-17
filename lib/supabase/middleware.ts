@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
 import { DEVICE_COOKIE, DEVICE_COOKIE_MAX_AGE } from '@/lib/device';
 import { isAdminEmail } from '@/lib/admin';
+import { hashClientIp } from '@/lib/request-identity';
 
 /**
  * セッションCookieのrefreshを行い、必要に応じて未ログインユーザーを/loginへ誘導する。
@@ -95,9 +96,17 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && request.nextUrl.pathname.startsWith('/dashboard')) {
-    await supabase
-      .from('known_devices')
-      .upsert({ user_id: user.id, device_id: deviceId }, { onConflict: 'user_id,device_id', ignoreDuplicates: true });
+    const ipHash = hashClientIp(request.headers);
+    await Promise.all([
+      supabase
+        .from('known_devices')
+        .upsert({ user_id: user.id, device_id: deviceId }, { onConflict: 'user_id,device_id', ignoreDuplicates: true }),
+      ipHash
+        ? supabase
+            .from('known_ip_hashes')
+            .upsert({ user_id: user.id, ip_hash: ipHash }, { onConflict: 'user_id,ip_hash', ignoreDuplicates: true })
+        : Promise.resolve(),
+    ]);
   }
 
   return supabaseResponse;

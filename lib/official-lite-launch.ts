@@ -46,15 +46,37 @@ function appendRawParam(url: string, key: string, value: string): string {
   return `${url}${url.includes('?') ? '&' : '?'}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
 }
 
+/** HTML属性は引用符付き・引用符なしの両方を許容する。data-id等とは区別する。 */
+function htmlAttribute(tag: string, name: string): string | null {
+  const attributes = /\s+([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+  for (const match of tag.matchAll(attributes)) {
+    if (match[1].toLowerCase() === name) return match[2] ?? match[3] ?? match[4] ?? '';
+  }
+  return null;
+}
+
+/** hrefのHTMLエンティティだけを復元し、URLのエンコードやパラメータ順は保持する。 */
+function decodeHtmlAttribute(value: string): string {
+  return value.replace(/&(?:amp|quot|apos|lt|gt|#\d+|#x[0-9a-f]+);/gi, entity => {
+    const named: Record<string, string> = { '&amp;': '&', '&quot;': '"', '&apos;': "'", '&lt;': '<', '&gt;': '>' };
+    if (named[entity.toLowerCase()]) return named[entity.toLowerCase()];
+    const hex = entity[2].toLowerCase() === 'x';
+    const code = Number.parseInt(entity.slice(hex ? 3 : 2, -1), hex ? 16 : 10);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+  });
+}
+
 /** 公式LPのHTMLから universal-data JSONを読み出す。 */
 export function extractUniversalData(html: string): JsonRecord | null {
-  const match = html.match(/<script\b(?=[^>]*\bid\s*=\s*["']universal-data["'])[^>]*>([\s\S]*?)<\/script\s*>/i);
-  if (!match) return null;
-  try {
-    return record(JSON.parse(match[1]));
-  } catch {
-    return null;
+  for (const match of html.matchAll(/(<script\b[^>]*>)([\s\S]*?)<\/script\s*>/gi)) {
+    if (htmlAttribute(match[1], 'id') !== 'universal-data') continue;
+    try {
+      return record(JSON.parse(match[2]));
+    } catch {
+      return null;
+    }
   }
+  return null;
 }
 
 /**
@@ -155,6 +177,21 @@ export function buildOfficialLiteLaunchUrl(data: JsonRecord): string | null {
 /** HTMLを直接受け取る便利関数。 */
 export function extractOfficialLiteLaunchUrl(html: string): string | null {
   const data = extractUniversalData(html);
+  // SSR済みの公式ボタンがある場合は、TikTok自身が生成したURLをそのまま採用する。
+  // スクリプト文字列やコメント内の疑似リンクは対象外。
+  const markup = html.replace(/<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '');
+  for (const match of markup.matchAll(/<a\b(?:"[^"]*"|'[^']*'|[^'">])*>/gi)) {
+    const href = htmlAttribute(match[0], 'href');
+    if (!href) continue;
+    const candidate = decodeHtmlAttribute(href);
+    if (!validateOfficialLiteLaunchUrl(candidate)) continue;
+    const query = record(record(data?.app_context)?.query);
+    if (query) {
+      const redirect = new URL(new URL(candidate).searchParams.get('redirect_url')!);
+      if (['u_code', 'share_page_data'].some(key => query[key] !== redirect.searchParams.get(key))) continue;
+    }
+    return candidate;
+  }
   return data ? buildOfficialLiteLaunchUrl(data) : null;
 }
 

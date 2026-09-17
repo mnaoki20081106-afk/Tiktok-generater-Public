@@ -62,4 +62,14 @@ assert.equal(
   'without draw configuration there is no safe prize URL to return'
 );
 
+const rawInvite = 'https://lite.tiktok.com/t/ZS9SKLkjB9v5P-nhiPj/';
+const rawConfig = load({
+  identityResult: identityFailure,
+  configResult: { data: { enabled: true, probability: 100, prize_url: rawInvite, prize_url_optimized: null }, error: null },
+});
+assert.equal(await rawConfig.resolveDestinationUrl(site, { deviceId: 'ordinary-visitor' }), rawInvite,
+  'Missing resolved URL must not stop the draw or change the invitation token');
+assert.equal(await rawConfig.resolveDestinationUrl(site, { deviceId: 'creator-device' }), site.content_data.tiktokUrl,
+  'Creator exclusion remains active with an unresolved prize URL');
+
 console.log('Surprise draw availability: identity lookup failures do not stop draws; creator cookie exclusion remains active');

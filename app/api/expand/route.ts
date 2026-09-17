@@ -34,8 +34,8 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ url: await followRedirects(url) });
   } catch (e) {
-    // 通常の展開呼び出しは従来経路へ進めるよう200で返す。公式分岐の呼び出し側は
-    // launchUrlが無い場合に保存を中断し、推測したリンクを公開しない。
+    // 呼び出し側で失敗を判別する。検証済みの公式短縮リンクに限り、
+    // generateDestinationUrlは入力URLを保持して保存を継続する。
     return NextResponse.json({ url: null, error: e instanceof Error ? e.message : String(e) });
   }
 }

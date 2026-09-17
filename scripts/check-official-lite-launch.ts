@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import {
   extractOfficialLiteLaunchUrl,
+  extractUniversalData,
   validateOfficialLiteLaunchUrl,
 } from '../lib/official-lite-launch.ts';
-import { detectBuildMode, isOfficialTikTokLiteLaunchUrl } from '../lib/link-generator.ts';
+import { detectBuildMode, isOfficialTikTokLiteLaunchUrl, generateDestinationUrl } from '../lib/link-generator.ts';
 
 const sharePageData = 'eyJpbnZpdGUiOiJhK2IvPSJ9';
 const inviteUrl = new URL('https://www.tiktok.com/ug/incentive/share/pro_scan_code');
@@ -75,5 +76,37 @@ tampered.searchParams.set('short_dl', tamperedShortDl.toString());
 assert.equal(validateOfficialLiteLaunchUrl(tampered.toString()), false, 'mismatched attribution IDs are rejected');
 assert.equal(validateOfficialLiteLaunchUrl(launch.replace('app-va.tiktokv.com', 'app-va.tiktokv.com.evil.example')), false);
 assert.equal(extractOfficialLiteLaunchUrl('<script id="universal-data">{bad json}</script>'), null);
+
+// 実際の添付HTMLは id=universal-data (引用符なし) だった。
+for (const attr of ['id=universal-data', "id='universal-data'", 'ID = "universal-data"']) {
+  const variant = html.replace('id="universal-data"', attr);
+  assert.deepEqual(extractUniversalData(variant), universalData);
+  assert.equal(extractOfficialLiteLaunchUrl(variant), launch);
+}
+assert.equal(extractUniversalData(html.replace('id="universal-data"', 'data-id="universal-data"')), null);
+
+// 描画済みボタンは不明な追加パラメータも含めてTikTokのURLをそのまま使う。
+const renderedLaunch = launch + '&official_extra=keep%2fme';
+const anchor = `<a class="matrix-smart-wrapper" href="${renderedLaunch.replaceAll('&', '&amp;')}">Open</a>`;
+assert.equal(extractOfficialLiteLaunchUrl(html + anchor), renderedLaunch);
+assert.equal(extractOfficialLiteLaunchUrl(anchor), renderedLaunch);
+assert.equal(extractOfficialLiteLaunchUrl(anchor.replaceAll('&amp;', '&#38;')), renderedLaunch);
+assert.equal(extractOfficialLiteLaunchUrl(`<!--${anchor}-->`), null);
+assert.equal(extractOfficialLiteLaunchUrl(`<script>${anchor}</script>`), null);
+assert.equal(extractOfficialLiteLaunchUrl(anchor.replace('href=', 'data-href=')), null);
+assert.equal(extractOfficialLiteLaunchUrl(anchor.replace('app-va.tiktokv.com', 'evil.example')), null);
+
+const savedFetch = globalThis.fetch;
+try {
+  const short = 'https://lite.tiktok.com/t/ZS9SKLkjB9v5P-nhiPj/';
+  globalThis.fetch = async input => String(input) === short
+    ? new Response(null, { status: 302, headers: { location: inviteUrl.toString() } })
+    : new Response(html.replace('id="universal-data"', 'id=universal-data') + anchor);
+  const result = await generateDestinationUrl(short);
+  assert.equal(result.url, renderedLaunch, 'Shared save path extracts the official button for page and prize URLs');
+  assert.equal((await generateDestinationUrl(result.url)).url, renderedLaunch, 'Resaving preserves the official button URL');
+} finally {
+  globalThis.fetch = savedFetch;
+}
 
 console.log('Official TikTok Lite launch URL: app and store routes preserve the same invite context');

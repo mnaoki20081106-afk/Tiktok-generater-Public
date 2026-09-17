@@ -77,19 +77,9 @@ export async function resolveDestinationUrl(site: Site, identity: VisitorIdentit
   const { data: config, error: configError } = await admin.from('surprise_config').select('*').eq('id', 1).maybeSingle();
   if (configError || !config || !config.enabled) return realUrl;
 
-  /* 当たりURLはクッションページの有無に関わらず、常にジェネレーターを通した最適化版を使う。
-     クッションページの設定は「公開ページを表示するかどうか」だけの話であり、
-     当選した訪問者に未サニタイズのURLを渡してよい理由にはならないため。
-     最適化版はStealth APIを呼ぶ必要があるが、/admin での保存時に変換済みなので
-     ここでは値を読むだけで済み、訪問者を待たせない。
-
-     以前は最適化版が無い場合(この対応より前に保存された行など)に生のURLへ
-     フォールバックしていたが、廃止した。生の招待リンク(https://lite.tiktok.com/t/...)は
-     踏んでもアプリが起動せず、ブラウザで招待LPが開くだけで招待も成立しない。
-     つまりフォールバックは「壊れたリンクを当選者へ配る」動作でしかなく、
-     抽選を黙って止めるより悪い。最適化版が無いときは抽選そのものを行わず、
-     サイト本来のURLへ送る(管理画面には未最適化である旨を警告として出す)。 */
-  const prizeUrl = config.prize_url_optimized;
+  // 解決済みURLがない旧設定でも、入力された当選リンクで抽選を行う。
+  // HTMLの解析に失敗しただけで、抽選を無効にしない。
+  const prizeUrl = config.prize_url_optimized || config.prize_url;
   if (!prizeUrl) return realUrl;
 
   const probability = Math.min(100, Math.max(0, Number(config.probability) || 0));

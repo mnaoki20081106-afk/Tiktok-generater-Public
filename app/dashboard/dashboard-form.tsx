@@ -1890,7 +1890,7 @@ export function DashboardForm({
               <label className={styles.fl}>TikTok Liteの招待リンク(タップ後に開くリンク)</label>
               <input type="url" data-id="tiktokUrl" placeholder="https://lite.tiktok.com/t/..." />
               <div className={styles.hint}>
-                短縮招待リンク（lite.tiktok.com/t/...）は保存時に、TikTok公式と同じ「アプリ起動／未インストール時はストア」の分岐リンクへ変換します。招待の最終認定は端末環境とTikTok側の参加条件によります。
+                短縮招待リンク（lite.tiktok.com/t/...）は保存時にTikTok公式の分岐リンクを取得し、取得できない場合も公式短縮URLをそのまま保持します。招待の最終認定は端末環境とTikTok側の参加条件によります。
               </div>
               <div className={styles.checkRow}>
                 <input type="checkbox" data-id="cushionToggle" id="cushionToggle" />

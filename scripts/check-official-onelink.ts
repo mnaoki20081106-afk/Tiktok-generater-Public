@@ -22,5 +22,12 @@ try {
   for (const invalid of ['https://lite.tiktok.com.evil.example/t/test', 'http://lite.tiktok.com/t/test', 'https://user@lite.tiktok.com/t/test', 'https://lite.tiktok.com:444/t/test', 'https://lite.tiktok.com/t/', 'https://lite.tiktok.com/other/test']) assert.equal(isTikTokLiteInviteShortLink(invalid), false);
   assert.equal(isTikTokLiteInviteShortLink('https://lite.tiktok.com/t/ZS9STpGp6kK2T-HhDaj/'), true);
   assert.equal(detectBuildMode('https://lite.tiktok.com/t/ZS9STpGp6kK2T-HhDaj/'), 'original');
+  const suppliedInvite = 'https://lite.tiktok.com/t/ZS9SKLkjB9v5P-nhiPj/';
+  assert.equal(isTikTokLiteInviteShortLink(suppliedInvite), true);
+  assert.deepEqual(
+    await generateDestinationUrl(suppliedInvite),
+    { url: suppliedInvite, mode: 'original', removed: [], liteForced: false },
+    'A verified official short invite remains publishable when TikTok does not expose launch metadata',
+  );
 } finally { globalThis.fetch = savedFetch; }
-console.log('Official Lite OneLinks: opaque IDs and all parameters preserved without network requests');
+console.log('Official Lite links: OneLinks and short invites remain publishable without fabricating parameters');

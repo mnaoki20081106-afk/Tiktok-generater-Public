@@ -14,9 +14,9 @@ assert.equal(sliderToLikeCount(1_000), 1_000_000);
 assert.equal(sliderToLikeCount(likeCountToSlider(125_000)), 125_000);
 
 const minimums = createTikTokEngagementCounts(100_000, () => 0);
-assert.deepEqual(minimums, { likes: 100_000, comments: 800, saves: 80_000, shares: 5_000 });
+assert.deepEqual(minimums, { likes: 100_000, comments: 8_000, saves: 80_000, shares: 5_000 });
 const maximums = createTikTokEngagementCounts(100_000, () => 1);
-assert.deepEqual(maximums, { likes: 100_000, comments: 1_200, saves: 120_000, shares: 7_000 });
+assert.deepEqual(maximums, { likes: 100_000, comments: 12_000, saves: 120_000, shares: 7_000 });
 
 assert.equal(formatTikTokCount(3_100), '3.1k');
 assert.equal(formatTikTokCount(1_000_000), '1M');

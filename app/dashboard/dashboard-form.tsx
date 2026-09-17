@@ -48,6 +48,7 @@ type DraftJson = {
 
 const IMAGE_NAMES = ['background', 'avatar', 'ogp', 'icon'] as const;
 const SNAP_PX = 10;
+const DEFAULT_TIKTOK_ICON_URL = '/tiktok-app-icon.png';
 
 // X(旧Twitter)のOGP画像の要件: 最小300×157px・最大4096×4096px・800KB以下が推奨・PNG/JPG/WebP
 const OGP_MIN_WIDTH = 300;
@@ -114,6 +115,7 @@ export function DashboardForm({
     const piCount = $<HTMLInputElement>('piCount');
     const floatToggle = $<HTMLInputElement>('floatToggle');
     const floatPreview = $('floatPreview');
+    const floatLater = $<HTMLButtonElement>('floatLater');
     const previewIconArea = $('previewIconArea');
     const previewIconPlaceholder = $('previewIconPlaceholder');
     const previewIconImg = $<HTMLImageElement>('previewIconImg');
@@ -909,6 +911,12 @@ export function DashboardForm({
       floatPreview.classList.toggle(styles.visible, floatToggle.checked);
       saveState();
     });
+    floatLater.addEventListener('click', (event) => {
+      event.stopPropagation();
+      floatToggle.checked = false;
+      floatPreview.classList.remove(styles.visible);
+      saveState();
+    });
     previewIconArea.addEventListener('click', (e) => {
       e.stopPropagation();
       iconInput.click();
@@ -1386,6 +1394,10 @@ export function DashboardForm({
           const span = iconLabel.querySelector('span');
           if (span) span.textContent = '設定済みの画像';
           iconLabel.classList.add(styles.selected);
+        } else {
+          applyIconPreview(DEFAULT_TIKTOK_ICON_URL);
+          const span = iconLabel.querySelector('span');
+          if (span) span.textContent = 'TikTokアイコン（デフォルト）';
         }
       }
 
@@ -1605,7 +1617,7 @@ export function DashboardForm({
                 </div>
                 <div className={styles.pMa}>
                   <div className={styles.pBo}>TikTokを開く</div>
-                  <div className={styles.pBl}>後で</div>
+                  <button type="button" className={styles.pBl} data-id="floatLater">後で</button>
                 </div>
               </div>
             </div>
@@ -1641,7 +1653,7 @@ export function DashboardForm({
               <div className={styles.engagementScale}>
                 <span>0</span><span>細かく調整</span><span>100万</span>
               </div>
-              <p>いいね数を基準に、コメント0.8〜1.2%・保存80〜120%・シェア5〜7%の範囲で自動生成します。</p>
+              <p>いいね数を基準に、コメント8〜12%・保存80〜120%・シェア5〜7%の範囲で自動生成します。</p>
             </div>
             <div className={styles.engagementManualGrid} data-id="engagementManualPanel" hidden>
               <label><span>いいね</span><input type="number" min="0" step="1" inputMode="numeric" data-id="manualLikeCount" /></label>

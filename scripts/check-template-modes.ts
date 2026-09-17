@@ -52,6 +52,16 @@ assert.ok(live.includes('三件目') && !live.includes('<span class="lv-play"'))
 assert.ok(live.includes('border:2px solid #00aaff'));
 const video = renderAlternateViewerHtml({ ...base, templateMode: 'youtube', templateSettings: { youtube: { videoUrl: 'https://example.com/movie.mp4', loop: false, rows: [] } } });
 assert.ok(video.includes('<video class="yt-v"') && !video.includes(' playsinline loop'));
+const youtubeAutoPreview = renderAlternateViewerHtml({ ...base, templateMode: 'youtube', templateSettings: { youtube: { rows: [{
+  title: '取得した人気動画', image: 'https://i.ytimg.com/vi/abcDEF_1234/hqdefault.jpg', channel: '人気チャンネル',
+  channelAvatar: 'https://yt3.ggpht.com/channel-icon',
+  viewCount: '98.8万回視聴', ago: '2日前', duration: '12:05',
+}] } } }, { preview: true, focusRows: true });
+assert.ok(youtubeAutoPreview.includes('取得した人気動画') && youtubeAutoPreview.includes('人気チャンネル・98.8万回視聴・2日前'));
+assert.ok(youtubeAutoPreview.includes('hqdefault.jpg') && youtubeAutoPreview.includes('12:05'));
+assert.ok(youtubeAutoPreview.includes('https://yt3.ggpht.com/channel-icon'), 'related video uses its channel icon');
+assert.ok(youtubeAutoPreview.includes("document.querySelector('.yt-rels')"), 'auto fill preview focuses the reflected related videos');
+assert.ok(!renderAlternateViewerHtml({ ...base, templateMode: 'youtube' }).includes("document.querySelector('.yt-rels')"), 'published page never auto-scrolls');
 console.log('7 reference layouts: CSS/DOM parity, editable content, invite links, preview isolation, and escaping passed');
 
 for (const templateMode of modes) {

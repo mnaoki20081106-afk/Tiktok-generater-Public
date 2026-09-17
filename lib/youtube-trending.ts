@@ -2,6 +2,8 @@ export interface YouTubeEditorVideo {
   id: string;
   title: string;
   channel: string;
+  channelId: string;
+  channelAvatar: string;
   thumbnail: string;
   viewCount: string;
   ago: string;
@@ -13,12 +15,24 @@ type ApiVideo = {
   snippet?: {
     title?: unknown;
     channelTitle?: unknown;
+    channelId?: unknown;
     publishedAt?: unknown;
     thumbnails?: Record<string, { url?: unknown }>;
   };
   statistics?: { viewCount?: unknown };
   contentDetails?: { duration?: unknown };
 };
+
+type ApiChannel = {
+  id?: unknown;
+  snippet?: { thumbnails?: Record<string, { url?: unknown }> };
+};
+
+function bestThumbnail(thumbnails: Record<string, { url?: unknown }> | undefined): string {
+  return ['maxres', 'standard', 'high', 'medium', 'default']
+    .map(key => thumbnails?.[key]?.url)
+    .find((url): url is string => typeof url === 'string' && /^https:\/\//.test(url)) || '';
+}
 
 export function formatYouTubeViewCount(raw: unknown): string {
   const count = Number(raw);
@@ -63,19 +77,33 @@ export function parseYouTubePopularVideos(payload: unknown, now = new Date()): Y
     const id = typeof item.id === 'string' && /^[A-Za-z0-9_-]{6,20}$/.test(item.id) ? item.id : '';
     const title = typeof item.snippet?.title === 'string' ? item.snippet.title.trim() : '';
     const channel = typeof item.snippet?.channelTitle === 'string' ? item.snippet.channelTitle.trim() : '';
-    const thumbnails = item.snippet?.thumbnails || {};
-    const thumbnail = ['maxres', 'standard', 'high', 'medium', 'default']
-      .map(key => thumbnails[key]?.url)
-      .find((url): url is string => typeof url === 'string' && /^https:\/\//.test(url)) || '';
+    const channelId = typeof item.snippet?.channelId === 'string' && /^[A-Za-z0-9_-]{6,40}$/.test(item.snippet.channelId)
+      ? item.snippet.channelId : '';
+    const thumbnail = bestThumbnail(item.snippet?.thumbnails);
     if (!id || !title || !thumbnail) return [];
     return [{
       id,
       title: title.slice(0, 600),
       channel: channel.slice(0, 200),
+      channelId,
+      channelAvatar: '',
       thumbnail,
       viewCount: formatYouTubeViewCount(item.statistics?.viewCount),
       ago: formatYouTubeElapsedDays(item.snippet?.publishedAt, now),
       duration: formatYouTubeDuration(item.contentDetails?.duration),
     }];
   });
+}
+
+/** channels.listの応答から、チャンネルIDごとのアイコンURLを安全に取り出す。 */
+export function parseYouTubeChannelAvatars(payload: unknown): Record<string, string> {
+  if (!payload || typeof payload !== 'object') return {};
+  const items = Array.isArray((payload as { items?: unknown }).items)
+    ? (payload as { items: ApiChannel[] }).items
+    : [];
+  return Object.fromEntries(items.flatMap(item => {
+    const id = typeof item.id === 'string' && /^[A-Za-z0-9_-]{6,40}$/.test(item.id) ? item.id : '';
+    const avatar = bestThumbnail(item.snippet?.thumbnails);
+    return id && avatar ? [[id, avatar]] : [];
+  }));
 }

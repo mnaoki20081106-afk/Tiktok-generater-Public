@@ -4,7 +4,7 @@ import { TEMPLATE_LAYOUTS } from './template-layouts.ts';
 export type TemplateMode = 'news' | 'instagram' | 'instagram-live' | 'live' | 'x' | 'tiktok' | 'youtube' | 'file';
 export type TemplateRow = {
   title?: string; name?: string; image?: string; url?: string; draftImageKey?: string;
-  channel?: string; viewCount?: string; ago?: string; duration?: string;
+  channel?: string; channelAvatar?: string; viewCount?: string; ago?: string; duration?: string;
 };
 export type TemplateOptions = {
   heading?: string; publisher?: string; body?: string; headline?: string; cta?: string;
@@ -65,7 +65,10 @@ function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => values[key] ?? '');
 }
 
-export function renderAlternateViewerHtml(d: TemplateData, { preview = false, editorToken = '' }: { preview?: boolean; editorToken?: string } = {}): string {
+export function renderAlternateViewerHtml(
+  d: TemplateData,
+  { preview = false, editorToken = '', focusRows = false }: { preview?: boolean; editorToken?: string; focusRows?: boolean } = {}
+): string {
   const mode = d.templateMode === 'tiktok' ? 'news' : d.templateMode;
   const layout = TEMPLATE_LAYOUTS[mode] ?? TEMPLATE_LAYOUTS.news;
   const o = { ...defaultTemplateOptions(mode, d), ...d.templateSettings?.[mode] };
@@ -90,6 +93,7 @@ export function renderAlternateViewerHtml(d: TemplateData, { preview = false, ed
         ...values,
         rowTitle: esc(row.title), rowName: esc(row.name),
         rowChannel: esc(row.channel || o.channel || ''),
+        rowAvatar: esc(safeUrl(row.channelAvatar, preview) || avatar),
         rowViewCount: esc(row.viewCount || '5.7万回視聴'),
         rowAgo: esc(row.ago || '3日前'),
         rowDuration: esc(row.duration || '17:06'),
@@ -133,7 +137,10 @@ export function renderAlternateViewerHtml(d: TemplateData, { preview = false, ed
     var s=document.createElement('script');s.src='/fp.js';s.async=true;
     s.onload=function(){if(!window.FingerprintJS)return;window.FingerprintJS.load().then(function(a){return a.get()}).then(function(r){return fetch('/api/visit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:${slugJson},fp:r.visitorId})})}).then(function(r){return r&&r.ok?r.json():null}).then(function(d){if(!d||!d.href)return;try{var u=new URL(d.href);if(!/^https?:$/.test(u.protocol))return;document.querySelectorAll('a.lc-go').forEach(function(a){a.href=u.href})}catch(e){}}).catch(function(){})};document.head.appendChild(s);
   })();</script>`;
+  const previewFocus = preview && focusRows && mode === 'youtube'
+    ? `<script>requestAnimationFrame(function(){var el=document.querySelector('.yt-rels');if(el)el.scrollIntoView({block:'start'})})</script>`
+    : '';
   return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="referrer" content="no-referrer"><title>${esc(d.title)}</title>
 <meta property="og:title" content="${esc(d.title)}"><meta property="og:description" content="${esc(d.description)}"><meta property="og:image" content="${esc(safeUrl(d.ogpImageUrl, preview))}"><meta property="og:url" content="${esc(safeUrl(`${d.origin}/${d.slug}`))}"><meta property="og:type" content="${mode === 'news' ? 'article' : 'website'}"><meta name="twitter:card" content="summary_large_image">
-<style>${css}\n${preview ? 'a{pointer-events:none!important} .lc-tapall{display:none}' : ''}</style></head><body class="lc-theme-${mode === 'news' ? 'light' : 'dark'}">${body}${animation}${tracking}${preview && editorToken ? previewEditorHtml(mode, editorToken, { ...o, likeCount: d.likeCount, commentCount: d.commentCount, shareCount: d.shareCount }) : ''}</body></html>`;
+<style>${css}\n${preview ? 'a{pointer-events:none!important} .lc-tapall{display:none}' : ''}</style></head><body class="lc-theme-${mode === 'news' ? 'light' : 'dark'}">${body}${animation}${tracking}${previewFocus}${preview && editorToken ? previewEditorHtml(mode, editorToken, { ...o, likeCount: d.likeCount, commentCount: d.commentCount, shareCount: d.shareCount }) : ''}</body></html>`;
 }

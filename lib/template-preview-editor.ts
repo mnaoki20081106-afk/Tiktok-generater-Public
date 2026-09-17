@@ -16,6 +16,8 @@ export function previewEditorHtml(mode: string, token: string, options: object):
 [data-edit-text]:empty::before{content:attr(data-placeholder);color:#67e8f9;font-size:12px}
 [data-edit-text]:empty{box-shadow:0 0 12px #38bdf888}
 [data-edit-image]{pointer-events:auto!important;cursor:pointer;outline:1px dashed #67e8f9;outline-offset:-2px}
+[data-engagement-trigger]{pointer-events:auto!important;cursor:pointer;outline:1px dashed #69dfff66;outline-offset:3px;border-radius:4px}
+[data-engagement-trigger]:focus{outline:2px solid #67e8f9;box-shadow:0 0 14px #38bdf866}
 .il-sc-t,.il-sc-b,.lv-sc-t,.lv-sc-b,.ig-play,.il-play,.lv-play,.x-play,.yt-play,.v-play{pointer-events:none!important}
 </style><script>(()=>{
 const c=${config};
@@ -41,6 +43,14 @@ Object.entries(c.targets||{}).forEach(([key,selector])=>document.querySelectorAl
  if(!ps.length){const p=document.createElement('p');el.append(p);ps=[p];}
  ps.forEach(p=>{p.contentEditable='plaintext-only';p.dataset.editText='comment-line';p.dataset.placeholder='コメントを入力（任意）';p.setAttribute('aria-label','コメントを編集');p.oninput=()=>send({type:'text',key:'comments',value:ps.map(plain).join('\\n')});});
 }));
+if(c.mode==='x'){
+ document.querySelectorAll('.x-actions > span,.x-stats > span,.x-like').forEach(el=>{
+  el.dataset.engagementTrigger='true';el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-label','反応数をまとめて設定');
+  const open=e=>{e.preventDefault();e.stopPropagation();send({type:'engagement'});};
+  el.addEventListener('click',open,true);
+  el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();send({type:'engagement'});}});
+ });
+}
 const rows=document.querySelectorAll(c.mode==='file'?'.gf-row':'.yt-rel');
 rows.forEach((row,index)=>edit(row.querySelector(c.mode==='file'?'.gf-nm':'.yt-rel-t'),c.mode==='file'?'name':'title',index));
 function pick(kind,index){const input=document.createElement('input');input.type='file';input.accept='image/*';input.hidden=true;document.body.append(input);input.addEventListener('change',()=>{const file=input.files[0];if(file)send({type:'image',kind,index,file});input.remove();});input.click();}

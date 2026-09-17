@@ -30,7 +30,6 @@ type DraftJson = {
   templateMode: string;
   slug: string;
   tiktokUrl: string;
-  cushionToggle: boolean;
   ogpTitle: string;
   username: string;
   description: string;
@@ -131,10 +130,7 @@ export function DashboardForm({
     const iconLabel = $('iconLabel');
     const slugInput = $<HTMLInputElement>('slug');
     const tiktokUrlInput = $<HTMLInputElement>('tiktokUrl');
-    const cushionToggle = $<HTMLInputElement>('cushionToggle');
-    const cushionHint = $('cushionHint');
     const previewCol = $('previewCol');
-    const previewNote = $('previewNote');
     const iconField = $('iconField');
     const ogpTitleInput = $<HTMLInputElement>('ogpTitle');
     const deployBtn = $<HTMLButtonElement>('deployBtn');
@@ -206,7 +202,6 @@ export function DashboardForm({
         templateSettings,
         slug: slugInput.value,
         tiktokUrl: tiktokUrlInput.value,
-        cushionToggle: cushionToggle.checked,
         ogpTitle: ogpTitleInput.value,
         username: usernameEl.textContent?.trim() ?? '',
         description: descText,
@@ -687,7 +682,7 @@ export function DashboardForm({
     async function handlePreviewMessage(event: MessageEvent) {
       const m = event.data;
       const mode = templateMode.value as TemplateMode;
-      if (disposed || !cushionToggle.checked || event.source !== altFrame.contentWindow || !m || m.source !== 'template-editor' || m.token !== editorToken || m.mode !== mode) return;
+      if (disposed || event.source !== altFrame.contentWindow || !m || m.source !== 'template-editor' || m.token !== editorToken || m.mode !== mode) return;
       if (m.type === 'engagement' && mode === 'x') {
         openXEngagementEditor();
         return;
@@ -736,7 +731,7 @@ export function DashboardForm({
       phone.dataset.mode = mode;
       previewCol.dataset.mode = mode;
       iconField.hidden = mode !== 'tiktok';
-      modeFields.hidden = mode === 'tiktok';
+      modeFields.hidden = mode === 'tiktok' || mode === 'link-card';
       clearTimeout(previewTimer);
       if (mode === 'tiktok') return;
       const focusRows = mode === 'youtube' && focusYouTubeRowsOnNextPreview;
@@ -779,8 +774,8 @@ export function DashboardForm({
     function renderModeFields() {
       modeFields.replaceChildren();
       const mode = templateMode.value as TemplateMode;
-      modeFields.hidden = mode === 'tiktok';
-      if (mode === 'tiktok') return;
+      modeFields.hidden = mode === 'tiktok' || mode === 'link-card';
+      if (mode === 'tiktok' || mode === 'link-card') return;
       const options: TemplateOptions = { ...defaultTemplateOptions(mode, modeData()), ...templateSettings[mode] };
       templateSettings[mode] = options;
       const heading = document.createElement('legend'); heading.className = styles.sec; heading.textContent = '公開ページの内容'; modeFields.append(heading);
@@ -935,45 +930,6 @@ export function DashboardForm({
     }
     templateMode.addEventListener('change', () => {
       renderModeFields(); syncAlternatePreview(); saveState(); check();
-    });
-
-    // ===== クッションページの有無 =====
-    /* ON  … 遷移先URLを一切加工せずそのまま保存する(従来どおりの挙動)。
-             クッションページ経由にしたい場合は /tools/link-generator で生成したURLを貼る。
-       OFF … 保存時にジェネレーター(展開＋サニタイズ)を通したURLを保存する。 */
-    function renderCushionHint() {
-      cushionHint.textContent = cushionToggle.checked
-        ? 'ON: 選択した作成モードの公開ページを表示し、ボタンのタップで遷移先へ移動します。'
-        : 'OFF: 公開ページは表示されず、アクセスした人は遷移先へ直接移動します。';
-    }
-
-    /* OFFのときは公開ページ自体を表示しないので、TikTok風ページの見た目に関わる入力は
-       使われなくなる。欄ごと消すと入力済みの内容が失われたように見えるため、
-       暗くして操作だけを止める(値・画像・下書きはそのまま保持する)。
-       pointer-events だけではキーボード操作で触れてしまうので disabled も併用する。 */
-    const previewInputs = [bgInput, avatarInput, iconInput, piToggle, piCount, floatToggle, descEdit, templateMode, engagementSlider, manualLikeCount, manualCommentCount, manualSaveCount, manualShareCount, xEngagementSlider, xManualLikeCount, xManualCommentCount, xManualRepostCount];
-    const previewEditables = [usernameEl, musicNameEl];
-
-    function applyCushionMode() {
-      const off = !cushionToggle.checked;
-      previewCol.classList.toggle(styles.previewDisabled, off);
-      iconField.classList.toggle(styles.fieldDisabled, off);
-      modeFields.disabled = off;
-      modeFields.classList.toggle(styles.fieldDisabled, off);
-      previewInputs.forEach((el) => {
-        el.disabled = off;
-      });
-      previewEditables.forEach((el) => {
-        el.contentEditable = off ? 'false' : 'true';
-      });
-      previewNote.classList.toggle(styles.visible, off);
-      renderCushionHint();
-      check();
-    }
-
-    cushionToggle.addEventListener('change', () => {
-      applyCushionMode();
-      saveState();
     });
 
     // ===== 誘導ダイアログのプレビュー表示切り替え =====
@@ -1221,14 +1177,11 @@ export function DashboardForm({
     });
 
     // ===== 必須項目チェック =====
-    /* cushionOnly … クッションページを挟む(ON)ときだけ必須になる項目。
-       OFFのサイトは公開ページを表示せず遷移先へ直行するため、TikTok風ページの
-       見た目に使う背景画像は無くても公開できる。
-       アプリアイコンは既定のTikTokアイコンを常に使えるため、どのモードでも必須にしない。
-       OGPタイトル・OGP画像はシェア時のカード表示に使うので、OFFでも必須のまま。 */
-    type RequiredField = { test: () => boolean; label: string; el: () => HTMLElement; cushionOnly?: boolean };
+    /* リンクカードは白い確認ダイアログだけを表示するため背景画像を使わない。
+       OGP画像はSNS上のリンクカード表示に使うので、どのモードでも必須。 */
+    type RequiredField = { test: () => boolean; label: string; el: () => HTMLElement; when?: () => boolean };
     const ALL_FIELDS: RequiredField[] = [
-      { test: () => !!state.bg, label: '背景画像', el: () => bgArea, cushionOnly: true },
+      { test: () => !!state.bg, label: '背景画像', el: () => bgArea, when: () => templateMode.value !== 'link-card' },
       { test: () => !!state.ogp, label: 'OGP画像', el: () => ogpLabel },
       { test: () => !!slugInput.value.trim(), label: '公開URL(slug)', el: () => slugInput },
       { test: () => !!tiktokUrlInput.value.trim(), label: 'TikTok Liteの招待リンク', el: () => tiktokUrlInput },
@@ -1236,7 +1189,7 @@ export function DashboardForm({
     ];
 
     function requiredFields() {
-      return ALL_FIELDS.filter((f) => !f.cushionOnly || cushionToggle.checked);
+      return ALL_FIELDS.filter((f) => !f.when || f.when());
     }
 
     function getMissingFields() {
@@ -1376,7 +1329,6 @@ export function DashboardForm({
               templateSettings: publishedSettings,
               username: usernameEl.textContent?.trim() || slug,
               tiktokUrl: destinationUrl,
-              useCushionPage: cushionToggle.checked,
               musicName: musicNameEl.textContent?.trim() || 'オリジナル楽曲',
               likeCount: likeCountEl.textContent?.trim() || '0',
               commentCount: commentCountEl.textContent?.trim() || '0',
@@ -1440,9 +1392,6 @@ export function DashboardForm({
         }
       }
       tiktokUrlInput.value = saved?.tiktokUrl || (cd.tiktokUrl as string) || '';
-      // 未設定の既存サイトはON(=遷移先URLを加工しない)として扱い、従来の挙動を保つ
-      cushionToggle.checked = saved ? saved.cushionToggle : cd.useCushionPage !== false;
-      applyCushionMode();
       ogpTitleInput.value = saved?.ogpTitle || site.title || '';
       usernameEl.textContent = saved?.username || (cd.username as string) || 'username';
       descText = saved?.description ?? site.description ?? '';
@@ -1540,9 +1489,6 @@ export function DashboardForm({
     <div ref={rootRef} className={styles.root}>
       <div className={styles.layout}>
         <div className={styles.previewCol} data-id="previewCol">
-          <div className={styles.previewNote} data-id="previewNote">
-            「クッションページを挟む」がOFFのため、公開ページは表示されません。ここの設定は使われないので入力不要です(入力済みの内容はそのまま保存されます)。
-          </div>
           <div className={styles.previewActions}>
             <button type="button" className={styles.backgroundChangeButton} data-id="bgChangeBtn" style={{ display: 'none' }}>
               背景画像を変更
@@ -1864,6 +1810,7 @@ export function DashboardForm({
             <div className={styles.field}>
               <label className={styles.fl}>作成モード</label>
               <select data-id="templateMode" defaultValue="tiktok" className={styles.modeSelect}>
+                <option value="link-card">リンクカード</option>
                 <option value="news">ニュース風</option>
                 <option value="instagram">インスタ風</option>
                 <option value="instagram-live">インスタライブ風</option>
@@ -1892,11 +1839,6 @@ export function DashboardForm({
               <div className={styles.hint}>
                 短縮招待リンク（lite.tiktok.com/t/...）は保存時にTikTok公式の分岐リンクを取得し、取得できない場合も公式短縮URLをそのまま保持します。招待の最終認定は端末環境とTikTok側の参加条件によります。
               </div>
-              <div className={styles.checkRow}>
-                <input type="checkbox" data-id="cushionToggle" id="cushionToggle" />
-                <label htmlFor="cushionToggle">クッションページを挟む</label>
-              </div>
-              <div className={styles.hint} data-id="cushionHint" />
             </div>
             <div className={styles.field}>
               <label className={styles.fl}>

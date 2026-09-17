@@ -1,7 +1,7 @@
 import { previewEditorHtml } from './template-preview-editor.ts';
 import { TEMPLATE_LAYOUTS } from './template-layouts.ts';
 
-export type TemplateMode = 'news' | 'instagram' | 'instagram-live' | 'live' | 'x' | 'tiktok' | 'youtube' | 'file';
+export type TemplateMode = 'link-card' | 'news' | 'instagram' | 'instagram-live' | 'live' | 'x' | 'tiktok' | 'youtube' | 'file';
 export type TemplateRow = {
   title?: string; name?: string; image?: string; url?: string; draftImageKey?: string;
   channel?: string; channelAvatar?: string; viewCount?: string; ago?: string; duration?: string;
@@ -65,10 +65,25 @@ function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => values[key] ?? '');
 }
 
+function renderLinkCardViewerHtml(d: TemplateData, preview: boolean): string {
+  const destination = safeUrl(d.tiktokUrl) || '#';
+  const href = esc(destination);
+  const pageUrl = esc(safeUrl(`${d.origin}/${d.slug}`));
+  const slugJson = JSON.stringify(d.slug).replace(/</g, '\\u003c');
+  const tracking = preview ? '' : `<script>(function(){
+    var s=document.createElement('script');s.src='/fp.js';s.async=true;
+    s.onload=function(){if(!window.FingerprintJS)return;window.FingerprintJS.load().then(function(a){return a.get()}).then(function(r){return fetch('/api/visit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:${slugJson},fp:r.visitorId})})}).then(function(r){return r&&r.ok?r.json():null}).then(function(d){if(!d||!d.href)return;try{var u=new URL(d.href);if(!/^https?:$/.test(u.protocol))return;document.querySelectorAll('a.lc-go').forEach(function(a){a.href=u.href})}catch(e){}}).catch(function(){})};document.head.appendChild(s);
+  })();</script>`;
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="referrer" content="no-referrer"><title>${esc(d.title)}</title>
+<meta property="og:title" content="${esc(d.title)}"><meta property="og:description" content="${esc(d.description)}"><meta property="og:image" content="${esc(safeUrl(d.ogpImageUrl, preview))}"><meta property="og:url" content="${pageUrl}"><meta property="og:type" content="website"><meta name="twitter:card" content="summary_large_image">
+<style>*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{min-height:100dvh;background:#fff;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Hiragino Sans','Noto Sans JP',sans-serif;display:grid;place-items:center;padding:24px}.lc-dialog{width:min(330px,calc(100vw - 40px));background:#fff;border:1px solid #dedede;border-radius:15px;box-shadow:0 18px 55px rgba(0,0,0,.18);overflow:hidden;text-align:center}.lc-copy{padding:25px 22px 21px}.lc-title{font-size:17px;line-height:1.45;font-weight:650;margin:0}.lc-description{font-size:13px;line-height:1.55;color:#666;margin:8px 0 0}.lc-actions{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #ddd}.lc-actions>*{appearance:none;border:0;background:#fff;color:#007aff;font:600 16px/1 -apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;padding:16px 8px;text-decoration:none;cursor:pointer}.lc-actions>*+*{border-left:1px solid #ddd}.lc-open{font-weight:700!important}.lc-actions>*:active{background:#f2f2f2}${preview ? '.lc-actions>*{pointer-events:none!important}' : ''}</style></head><body><main class="lc-dialog" role="dialog" aria-modal="true" aria-labelledby="lc-title"><div class="lc-copy"><h1 class="lc-title" id="lc-title">TikTokで開きますか？</h1><p class="lc-description">TikTok Liteアプリまたはストアに移動します。</p></div><div class="lc-actions"><button type="button" onclick="history.length>1&&history.back()">キャンセル</button><a class="lc-go lc-open" href="${href}" target="_top" rel="noreferrer noopener">TikTokで開く</a></div></main>${tracking}</body></html>`;
+}
+
 export function renderAlternateViewerHtml(
   d: TemplateData,
   { preview = false, editorToken = '', focusRows = false }: { preview?: boolean; editorToken?: string; focusRows?: boolean } = {}
 ): string {
+  if (d.templateMode === 'link-card') return renderLinkCardViewerHtml(d, preview);
   const mode = d.templateMode === 'tiktok' ? 'news' : d.templateMode;
   const layout = TEMPLATE_LAYOUTS[mode] ?? TEMPLATE_LAYOUTS.news;
   const o = { ...defaultTemplateOptions(mode, d), ...d.templateSettings?.[mode] };

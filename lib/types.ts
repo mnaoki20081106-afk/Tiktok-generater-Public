@@ -10,20 +10,12 @@ import type { TemplateSettings } from './template-viewer';
  */
 export interface SiteContentData {
   /** 公開ページの見た目。未設定の既存データは tiktok として扱う。 */
-  templateMode?: 'news' | 'instagram' | 'instagram-live' | 'live' | 'x' | 'tiktok' | 'youtube' | 'file';
+  templateMode?: 'link-card' | 'news' | 'instagram' | 'instagram-live' | 'live' | 'x' | 'tiktok' | 'youtube' | 'file';
   templateSettings?: TemplateSettings;
   links?: { label: string; url: string }[];
   theme?: string;
   username?: string;
   tiktokUrl?: string;
-  /**
-   * クッションページ(遅延リダイレクト画面)を挟むか。
-   * true(既定) … 公開ページ(TikTok風レイアウト)を表示し、ボタンのタップで遷移先へ移動する。
-   * false       … 公開ページを表示せず、アクセスした人を遷移先へ直接送る。
-   * 遷移先URLへのジェネレーター適用はこの設定に関係なく常に行う。
-   * 未設定の既存サイトは true として扱う。
-   */
-  useCushionPage?: boolean;
   musicName?: string;
   likeCount?: string;
   commentCount?: string;
@@ -72,11 +64,11 @@ export interface SurpriseConfig {
   id: number;
   enabled: boolean;
   probability: number;
-  /** 管理者が入力した当たりURL。クッションページONのサイトではこの値をそのまま使う */
+  /** 管理者が入力した当たりURL。 */
   prize_url: string | null;
   /**
    * prize_url にリンクジェネレーター(展開＋サニタイズ)を適用した結果。
-   * 当選者へ実際に渡すのはこちら(クッションページの有無に関わらず)。保存時に一度だけ
+   * 当選者へ実際に渡すのはこちら。保存時に一度だけ
    * 変換して持っておくので、訪問者を待たせずに済む。
    * 未設定(既存行・変換前)の場合は prize_url にフォールバックする。
    */

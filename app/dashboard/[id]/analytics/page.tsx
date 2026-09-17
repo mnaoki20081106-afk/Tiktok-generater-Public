@@ -31,13 +31,13 @@ export default async function SiteAnalyticsPage({ params }: { params: Promise<{ 
   ]);
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="studio-workspace">
       <div className="mb-6">
         <Link href={`/dashboard/${site.id}`} className="flex items-center gap-1 text-sm text-slate-400 hover:text-cyan-100">
           <ArrowLeft size={14} />
           編集画面に戻る
         </Link>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-100">アクセス解析</h1>
+        <h1 className="workspace-title mt-5">アクセス解析</h1>
         <p className="text-sm text-slate-400">{site.title || '(無題)'} / {site.slug}</p>
       </div>
 

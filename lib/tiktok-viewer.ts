@@ -74,7 +74,7 @@ export function siteToViewerData(site: Site, origin: string): ViewerData {
     avatarUrl: site.image_url || '',
     backgroundUrl: images.background || '',
     ogpImageUrl: withCacheBustParam(images.ogpImage || ''),
-    appIconUrl: images.appIcon || '',
+    appIconUrl: images.appIcon || `${origin}/tiktok-app-icon.png`,
     origin,
   };
 }

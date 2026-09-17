@@ -34,7 +34,7 @@ export function createTikTokEngagementCounts(
   const safeLikes = clamp(Math.round(Number.isFinite(likes) ? likes : 0), 0, TIKTOK_LIKE_MAX);
   return {
     likes: safeLikes,
-    comments: Math.round(safeLikes * randomBetween(0.008, 0.012, random)),
+    comments: Math.round(safeLikes * randomBetween(0.08, 0.12, random)),
     saves: Math.round(safeLikes * randomBetween(0.8, 1.2, random)),
     shares: Math.round(safeLikes * randomBetween(0.05, 0.07, random)),
   };

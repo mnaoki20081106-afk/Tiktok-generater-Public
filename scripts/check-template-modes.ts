@@ -65,4 +65,8 @@ for (const templateMode of modes) {
   const published = renderAlternateViewerHtml(data);
   assert.ok(!published.includes('template-editor') && !published.includes('data-edit-text'), 'editor never leaks to published pages');
 }
+const localImage = 'data:image/png;base64,iVBORw0KGgo=';
+const localPreview = renderAlternateViewerHtml({ ...base, templateMode: 'instagram', backgroundUrl: localImage }, { preview: true, editorToken: 'local-image' });
+assert.ok(localPreview.includes(localImage), 'sandboxed preview accepts a local image data URL');
+assert.ok(!renderAlternateViewerHtml({ ...base, templateMode: 'instagram', backgroundUrl: localImage }).includes(localImage), 'published pages reject embedded data URLs');
 console.log('Preview editor scripts: all modes parse, escaped input and public isolation passed');

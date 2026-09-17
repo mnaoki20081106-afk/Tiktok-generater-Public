@@ -16,8 +16,7 @@ export function previewEditorHtml(mode: string, token: string, options: object):
 [data-edit-text]:empty::before{content:attr(data-placeholder);color:#67e8f9;font-size:12px}
 [data-edit-text]:empty{box-shadow:0 0 12px #38bdf888}
 [data-edit-image]{pointer-events:auto!important;cursor:pointer;outline:1px dashed #67e8f9;outline-offset:-2px}
-.il-sc-t,.il-sc-b,.lv-sc-t,.lv-sc-b,.ig-play,.il-play,.lv-play,.x-play,.yt-play,.v-play{pointer-events:none!important}\n.editor-images{position:fixed;right:8px;bottom:8px;z-index:99999;display:flex;gap:4px}
-.editor-images button{background:#082f49;color:#a5f3fc;border:1px solid #38bdf8;border-radius:12px;padding:9px;font-size:12px}
+.il-sc-t,.il-sc-b,.lv-sc-t,.lv-sc-b,.ig-play,.il-play,.lv-play,.x-play,.yt-play,.v-play{pointer-events:none!important}
 </style><script>(()=>{
 const c=${config};
 const send=(data)=>parent.postMessage({source:'template-editor',token:c.token,mode:c.mode,...data},'*');
@@ -49,9 +48,6 @@ const imageSelectors={news:'.v-media',instagram:'.ig-bg','instagram-live':'.il-v
 const avatars='.ig-av,.il-av,.lv-av,.x-av,.yt-av';
 document.querySelectorAll(imageSelectors[c.mode]+','+avatars).forEach(el=>{el.dataset.editImage='true';el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-label','画像を変更');const open=()=>pick(el.matches(avatars)?'avatar':'background');el.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();open();});el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});});
 rows.forEach((row,index)=>{const el=row.querySelector(c.mode==='file'?'.gf-th':'.yt-rel-th');if(el){el.dataset.editImage='true';el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-label','サムネイルを変更');el.onclick=e=>{e.preventDefault();e.stopPropagation();pick('row',index);};el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick('row',index);}};}});
-// Backgrounds behind decorative overlays remain reachable without changing the layout.
-const toolbar=document.createElement('div');toolbar.className='editor-images';
-['background','avatar'].forEach(kind=>{const b=document.createElement('button');b.textContent=kind==='background'?'背景画像を変更':'プロフィール画像';b.onclick=()=>pick(kind);toolbar.append(b);});document.body.append(toolbar);
 document.addEventListener('click',e=>{if(e.target.closest('a'))e.preventDefault();},true);
 document.querySelectorAll('.ig-in').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)pick('background');}));
 })();</script>`;

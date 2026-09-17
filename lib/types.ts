@@ -27,6 +27,7 @@ export interface SiteContentData {
   musicName?: string;
   likeCount?: string;
   commentCount?: string;
+  saveCount?: string;
   shareCount?: string;
   showPageIndicator?: boolean;
   pageIndicatorCount?: string;

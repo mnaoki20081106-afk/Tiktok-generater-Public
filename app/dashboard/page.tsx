@@ -25,10 +25,11 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false });
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-6 py-12">
+    <main className="studio-workspace">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-100">マイサイト</h1>
+          <p className="studio-eyebrow">YOUR WORKSPACE</p>
+          <h1 className="workspace-title">マイサイト</h1>
           <p className="text-sm text-slate-400">{user.email}</p>
         </div>
         <div className="flex items-center gap-3">
@@ -46,26 +47,28 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="mb-6">
+      <div className="workspace-toolbar">
+        <div><h2>あなたのコレクション</h2><p>{sites?.length || 0} 件のサイト · つくったページを、ひとつの場所に。</p></div>
         <CreateSiteButton />
       </div>
 
       {!sites || sites.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-cyan-300/20 px-4 py-10 text-center text-sm text-slate-400">
+        <p className="workspace-empty">
           まだサイトがありません。「新しいサイトを作成」から始めましょう。
         </p>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="workspace-grid">
           {sites.map((site) => (
             <li
               key={site.id}
-              className="flex flex-col gap-2 rounded-xl border border-cyan-300/15 bg-[#0c1b2d] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+              className="workspace-card"
             >
-              <div className="min-w-0">
+              <div className="workspace-card-title">
+                <div className="workspace-site-icon" aria-hidden="true"><ExternalLink size={22} strokeWidth={1.3} /></div>
                 <p className="truncate text-sm font-semibold text-slate-100">{site.title || '(無題)'}</p>
                 <p className="truncate text-xs text-slate-400">/{site.slug}</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+              <div className="workspace-card-actions">
                 <Link
                   href={`/dashboard/${site.id}`}
                   className="flex items-center gap-1 rounded-lg border border-cyan-300/15 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-[#0c1c2d]"

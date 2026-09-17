@@ -1,68 +1,31 @@
 import Link from 'next/link';
-import { Sparkles, Link2, Smartphone } from 'lucide-react';
+import { ArrowRight, LayoutTemplate, MousePointer2, ChartNoAxesCombined, Link2 } from 'lucide-react';
+import { StudioHeader } from '@/components/StudioHeader';
 
 export default function HomePage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-20 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-white">
-        <Sparkles size={22} />
-      </div>
-      <h1 className="mt-6 text-3xl font-bold text-slate-900 sm:text-4xl">
-        TikTok風プロフィールサイトを、
-        <br />
-        いくつでも作って公開しよう
-      </h1>
-      <p className="mt-4 max-w-md text-slate-500">
-        Googleアカウントでログインすると、作成したサイトを一覧で管理できます。
-        タイトル・自己紹介・画像を入力するだけで、自分専用のURLが完成します。
-      </p>
-
-      <div className="mt-8 flex gap-3">
-        <Link
-          href="/login"
-          className="rounded-lg bg-slate-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-slate-700"
-        >
-          Googleでログインしてはじめる
-        </Link>
-      </div>
-
-      <div className="mt-16 grid w-full max-w-2xl grid-cols-1 gap-4 text-left sm:grid-cols-3">
-        <Feature
-          icon={<Link2 size={18} />}
-          title="専用URL"
-          description="/自分のslug で世界に公開できます"
-        />
-        <Feature
-          icon={<Smartphone size={18} />}
-          title="端末に自動保存"
-          description="編集中の内容は端末にも自動保存され、安心して編集できます"
-        />
-        <Feature
-          icon={<Sparkles size={18} />}
-          title="複数サイトを管理"
-          description="ログイン後のマイページで、作成したサイトを一覧・新規作成・削除できます"
-        />
-      </div>
-    </main>
-  );
-}
-
-function Feature({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
-        {icon}
-      </div>
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      <p className="mt-1 text-xs text-slate-500">{description}</p>
+    <div className="studio-shell marketing-shell">
+      <StudioHeader publicView />
+      <main>
+        <section className="studio-hero">
+          <p className="studio-eyebrow">YOUR LINK. YOUR EXPRESSION.</p>
+          <h1>ひとつのリンクに、<br /><span>あなたらしさを。</span></h1>
+          <p className="studio-lead">選んで、触れて、公開する。<br />思い描いたページを、そのまま指先から。</p>
+          <Link className="studio-primary" href="/login">ページをつくる <ArrowRight size={17} /></Link>
+          <p className="studio-caption">Googleアカウントで、すぐにはじめられます。</p>
+          <div className="hero-object" aria-hidden="true">
+            <div className="hero-orbit" />
+            <div className="hero-glass"><Link2 size={46} strokeWidth={1} /><span>Made for your next idea.</span><div className="hero-glass-line" /><div className="hero-glass-line short" /></div>
+            <span className="hero-tag">DESIGN. EDIT. SHARE.</span>
+          </div>
+        </section>
+        <section className="studio-features" aria-label="できること">
+          <article><LayoutTemplate size={25} /><p className="studio-eyebrow">01 / CREATE</p><h2>伝え方は、自由。</h2><p>ニュース、SNS、ライブ配信。8つのモードから、あなたに合った見せ方を。</p></article>
+          <article><MousePointer2 size={25} /><p className="studio-eyebrow">02 / EDIT</p><h2>見たまま、つくる。</h2><p>プレビューの文字や画像をタップ。仕上がりを確かめながら、直感的に編集。</p></article>
+          <article><ChartNoAxesCombined size={25} /><p className="studio-eyebrow">03 / INSIGHT</p><h2>届けた、その先へ。</h2><p>公開したページのアクセスをグラフで確認。リンクの反応を、ひと目で。</p></article>
+        </section>
+      </main>
+      <footer className="studio-footer"><span>ProfileHub Studio</span><Link href="/login">あなたのページをつくる <ArrowRight size={14} /></Link></footer>
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { signInWithGoogle } from './actions';
+import { StudioHeader } from '@/components/StudioHeader';
+import { ArrowRight, Link2 } from 'lucide-react';
 
 export default async function LoginPage({
   searchParams,
@@ -9,42 +11,52 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <h1 className="text-xl font-semibold text-slate-900">ログイン</h1>
-          <p className="text-sm text-slate-500">
-            Googleアカウントでログインすると、作成したサイトを一覧で管理できます
-          </p>
+    <div className="studio-shell login-shell">
+      <StudioHeader publicView />
+      <main className="login-layout">
+        <section className="login-intro">
+          <p className="studio-eyebrow">A SPACE FOR YOUR IDEAS</p>
+          <h1>そのアイデアを、<br /><span>次のリンクへ。</span></h1>
+          <p>あなたのページをつくる、磨く、届ける。<br />すべてが、ここから。</p>
+          <div className="login-sculpture" aria-hidden="true"><div /><Link2 size={80} strokeWidth={.8} /></div>
+        </section>
+      <section className="login-card" aria-labelledby="login-heading">
+        <div className="login-card-heading">
+          <p className="studio-eyebrow">WELCOME TO YOUR STUDIO</p>
+          <h2 id="login-heading">ログイン</h2>
+          <p>つくりかけのアイデアも、新しいひらめきも。<br />あなたのスタジオで続きを。</p>
         </div>
 
         {error && (
-          <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+          <p role="alert" className="login-error">{error}</p>
         )}
 
         <form action={signInWithGoogle}>
           <button
             type="submit"
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            className="login-google"
           >
             <GoogleIcon />
             Googleでログイン
+            <ArrowRight size={16} />
           </button>
         </form>
 
-        <p className="mt-4 text-xs leading-5 text-slate-500">
+        <p className="login-session-note">
           ログイン状態はこのブラウザに保存され、次回は自動で管理画面を開きます。
           ログアウトや保存データの削除、セッションの失効後は再ログインが必要です。
         </p>
 
         <Link
           href="/"
-          className="mt-6 block text-center text-sm text-slate-400 hover:text-slate-600"
+          className="login-back"
         >
           トップに戻る
         </Link>
-      </div>
-    </main>
+      </section>
+      </main>
+      <footer className="login-footer">ProfileHub Studio · Make it yours.</footer>
+    </div>
   );
 }
 

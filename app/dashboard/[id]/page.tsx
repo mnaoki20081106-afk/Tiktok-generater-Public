@@ -29,14 +29,15 @@ export default async function EditSitePage({ params }: { params: Promise<{ id: s
   const siteUrlOrigin = `${protocol}://${host}`;
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="studio-workspace">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <Link href="/dashboard" className="flex items-center gap-1 text-sm text-slate-400 hover:text-cyan-100">
             <ArrowLeft size={14} />
             マイサイト一覧に戻る
           </Link>
-          <h1 className="mt-2 text-xl font-semibold text-slate-100">サイトを編集</h1>
+          <h1 className="workspace-title mt-5">サイトを編集</h1>
+          <p className="text-sm text-slate-400">仕上がりを見ながら、あなたらしい一枚に。</p>
         </div>
         <Link
           href={`/dashboard/${site.id}/analytics`}

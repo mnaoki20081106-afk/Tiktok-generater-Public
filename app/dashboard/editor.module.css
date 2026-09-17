@@ -796,4 +796,36 @@
 .previewCol:not([data-mode="tiktok"]) .floatRow,
 .previewCol:not([data-mode="tiktok"]) .piRow { display: none !important; }
 
+/* Studio controls surround, but never restyle, the published-page preview. */
+.root { background: transparent; border: none; box-shadow: none; padding: 24px 0 48px; }
+.layout { gap: 64px; align-items: flex-start; }
+.panel { flex-basis: 360px; max-width: 460px; gap: 24px; }
+.card { background: linear-gradient(145deg, #171b20, #101317); border: 1px solid #ffffff12; border-radius: 24px; padding: 28px; gap: 20px; box-shadow: 0 12px 35px #00000012; }
+.sec { font-size: 14px; font-weight: 600; color: #eef3f7; letter-spacing: -.02em; text-transform: none; }
+.fl { color: #b7c0cb; font-size: 12px; font-weight: 500; }
+.hint, .previewHint { color: #929eab; line-height: 1.9; font-size: 11px; }
+.card input[type=text], .card input[type=url], .card textarea, .modeSelect {
+  background: #090d11; color: #e8eff5; border: 1px solid #ffffff1c; border-radius: 12px; padding: 14px; min-height: 48px; font-size: 16px;
+}
+.card input::placeholder, .card textarea::placeholder { color: #6e7c8b; }
+.card input:focus, .card textarea:focus, .modeSelect:focus { outline: none; border-color: #8cdcf8; box-shadow: 0 0 0 3px #80dcff15; }
+.fileBtn { background: #1c242c; color: #c1d2df; border: 1px solid #ffffff18; border-radius: 12px; min-height: 46px; padding: 13px 16px; font-size: 12px; }
+.fileBtn:hover { background: #25333f; border-color: #9cdef844; }
+.fileBtn.selected { color: #ade8f6; border-color: #ade8f630; background: #13252d; }
+.btnDeploy { min-height: 52px; border-radius: 999px; font-size: 14px; font-weight: 600; background: linear-gradient(110deg, #c6f0ff, #79d2f2); color: #092737; box-shadow: 0 6px 28px #45bfff14; }
+.phone { box-shadow: 0 0 0 1px #77808b, 0 0 0 7px #20242a, 0 30px 80px #0009; }
+.previewCol { gap: 22px; padding-top: 8px; }
+.checkRow { gap: 12px; line-height: 1.7; }
+.checkRow input[type=checkbox] { accent-color: #8adaf4; width: 18px; height: 18px; }
+.info { color: #a6b2c0; background: #121b23; border-color: #8ccef31c; border-radius: 14px; line-height: 1.9; }
+.info strong { color: #b6e7f7; }
+.result { border-radius: 18px; border-color: #7dd3fc33; background: #10242b; }
+@media (min-width: 880px) { .previewCol { position: sticky; top: 30px; } }
+@media (max-width: 600px) {
+  .root { padding: 12px 0 30px; }
+  .layout { gap: 36px; }
+  .panel { min-width: 0; width: 100%; flex-basis: 100%; }
+  .card { padding: 23px 20px; border-radius: 20px; }
+}
+
 fieldset.card { min-width: 0; margin: 0; }

@@ -21,7 +21,7 @@ export function CreateSiteButton() {
       type="button"
       onClick={handleClick}
       disabled={isPending}
-      className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-cyan-300 to-sky-400 px-4 py-2 text-sm font-medium text-slate-950 transition hover:brightness-110 disabled:opacity-60"
+      className="studio-primary"
     >
       {isPending ? (
         <>

@@ -97,7 +97,7 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
 
           {/* どちらの形式で生成されたかを見せる。フォールバック側は実機で招待が
               成立しないことが分かっているため、気づけるように警告を出す。 */}
-          {mode === 'original' && (<span data-id="prizeMode" className="text-xs text-emerald-700">形式: 公式の短縮招待リンクをそのまま保持しています。招待の認定はTikTok側の条件によります。</span>)}
+          {mode === 'original' && (<span data-id="prizeMode" className="text-xs text-emerald-700">形式: TikTok公式のアプリ／ストア分岐リンクです。招待の最終認定はTikTok側の条件によります。</span>)}
           {mode === 'lp' && (
             <span data-id="prizeMode" className="text-xs text-emerald-700">
               形式: 招待LP直結。招待ページを開き、そこからTikTok側の案内に従って進みます。

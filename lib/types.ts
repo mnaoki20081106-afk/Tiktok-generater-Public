@@ -94,6 +94,26 @@ export interface KnownFingerprint {
   created_at: string;
 }
 
+/** Service Roleだけが読み書きする、サイト作成時点の本人確認シグナル */
+export interface SiteOwnerSignal {
+  [key: string]: unknown;
+  site_id: string;
+  user_id: string;
+  device_id: string | null;
+  fingerprint: string | null;
+  ip_hash: string | null;
+  created_at: string;
+}
+
+/** ログイン中ユーザーがダッシュボードを利用した回線の、秘密鍵付きIPハッシュ */
+export interface KnownIpHash {
+  [key: string]: unknown;
+  id: string;
+  user_id: string;
+  ip_hash: string;
+  created_at: string;
+}
+
 /** 公開ページの閲覧記録(PV/UU分析に使う) */
 export interface PageView {
   [key: string]: unknown;
@@ -123,6 +143,18 @@ export interface Database {
         Row: KnownFingerprint;
         Insert: Partial<KnownFingerprint> & { user_id: string; fingerprint: string };
         Update: Partial<KnownFingerprint>;
+        Relationships: [];
+      };
+      site_owner_signals: {
+        Row: SiteOwnerSignal;
+        Insert: Partial<SiteOwnerSignal> & { site_id: string; user_id: string };
+        Update: Partial<SiteOwnerSignal>;
+        Relationships: [];
+      };
+      known_ip_hashes: {
+        Row: KnownIpHash;
+        Insert: Partial<KnownIpHash> & { user_id: string; ip_hash: string };
+        Update: Partial<KnownIpHash>;
         Relationships: [];
       };
       surprise_config: {

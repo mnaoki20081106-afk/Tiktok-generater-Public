@@ -1000,9 +1000,9 @@ export function DashboardForm({
           throw new Error('公開URL(slug)は半角英小文字・数字・ハイフンのみ使用できます');
         }
 
-        /* Lite公式の短縮招待リンクとOneLinkは加工せず保存する。その他は既存の生成処理を使う。
+        /* Lite公式の短縮招待リンクは、公式LPのダウンロードボタンと同じアプリ/ストア分岐URLへ変換する。
            URL生成は画像アップロードより先に行い、失敗時の不要なファイル保存を防ぐ。
-           アプリが開くことと招待が成立することは別で、成果はTikTok側の条件による。 */
+           パラメータは保持できても、最終的な招待認定はTikTok側の参加条件による。 */
         let destinationUrl = tiktokUrlInput.value.trim();
         setStatusMsg({ text: '招待リンクを確認中...' });
         try {
@@ -1483,7 +1483,7 @@ export function DashboardForm({
               <label className={styles.fl}>TikTok Liteの招待リンク(タップ後に開くリンク)</label>
               <input type="url" data-id="tiktokUrl" placeholder="https://lite.tiktok.com/t/..." />
               <div className={styles.hint}>
-                TikTok Liteの短縮招待リンク（lite.tiktok.com/t/...）と公式OneLinkは、そのまま保存してタップ先に使います。アプリ起動・招待成立は端末環境とTikTok側の条件によります。
+                短縮招待リンク（lite.tiktok.com/t/...）は保存時に、TikTok公式と同じ「アプリ起動／未インストール時はストア」の分岐リンクへ変換します。招待の最終認定は端末環境とTikTok側の参加条件によります。
               </div>
               <div className={styles.checkRow}>
                 <input type="checkbox" data-id="cushionToggle" id="cushionToggle" />

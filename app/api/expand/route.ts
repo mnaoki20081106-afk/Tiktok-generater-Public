@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server';
-import { followRedirects } from '@/lib/link-generator';
+import { followRedirects, isTikTokLiteInviteShortLink, resolveOfficialLiteInviteUrl } from '@/lib/link-generator';
 
 export const dynamic = 'force-dynamic';
 
 interface ExpandBody {
   url?: unknown;
+  includeLaunchUrl?: unknown;
 }
 
 /**
- * 短縮リンクを展開して、着地した最終URLだけを返す。
+ * 短縮リンクを展開して着地URLを返す。公式Lite招待リンクから明示的に要求された場合は、
+ * 招待LP内にあるTikTok公式のアプリ/ストア分岐URLも抽出して返す。
  *
  * 公式の招待リンク(`https://lite.tiktok.com/t/XXXX/`)はただのリダイレクトで
  * 招待LPへ着地するので、Puppeteer を使わずここで展開できる。
@@ -26,9 +28,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (body?.includeLaunchUrl === true && isTikTokLiteInviteShortLink(url)) {
+      const resolved = await resolveOfficialLiteInviteUrl(url);
+      return NextResponse.json({ url: resolved.landingUrl, launchUrl: resolved.launchUrl });
+    }
     return NextResponse.json({ url: await followRedirects(url) });
   } catch (e) {
-    // 展開できなくても呼び出し側は従来の抽出経路へ進むだけなので、エラーでは返さない
+    // 通常の展開呼び出しは従来経路へ進めるよう200で返す。公式分岐の呼び出し側は
+    // launchUrlが無い場合に保存を中断し、推測したリンクを公開しない。
     return NextResponse.json({ url: null, error: e instanceof Error ? e.message : String(e) });
   }
 }

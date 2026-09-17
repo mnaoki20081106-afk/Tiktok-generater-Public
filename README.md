@@ -18,7 +18,7 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
 
 1. Supabaseプロジェクトを作成し、SQL Editorで `supabase/schema.sql` を実行する(`sites` / `known_devices` / `surprise_config` / `page_views` テーブル・RLSポリシー・`site-images` Storageバケットが作成されます)。既存環境を更新する場合は、デプロイ前に `supabase/owner-identity-migration.sql` を1回実行します。
 2. Supabaseダッシュボードの **Authentication > Providers > Google** を有効化する。Google Cloud ConsoleでOAuthクライアントID/シークレットを発行し、リダイレクトURIにSupabaseが指定するURL(`https://<project>.supabase.co/auth/v1/callback`)を登録すること。
-3. `.env.local.example` を `.env.local` にコピーし、SupabaseのURL/anonキー・Service Roleキー・管理者メールアドレス(`ADMIN_EMAILS`)・IPハッシュ鍵(`IP_HASH_SECRET`)を設定する(`.env.local` は `.gitignore` 済みなのでリポジトリにはコミットされません)。
+3. `.env.local.example` を `.env.local` にコピーし、SupabaseのURL/anonキー・Service Roleキー・管理者メールアドレス(`ADMIN_EMAILS`)・IPハッシュ鍵(`IP_HASH_SECRET`)を設定する。YouTube風モードの人気動画自動入力を使う場合は、YouTube Data API v3のサーバー用キー(`YOUTUBE_API_KEY`)も設定する(`.env.local` は `.gitignore` 済みなのでリポジトリにはコミットされません)。
    ```
    cp .env.local.example .env.local
    ```

@@ -2,11 +2,15 @@ import { previewEditorHtml } from './template-preview-editor.ts';
 import { TEMPLATE_LAYOUTS } from './template-layouts.ts';
 
 export type TemplateMode = 'news' | 'instagram' | 'instagram-live' | 'live' | 'x' | 'tiktok' | 'youtube' | 'file';
-export type TemplateRow = { title?: string; name?: string; image?: string; url?: string; draftImageKey?: string };
+export type TemplateRow = {
+  title?: string; name?: string; image?: string; url?: string; draftImageKey?: string;
+  channel?: string; viewCount?: string; ago?: string; duration?: string;
+};
 export type TemplateOptions = {
   heading?: string; publisher?: string; body?: string; headline?: string; cta?: string;
   channel?: string; handle?: string; duration?: string; ago?: string; teaser?: string;
   notice?: string; badge?: string; comments?: string; videoUrl?: string; accent?: string;
+  youtubeInputMode?: 'auto' | 'detail'; youtubeAutoCount?: number;
   play?: boolean; loop?: boolean; tapAll?: boolean; rows?: TemplateRow[];
 };
 export type TemplateSettings = Partial<Record<TemplateMode, TemplateOptions>>;
@@ -36,6 +40,8 @@ export function defaultTemplateOptions(mode: TemplateMode, d: Pick<TemplateData,
     ago: '3 日前', teaser: '', notice: `${account}のライブ動画への参加リクエストを送信できます。`,
     comments: mode === 'live' ? 'こんばんは〜\n初見です！\n待ってた' : 'きたー！\nまってました\n今日も見てます',
     play: mode !== 'instagram', loop: true, tapAll: true, badge: '',
+    youtubeInputMode: mode === 'youtube' ? 'auto' : undefined,
+    youtubeAutoCount: mode === 'youtube' ? 3 : undefined,
     rows: mode === 'file' ? ['IMG_4821.JPG', 'IMG_4822.JPG', 'IMG_4823.JPG', 'IMG_4824.JPG'].map(name => ({ name }))
       : mode === 'youtube' ? ['【保存版】これだけは知っておきたい基本', 'やってはいけない3つのこと', '初心者がつまずくポイントまとめ'].map(title => ({ title })) : [],
   };
@@ -80,7 +86,15 @@ export function renderAlternateViewerHtml(d: TemplateData, { preview = false, ed
     values.rows = rows.map(row => {
       const rowUrl = safeUrl(row.url);
       const snippet = rowUrl ? layout.row.replace('class="lc-go ', 'style="position:relative;z-index:9100" class="lc-hit ') : layout.row;
-      return fill(snippet, { ...values, rowTitle: esc(row.title), rowName: esc(row.name), image: esc(safeUrl(row.image, preview) || image), href: esc(rowUrl || destination) });
+      return fill(snippet, {
+        ...values,
+        rowTitle: esc(row.title), rowName: esc(row.name),
+        rowChannel: esc(row.channel || o.channel || ''),
+        rowViewCount: esc(row.viewCount || '5.7万回視聴'),
+        rowAgo: esc(row.ago || '3日前'),
+        rowDuration: esc(row.duration || '17:06'),
+        image: esc(safeUrl(row.image, preview) || image), href: esc(rowUrl || destination),
+      });
     }).join('');
   }
   if ('comments' in layout) {

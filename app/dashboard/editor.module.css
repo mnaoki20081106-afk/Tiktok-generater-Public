@@ -516,6 +516,55 @@
   flex-direction: column;
   gap: 16px;
 }
+.inputModeChoice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.inputModeButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  background: rgba(255,255,255,.04);
+}
+.inputModeButton {
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  color: rgba(255,255,255,.58);
+  background: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+.inputModeButtonActive {
+  color: #03131c;
+  background: linear-gradient(135deg,#67e8f9,#38bdf8);
+  box-shadow: 0 5px 18px rgba(56,189,248,.24);
+}
+.youtubeAutoPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(103,232,249,.18);
+  border-radius: 14px;
+  background: linear-gradient(145deg,rgba(8,47,73,.64),rgba(15,23,42,.72));
+}
+.youtubeAutoPanel > strong { color: #e6fbff; font-size: 14px; }
+.youtubeAutoPanel > p { margin: 0; color: rgba(255,255,255,.62); font-size: 12px; line-height: 1.65; }
+.youtubeAutoActions { display: flex; gap: 10px; align-items: end; }
+.youtubeAutoActions label { display: flex; flex-direction: column; gap: 5px; color: rgba(255,255,255,.56); font-size: 11px; }
+.youtubeAutoActions select { min-width: 76px; height: 40px; border-radius: 10px; }
+.youtubeAutoActions button { flex: 1; margin: 0; }
+.youtubeAutoList { display: flex; flex-direction: column; gap: 8px; }
+.youtubeAutoItem { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.youtubeAutoItem img { width: 76px; aspect-ratio: 16/9; object-fit: cover; border-radius: 7px; background: #111827; }
+.youtubeAutoItem span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.youtubeAutoItem b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f8fafc; font-size: 12px; }
+.youtubeAutoItem small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255,255,255,.48); font-size: 10px; }
 .sec {
   font-size: 11px;
   font-weight: 700;

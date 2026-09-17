@@ -8,6 +8,12 @@ export type TikTokEngagementCounts = {
   shares: number;
 };
 
+export type XEngagementCounts = {
+  likes: number;
+  comments: number;
+  reposts: number;
+};
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -37,6 +43,18 @@ export function createTikTokEngagementCounts(
     comments: Math.round(safeLikes * randomBetween(0.08, 0.12, random)),
     saves: Math.round(safeLikes * randomBetween(0.8, 1.2, random)),
     shares: Math.round(safeLikes * randomBetween(0.05, 0.07, random)),
+  };
+}
+
+export function createXEngagementCounts(
+  likes: number,
+  random: () => number = Math.random
+): XEngagementCounts {
+  const safeLikes = clamp(Math.round(Number.isFinite(likes) ? likes : 0), 0, TIKTOK_LIKE_MAX);
+  return {
+    likes: safeLikes,
+    comments: Math.round(safeLikes * randomBetween(0.065, 0.085, random)),
+    reposts: Math.round(safeLikes * randomBetween(0.15, 0.25, random)),
   };
 }
 

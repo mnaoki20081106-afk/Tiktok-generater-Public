@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  createXEngagementCounts,
   createTikTokEngagementCounts,
   formatTikTokCount,
   likeCountToSlider,
@@ -18,9 +19,14 @@ assert.deepEqual(minimums, { likes: 100_000, comments: 8_000, saves: 80_000, sha
 const maximums = createTikTokEngagementCounts(100_000, () => 1);
 assert.deepEqual(maximums, { likes: 100_000, comments: 12_000, saves: 120_000, shares: 7_000 });
 
+const xMinimums = createXEngagementCounts(100_000, () => 0);
+assert.deepEqual(xMinimums, { likes: 100_000, comments: 6_500, reposts: 15_000 });
+const xMaximums = createXEngagementCounts(100_000, () => 1);
+assert.deepEqual(xMaximums, { likes: 100_000, comments: 8_500, reposts: 25_000 });
+
 assert.equal(formatTikTokCount(3_100), '3.1k');
 assert.equal(formatTikTokCount(1_000_000), '1M');
 assert.equal(parseTikTokCount('3.1k'), 3_100);
 assert.equal(parseTikTokCount('12.5万'), 125_000);
 
-console.log('TikTok engagement curve, random multiplier thresholds, and count formatting passed');
+console.log('TikTok/X engagement curve, random multiplier thresholds, and count formatting passed');

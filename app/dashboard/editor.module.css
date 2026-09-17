@@ -37,6 +37,28 @@
   max-width: 300px;
   line-height: 1.6;
 }
+.previewActions {
+  display: flex;
+  width: 300px;
+  justify-content: flex-end;
+}
+.backgroundChangeButton {
+  align-items: center;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgba(103, 232, 249, .62);
+  border-radius: 999px;
+  color: #e7fbff;
+  background: linear-gradient(135deg, rgba(14, 116, 144, .92), rgba(8, 47, 73, .96));
+  box-shadow: 0 8px 22px rgba(14, 165, 233, .2), inset 0 1px 0 rgba(255, 255, 255, .16);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.backgroundChangeButton:hover {
+  border-color: #a5f3fc;
+  background: linear-gradient(135deg, #0891b2, #075985);
+}
 .phone {
   position: relative;
   width: 300px;
@@ -89,25 +111,6 @@
   color: rgba(255, 255, 255, .35);
   font-size: 12px;
   background: #151515;
-}
-.editBadge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(0, 0, 0, .55);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 5px 9px;
-  border-radius: 20px;
-  opacity: 0;
-  transition: opacity .15s;
-  border: none;
-  cursor: pointer;
-  z-index: 20;
-}
-.bg.hasImage .editBadge {
-  opacity: 1;
 }
 .zoomRow {
   align-items: center;
@@ -348,7 +351,8 @@
 .railItem span:focus {
   background: rgba(255, 255, 255, .18);
 }
-.engagementEditor {
+.engagementEditor,
+.xEngagementEditor {
   width: 300px;
   padding: 16px;
   border: 1px solid rgba(103, 232, 249, .22);
@@ -357,7 +361,9 @@
   box-shadow: 0 18px 50px rgba(0, 0, 0, .35), 0 0 28px rgba(56, 189, 248, .08);
 }
 .engagementEditor[hidden],
-.previewCol:not([data-mode="tiktok"]) .engagementEditor {
+.xEngagementEditor[hidden],
+.previewCol:not([data-mode="tiktok"]) .engagementEditor,
+.previewCol:not([data-mode="x"]) .xEngagementEditor {
   display: none;
 }
 .engagementHeader {
@@ -436,6 +442,7 @@
   font-size: 13px;
 }
 .engagementManualGrid input:focus { border-color: #67e8f9; box-shadow: 0 0 0 3px rgba(34, 211, 238, .08); }
+.xEngagementEditor .engagementManualGrid label:last-child { grid-column: 1 / -1; }
 .disc {
   width: 34px;
   height: 34px;
@@ -659,6 +666,16 @@
 .youtubeAutoActions label { display: flex; flex-direction: column; gap: 5px; color: rgba(255,255,255,.56); font-size: 11px; }
 .youtubeAutoActions select { min-width: 76px; height: 40px; border-radius: 10px; }
 .youtubeAutoActions button { flex: 1; margin: 0; }
+.youtubeAutoStatus {
+  padding: 10px 12px;
+  border: 1px solid rgba(103,232,249,.22);
+  border-radius: 10px;
+  color: #c8f4ff !important;
+  background: rgba(8,47,73,.62);
+}
+.youtubeAutoStatus[hidden] { display: none; }
+.youtubeAutoStatus[data-type="ok"] { border-color: rgba(52,211,153,.38); color: #a7f3d0 !important; background: rgba(6,78,59,.3); }
+.youtubeAutoStatus[data-type="err"] { border-color: rgba(251,113,133,.45); color: #fecdd3 !important; background: rgba(127,29,29,.28); }
 .youtubeAutoList { display: flex; flex-direction: column; gap: 8px; }
 .youtubeAutoItem { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .youtubeAutoItem img { width: 76px; aspect-ratio: 16/9; object-fit: cover; border-radius: 7px; background: #111827; }
@@ -961,6 +978,7 @@
 .fileBtn { background: #1c242c; color: #c1d2df; border: 1px solid #ffffff18; border-radius: 12px; min-height: 46px; padding: 13px 16px; font-size: 12px; }
 .fileBtn:hover { background: #25333f; border-color: #9cdef844; }
 .fileBtn.selected { color: #ade8f6; border-color: #ade8f630; background: #13252d; }
+.fileBtn.imagePickerReady { color: #d8f8ff; border-color: rgba(103, 232, 249, .55); background: linear-gradient(135deg, rgba(8, 91, 116, .5), rgba(12, 45, 65, .8)); }
 .btnDeploy { min-height: 52px; border-radius: 999px; font-size: 14px; font-weight: 600; background: linear-gradient(110deg, #c6f0ff, #79d2f2); color: #092737; box-shadow: 0 6px 28px #45bfff14; }
 .phone { box-shadow: 0 0 0 1px #77808b, 0 0 0 7px #20242a, 0 30px 80px #0009; }
 .previewCol { gap: 22px; padding-top: 8px; }

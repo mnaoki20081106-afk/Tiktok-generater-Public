@@ -7,7 +7,7 @@ import { compressToTargetSize } from '@/lib/imageCompress';
 import { generateDestinationUrl } from '@/lib/link-generator';
 import { renderAlternateViewerHtml, defaultTemplateOptions, TEMPLATE_FIELDS, type TemplateMode, type TemplateSettings, type TemplateOptions, type TemplateRow } from '@/lib/template-viewer';
 import { PREVIEW_TEXT_TARGETS } from '@/lib/template-preview-editor';
-import { createTikTokEngagementCounts, formatTikTokCount, likeCountToSlider, parseTikTokCount, sliderToLikeCount } from '@/lib/tiktok-engagement';
+import { createTikTokEngagementCounts, createXEngagementCounts, formatTikTokCount, likeCountToSlider, parseTikTokCount, sliderToLikeCount } from '@/lib/tiktok-engagement';
 import type { YouTubeEditorVideo } from '@/lib/youtube-trending';
 import type { Site } from '@/lib/types';
 import styles from './editor.module.css';
@@ -80,6 +80,7 @@ export function DashboardForm({
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+    const editorRoot = root;
 
     const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
       root.querySelector<T>(`[data-id="${id}"]`)!;
@@ -90,6 +91,8 @@ export function DashboardForm({
     const altFrame = $<HTMLIFrameElement>('altFrame');
     const modeFields = $<HTMLFieldSetElement>('modeFields');
     let templateSettings: TemplateSettings = {};
+    let youtubeAutoNotice: { text: string; type: 'loading' | 'ok' | 'err' } | null = null;
+    let focusYouTubeRowsOnNextPreview = false;
     const bgImg = $<HTMLImageElement>('bgImg');
     const bgInput = $<HTMLInputElement>('bgInput');
     const bgChangeBtn = $('bgChangeBtn');
@@ -147,6 +150,16 @@ export function DashboardForm({
     const manualCommentCount = $<HTMLInputElement>('manualCommentCount');
     const manualSaveCount = $<HTMLInputElement>('manualSaveCount');
     const manualShareCount = $<HTMLInputElement>('manualShareCount');
+    const xEngagementEditor = $('xEngagementEditor');
+    const xEngagementSlider = $<HTMLInputElement>('xEngagementSlider');
+    const xEngagementValue = $('xEngagementValue');
+    const xEngagementAuto = $('xEngagementAuto');
+    const xEngagementManual = $('xEngagementManual');
+    const xEngagementAutoPanel = $('xEngagementAutoPanel');
+    const xEngagementManualPanel = $('xEngagementManualPanel');
+    const xManualLikeCount = $<HTMLInputElement>('xManualLikeCount');
+    const xManualCommentCount = $<HTMLInputElement>('xManualCommentCount');
+    const xManualRepostCount = $<HTMLInputElement>('xManualRepostCount');
 
     const state: { bg: ImageSlot; avatar: ImageSlot; ogp: ImageSlot; icon: ImageSlot } = {
       bg: null,
@@ -446,7 +459,8 @@ export function DashboardForm({
       bgImg.style.display = 'block';
       bgEmpty.style.display = 'none';
       bgArea.classList.add(styles.hasImage);
-      bgChangeBtn.style.display = 'block';
+      bgChangeBtn.style.display = 'inline-flex';
+      syncTemplateImageButtons();
       syncAlternatePreview();
     }
 
@@ -584,6 +598,7 @@ export function DashboardForm({
       avatarBox.appendChild(img);
       discImg.src = url;
       discImg.style.display = 'block';
+      syncTemplateImageButtons();
       syncAlternatePreview();
     }
     avatarArea.addEventListener('click', () => avatarInput.click());
@@ -673,6 +688,10 @@ export function DashboardForm({
       const m = event.data;
       const mode = templateMode.value as TemplateMode;
       if (disposed || !cushionToggle.checked || event.source !== altFrame.contentWindow || !m || m.source !== 'template-editor' || m.token !== editorToken || m.mode !== mode) return;
+      if (m.type === 'engagement' && mode === 'x') {
+        openXEngagementEditor();
+        return;
+      }
       const options = templateSettings[mode];
       if (!options) return;
       const row = Number.isInteger(m.index) && m.index >= 0 ? options.rows?.[m.index] : undefined;
@@ -716,10 +735,45 @@ export function DashboardForm({
       const mode = templateMode.value || 'tiktok';
       phone.dataset.mode = mode;
       previewCol.dataset.mode = mode;
+      iconField.hidden = mode !== 'tiktok';
       modeFields.hidden = mode === 'tiktok';
       clearTimeout(previewTimer);
       if (mode === 'tiktok') return;
-      previewTimer = setTimeout(() => { editorToken = crypto.randomUUID(); altFrame.srcdoc = renderAlternateViewerHtml(modeData(), { preview: true, editorToken }); }, 120);
+      const focusRows = mode === 'youtube' && focusYouTubeRowsOnNextPreview;
+      focusYouTubeRowsOnNextPreview = false;
+      previewTimer = setTimeout(() => {
+        editorToken = crypto.randomUUID();
+        altFrame.srcdoc = renderAlternateViewerHtml(modeData(), { preview: true, editorToken, focusRows });
+      }, 120);
+    }
+
+    function syncTemplateImageButtons() {
+      editorRoot.querySelectorAll<HTMLButtonElement>('[data-image-picker]').forEach((button) => {
+        const isBackground = button.dataset.imagePicker === 'background';
+        const isConfigured = isBackground ? Boolean(state.bg) : Boolean(state.avatar);
+        const label = isBackground ? '公開ページの画像' : 'プロフィール画像';
+        button.textContent = isConfigured ? `${label}を変更（設定済み）` : `${label}を選ぶ`;
+        button.classList.toggle(styles.selected, isConfigured);
+        button.classList.toggle(styles.imagePickerReady, isConfigured);
+        button.setAttribute('aria-label', isConfigured ? `${label}を変更` : `${label}を選ぶ`);
+      });
+    }
+
+    function appendTemplateImagePickers() {
+      const imageButton = document.createElement('button');
+      imageButton.type = 'button';
+      imageButton.className = styles.fileBtn;
+      imageButton.dataset.imagePicker = 'background';
+      imageButton.addEventListener('click', () => bgInput.click());
+
+      const avatarButton = document.createElement('button');
+      avatarButton.type = 'button';
+      avatarButton.className = styles.fileBtn;
+      avatarButton.dataset.imagePicker = 'avatar';
+      avatarButton.addEventListener('click', () => avatarInput.click());
+
+      modeFields.append(imageButton, avatarButton);
+      syncTemplateImageButtons();
     }
 
     function renderModeFields() {
@@ -766,6 +820,14 @@ export function DashboardForm({
           const autoPanel = document.createElement('div'); autoPanel.className = styles.youtubeAutoPanel;
           const autoTitle = document.createElement('strong'); autoTitle.textContent = '日本の人気動画から関連動画を作成';
           const autoText = document.createElement('p'); autoText.textContent = 'YouTube公式の人気動画からランダムに選び、タイトル・サムネイル・視聴回数・経過日数をまとめて入力します。';
+          const autoStatus = document.createElement('p'); autoStatus.className = styles.youtubeAutoStatus;
+          const showAutoNotice = (notice: typeof youtubeAutoNotice) => {
+            youtubeAutoNotice = notice;
+            autoStatus.hidden = !notice;
+            autoStatus.textContent = notice?.text || '';
+            autoStatus.dataset.type = notice?.type || '';
+          };
+          showAutoNotice(youtubeAutoNotice);
           const actions = document.createElement('div'); actions.className = styles.youtubeAutoActions;
           const countLabel = document.createElement('label'); countLabel.textContent = '件数';
           const count = document.createElement('select');
@@ -777,9 +839,11 @@ export function DashboardForm({
           count.addEventListener('change', () => { options.youtubeAutoCount = Number(count.value); saveState(); });
           countLabel.append(count);
           const fetchButton = document.createElement('button'); fetchButton.type = 'button'; fetchButton.className = styles.fileBtn;
-          fetchButton.textContent = options.rows?.length ? '人気動画をランダムに入れ直す' : '人気動画を自動入力する';
+          const hasFetchedRows = Boolean(options.rows?.some(row => row.image && row.channel && row.viewCount));
+          fetchButton.textContent = hasFetchedRows ? '人気動画をランダムに入れ直す' : '人気動画を自動入力する';
           fetchButton.addEventListener('click', async () => {
             fetchButton.disabled = true; fetchButton.textContent = 'YouTubeから取得中...';
+            showAutoNotice({ text: 'YouTubeから日本の人気動画を取得しています…', type: 'loading' });
             setStatusMsg({ text: 'YouTubeの人気動画を取得中...' });
             try {
               const response = await fetch('/api/youtube/trending', { method: 'GET', cache: 'no-store' });
@@ -796,19 +860,24 @@ export function DashboardForm({
                 title: video.title,
                 image: video.thumbnail,
                 channel: video.channel,
+                channelAvatar: video.channelAvatar,
                 viewCount: video.viewCount,
                 ago: video.ago,
                 duration: video.duration,
               }));
+              youtubeAutoNotice = { text: `${wanted}件を反映しました。プレビューも関連動画の位置へ移動しました。`, type: 'ok' };
+              focusYouTubeRowsOnNextPreview = true;
               saveState(); renderModeFields(); syncAlternatePreview();
               setStatusMsg({ text: `${wanted}件の人気動画を関連動画へ入力しました`, type: 'ok' });
             } catch (error) {
               fetchButton.disabled = false; fetchButton.textContent = '人気動画を自動入力する';
-              setStatusMsg({ text: `エラー: ${error instanceof Error ? error.message : '人気動画を取得できませんでした。'}`, type: 'err' });
+              const message = error instanceof Error ? error.message : '人気動画を取得できませんでした。';
+              showAutoNotice({ text: `取得できませんでした: ${message}`, type: 'err' });
+              setStatusMsg({ text: `エラー: ${message}`, type: 'err' });
             }
           });
-          actions.append(countLabel, fetchButton); autoPanel.append(autoTitle, autoText, actions);
-          if (options.rows?.length) {
+          actions.append(countLabel, fetchButton); autoPanel.append(autoTitle, autoText, actions, autoStatus);
+          if (hasFetchedRows && options.rows?.length) {
             const list = document.createElement('div'); list.className = styles.youtubeAutoList;
             options.rows.forEach((row, index) => {
               const item = document.createElement('div'); item.className = styles.youtubeAutoItem;
@@ -821,6 +890,7 @@ export function DashboardForm({
             autoPanel.append(list);
           }
           modeFields.append(autoPanel);
+          appendTemplateImagePickers();
           toggle('tapAll', '画面のどこでもタップで移動');
           const autoHint = document.createElement('p'); autoHint.className = styles.hint;
           autoHint.textContent = 'メイン動画の文字や画像はプレビューを直接タップして編集できます。関連動画を個別修正する場合は「詳細入力」へ切り替えてください。';
@@ -830,8 +900,7 @@ export function DashboardForm({
       }
       for (const f of TEMPLATE_FIELDS[mode] || []) field(f.label, String(options[f.key] ?? ''), v => { Object.assign(options, { [f.key]: v }); }, f.multiline, f.placeholder);
       field('ボタンの文字', options.cta || '', v => { options.cta = v; }, false, mode === 'file' ? '空欄でファイル数を自動表示' : '');
-      const imageButton = document.createElement('button'); imageButton.type = 'button'; imageButton.className = styles.fileBtn; imageButton.textContent = '公開ページの画像を選ぶ'; imageButton.addEventListener('click', () => bgInput.click()); modeFields.append(imageButton);
-      const avatarButton = document.createElement('button'); avatarButton.type = 'button'; avatarButton.className = styles.fileBtn; avatarButton.textContent = 'プロフィール画像を選ぶ'; avatarButton.addEventListener('click', () => avatarInput.click()); modeFields.append(avatarButton);
+      appendTemplateImagePickers();
       if (['news', 'youtube', 'live', 'instagram-live'].includes(mode)) {
         field('動画URL（任意・直接再生できるMP4など）', options.videoUrl || '', v => { options.videoUrl = v; }); toggle('loop', '動画を繰り返す');
       }
@@ -847,6 +916,7 @@ export function DashboardForm({
           field(`${i + 1}. ${mode === 'file' ? 'ファイル名' : '関連動画の見出し'}`, (mode === 'file' ? row.name : row.title) || '', v => { if (mode === 'file') row.name = v; else row.title = v; });
           if (mode === 'youtube') {
             field(`${i + 1}. チャンネル名`, row.channel || '', v => { row.channel = v; });
+            field(`${i + 1}. チャンネルアイコン画像URL`, row.channelAvatar || '', v => { row.channelAvatar = v; });
             field(`${i + 1}. 視聴回数`, row.viewCount || '', v => { row.viewCount = v; }, false, '例: 12万回視聴');
             field(`${i + 1}. 公開からの経過`, row.ago || '', v => { row.ago = v; }, false, '例: 3日前');
             field(`${i + 1}. 動画の長さ`, row.duration || '', v => { row.duration = v; }, false, '例: 8:24');
@@ -881,7 +951,7 @@ export function DashboardForm({
        使われなくなる。欄ごと消すと入力済みの内容が失われたように見えるため、
        暗くして操作だけを止める(値・画像・下書きはそのまま保持する)。
        pointer-events だけではキーボード操作で触れてしまうので disabled も併用する。 */
-    const previewInputs = [bgInput, avatarInput, iconInput, piToggle, piCount, floatToggle, descEdit, templateMode, engagementSlider, manualLikeCount, manualCommentCount, manualSaveCount, manualShareCount];
+    const previewInputs = [bgInput, avatarInput, iconInput, piToggle, piCount, floatToggle, descEdit, templateMode, engagementSlider, manualLikeCount, manualCommentCount, manualSaveCount, manualShareCount, xEngagementSlider, xManualLikeCount, xManualCommentCount, xManualRepostCount];
     const previewEditables = [usernameEl, musicNameEl];
 
     function applyCushionMode() {
@@ -991,6 +1061,62 @@ export function DashboardForm({
       });
     });
 
+    // ===== X反応数の一括編集 =====
+    const xCountElements = { likes: likeCountEl, comments: commentCountEl, reposts: shareCountEl };
+    const xManualInputs = { likes: xManualLikeCount, comments: xManualCommentCount, reposts: xManualRepostCount };
+
+    function syncXManualEngagementInputs() {
+      xManualLikeCount.value = String(parseTikTokCount(likeCountEl.textContent));
+      xManualCommentCount.value = String(parseTikTokCount(commentCountEl.textContent));
+      xManualRepostCount.value = String(parseTikTokCount(shareCountEl.textContent));
+    }
+
+    function setXEngagementCounts(counts: { likes: number; comments: number; reposts: number }) {
+      (Object.keys(xCountElements) as Array<keyof typeof xCountElements>).forEach((key) => {
+        xCountElements[key].textContent = formatTikTokCount(counts[key]);
+      });
+      xEngagementValue.textContent = `${counts.likes.toLocaleString('ja-JP')} いいね`;
+      syncXManualEngagementInputs();
+      saveState();
+      syncAlternatePreview();
+    }
+
+    function openXEngagementEditor() {
+      const likes = Math.min(1_000_000, parseTikTokCount(likeCountEl.textContent));
+      xEngagementSlider.value = String(likeCountToSlider(likes));
+      xEngagementValue.textContent = `${likes.toLocaleString('ja-JP')} いいね`;
+      syncXManualEngagementInputs();
+      xEngagementEditor.hidden = false;
+      xEngagementEditor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    $('xEngagementClose').addEventListener('click', () => { xEngagementEditor.hidden = true; });
+    function setXEngagementInputMode(mode: 'auto' | 'manual') {
+      const auto = mode === 'auto';
+      xEngagementAuto.classList.toggle(styles.engagementTabActive, auto);
+      xEngagementManual.classList.toggle(styles.engagementTabActive, !auto);
+      xEngagementAutoPanel.hidden = !auto;
+      xEngagementManualPanel.hidden = auto;
+      if (!auto) syncXManualEngagementInputs();
+    }
+    xEngagementAuto.addEventListener('click', () => setXEngagementInputMode('auto'));
+    xEngagementManual.addEventListener('click', () => setXEngagementInputMode('manual'));
+    xEngagementSlider.addEventListener('input', () => {
+      setXEngagementCounts(createXEngagementCounts(sliderToLikeCount(Number(xEngagementSlider.value))));
+    });
+    (Object.keys(xManualInputs) as Array<keyof typeof xManualInputs>).forEach((key) => {
+      xManualInputs[key].addEventListener('input', () => {
+        const value = Math.max(0, Math.round(Number(xManualInputs[key].value) || 0));
+        xCountElements[key].textContent = formatTikTokCount(value);
+        if (key === 'likes') {
+          xEngagementSlider.value = String(likeCountToSlider(Math.min(value, 1_000_000)));
+          xEngagementValue.textContent = `${value.toLocaleString('ja-JP')} いいね`;
+        }
+        saveState();
+        syncAlternatePreview();
+      });
+    });
+
     // ===== テキストのタップ編集(contenteditable) =====
     (['username', 'musicName'] as const).forEach((id) => {
       const el = $(id);
@@ -1097,13 +1223,13 @@ export function DashboardForm({
     // ===== 必須項目チェック =====
     /* cushionOnly … クッションページを挟む(ON)ときだけ必須になる項目。
        OFFのサイトは公開ページを表示せず遷移先へ直行するため、TikTok風ページの
-       見た目に使う背景画像・アプリアイコン画像は無くても公開できる。
+       見た目に使う背景画像は無くても公開できる。
+       アプリアイコンは既定のTikTokアイコンを常に使えるため、どのモードでも必須にしない。
        OGPタイトル・OGP画像はシェア時のカード表示に使うので、OFFでも必須のまま。 */
     type RequiredField = { test: () => boolean; label: string; el: () => HTMLElement; cushionOnly?: boolean };
     const ALL_FIELDS: RequiredField[] = [
       { test: () => !!state.bg, label: '背景画像', el: () => bgArea, cushionOnly: true },
       { test: () => !!state.ogp, label: 'OGP画像', el: () => ogpLabel },
-      { test: () => templateMode.value !== 'tiktok' || !!state.icon, label: 'アプリアイコン画像', el: () => iconLabel, cushionOnly: true },
       { test: () => !!slugInput.value.trim(), label: '公開URL(slug)', el: () => slugInput },
       { test: () => !!tiktokUrlInput.value.trim(), label: 'TikTok Liteの招待リンク', el: () => tiktokUrlInput },
       { test: () => !!ogpTitleInput.value.trim(), label: 'OGPタイトル', el: () => ogpTitleInput },
@@ -1417,6 +1543,11 @@ export function DashboardForm({
           <div className={styles.previewNote} data-id="previewNote">
             「クッションページを挟む」がOFFのため、公開ページは表示されません。ここの設定は使われないので入力不要です(入力済みの内容はそのまま保存されます)。
           </div>
+          <div className={styles.previewActions}>
+            <button type="button" className={styles.backgroundChangeButton} data-id="bgChangeBtn" style={{ display: 'none' }}>
+              背景画像を変更
+            </button>
+          </div>
           <div className={styles.phone} data-id="phone" data-mode="tiktok">
             <div className={styles.bg} data-id="bgArea">
               <div className={styles.bgEmpty} data-id="bgEmpty">
@@ -1425,9 +1556,6 @@ export function DashboardForm({
                 背景画像を選択
               </div>
               <img data-id="bgImg" style={{ display: 'none' }} alt="" />
-              <button type="button" className={styles.editBadge} data-id="bgChangeBtn" style={{ display: 'none' }}>
-                画像を変更
-              </button>
             </div>
 
             <div className={styles.altPreview}>
@@ -1660,6 +1788,45 @@ export function DashboardForm({
               <label><span>コメント</span><input type="number" min="0" step="1" inputMode="numeric" data-id="manualCommentCount" /></label>
               <label><span>保存</span><input type="number" min="0" step="1" inputMode="numeric" data-id="manualSaveCount" /></label>
               <label><span>シェア</span><input type="number" min="0" step="1" inputMode="numeric" data-id="manualShareCount" /></label>
+            </div>
+          </div>
+
+          <div className={styles.xEngagementEditor} data-id="xEngagementEditor" hidden>
+            <div className={styles.engagementHeader}>
+              <div>
+                <strong>Xの反応数をまとめて設定</strong>
+                <span>プレビュー内の反応数をタップして開けます</span>
+              </div>
+              <button type="button" data-id="xEngagementClose" aria-label="閉じる">×</button>
+            </div>
+            <div className={styles.engagementTabs}>
+              <button type="button" className={styles.engagementTabActive} data-id="xEngagementAuto">伸び率バー</button>
+              <button type="button" data-id="xEngagementManual">手動入力</button>
+            </div>
+            <div className={styles.engagementAutoPanel} data-id="xEngagementAutoPanel">
+              <div className={styles.engagementValueRow}>
+                <span>伸び率</span>
+                <output data-id="xEngagementValue">0 いいね</output>
+              </div>
+              <input
+                className={styles.engagementSlider}
+                data-id="xEngagementSlider"
+                type="range"
+                min="0"
+                max="1000"
+                step="1"
+                defaultValue="0"
+                aria-label="Xの伸び率"
+              />
+              <div className={styles.engagementScale}>
+                <span>0</span><span>細かく調整</span><span>100万</span>
+              </div>
+              <p>いいね数を基準に、コメント6.5〜8.5%・リポスト15〜25%の範囲で自動生成します。</p>
+            </div>
+            <div className={styles.engagementManualGrid} data-id="xEngagementManualPanel" hidden>
+              <label><span>いいね</span><input type="number" min="0" step="1" inputMode="numeric" data-id="xManualLikeCount" /></label>
+              <label><span>コメント</span><input type="number" min="0" step="1" inputMode="numeric" data-id="xManualCommentCount" /></label>
+              <label><span>リポスト</span><input type="number" min="0" step="1" inputMode="numeric" data-id="xManualRepostCount" /></label>
             </div>
           </div>
 

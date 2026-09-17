@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { parseYouTubePopularVideos } from '@/lib/youtube-trending';
+import { parseYouTubeChannelAvatars, parseYouTubePopularVideos } from '@/lib/youtube-trending';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,9 +39,24 @@ export async function GET() {
         { status: 502 }
       );
     }
-    const videos = parseYouTubePopularVideos(data);
+    let videos = parseYouTubePopularVideos(data);
     if (videos.length === 0) {
       return NextResponse.json({ error: '利用できる人気動画が見つかりませんでした。' }, { status: 502 });
+    }
+
+    const channelIds = [...new Set(videos.map(video => video.channelId).filter(Boolean))].slice(0, 50);
+    if (channelIds.length > 0) {
+      const channelsUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+      channelsUrl.searchParams.set('part', 'snippet');
+      channelsUrl.searchParams.set('id', channelIds.join(','));
+      channelsUrl.searchParams.set('maxResults', String(channelIds.length));
+      channelsUrl.searchParams.set('key', apiKey);
+      // チャンネル画像だけを追加取得する。失敗時も動画一覧自体は返し、共通プロフィール画像へフォールバックする。
+      const channelsResponse = await fetch(channelsUrl, { next: { revalidate: 900 } }).catch(() => null);
+      if (channelsResponse?.ok) {
+        const channelAvatars = parseYouTubeChannelAvatars(await channelsResponse.json().catch(() => null));
+        videos = videos.map(video => ({ ...video, channelAvatar: channelAvatars[video.channelId] || '' }));
+      }
     }
     return NextResponse.json({ videos }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch {

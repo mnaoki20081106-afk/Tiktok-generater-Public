@@ -2,20 +2,12 @@
 
 import { useState } from 'react';
 import { updateSurpriseConfig, type UpdateSurpriseConfigResult } from './actions';
-import { detectBuildMode } from '@/lib/link-generator';
 import type { SurpriseConfig } from '@/lib/types';
 
 export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null }) {
   const [probability, setProbability] = useState(config?.probability ?? 0);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<UpdateSurpriseConfigResult | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  // 保存直後は返ってきた値を、それ以外はDBの値を見せる
-  const optimized = result?.ok ? result.optimizedPrizeUrl : config?.prize_url_optimized;
-  /* 保存直後は生成時に分かった経路をそのまま使い、ページを開き直したときは
-     保存済みURLの形から判定する(DBには経路を持たせていないため)。 */
-  const mode = result?.ok && result.optimizedMode ? result.optimizedMode : detectBuildMode(optimized);
 
   return (
     <form
@@ -60,110 +52,18 @@ export function AdminSurpriseForm({ config }: { config: SurpriseConfig | null })
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
         <span className="text-xs leading-relaxed text-slate-400">
-          保存時にリンクジェネレーターを通し、最適化したURLも一緒に保存します(短縮リンクは展開し、ディープリンク系パラメータを除去します)。
-          当選した訪問者には、クッションページの有無に関わらずこの最適化版が使われます。
-          Stealth APIの起動待ちで保存に数十秒かかることがあります。
+          公開ページと同じ処理でTikTokのアプリ／ストア分岐情報を取得します。
+          取得できない場合は入力した公式招待リンクを保持します。その場合、TikTokの招待画面が表示されることがあります。
         </span>
       </label>
 
-      {/* 当たりURLは設定されているのに最適化版が無い状態。この場合は抽選そのものが
-          行われない(生のURLを配ると、踏んでもアプリが起動しない壊れたリンクになるため)。
-          保存し直せば解消するが、放置すると「抽選が動いていない」ことに気づけないので明示する。 */}
-      {!optimized && (config?.prize_url ?? '') !== '' && (
-        <p
-          data-id="notOptimized"
-          className="whitespace-pre-line rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-700"
-        >
-          当たりURLは設定されていますが、<strong>最適化版が保存されていません。</strong>
-          この状態では抽選は行われず、全員がサイト本来のURLへ遷移します。
-          {'\n'}
-          「保存する」を押し直して最適化版を作り直してください。
-          それでもこの表示が消えない場合は、<code className="font-mono">surprise_config</code> テーブルに{' '}
-          <code className="font-mono">prize_url_optimized</code> 列があるかを確認してください
-          （<code className="font-mono">supabase/schema.sql</code> の末尾にある alter 文が未実行の可能性があります）。
-        </p>
-      )}
-
-      {optimized && (
-        <div
-          data-id="optimizedPrize"
-          className={
-            'flex flex-col gap-1.5 rounded-lg border p-3 ' +
-            (mode === 'lp' ? 'border-slate-200 bg-slate-50' : 'border-amber-300 bg-amber-50')
-          }
-        >
-          <span className="text-xs font-medium text-slate-900">最適化済みの当たりURL(実際に当選者へ渡されるURL)</span>
-          <code className="break-all font-mono text-xs text-slate-600">{optimized}</code>
-
-          {/* どちらの形式で生成されたかを見せる。フォールバック側は実機で招待が
-              成立しないことが分かっているため、気づけるように警告を出す。 */}
-          {mode === 'original' && (<span data-id="prizeMode" className="text-xs text-emerald-700">形式: TikTok公式のアプリ／ストア分岐リンクです。招待の最終認定はTikTok側の条件によります。</span>)}
-          {mode === 'lp' && (
-            <span data-id="prizeMode" className="text-xs text-emerald-700">
-              形式: 招待LP直結。招待ページを開き、そこからTikTok側の案内に従って進みます。
-            </span>
-          )}
-          {mode === 'wrapper' && (
-            <span data-id="prizeMode" className="text-xs leading-relaxed text-amber-800">
-              形式: <strong>OneLinkラッパー（撤回済みの形式）</strong>。
-              以前生成したリンクの場合は、TikTokから取得した元の招待リンクを入力して保存し直してください。
-            </span>
-          )}
-          {mode === 'onelink' && (
-            <span data-id="prizeMode" className="text-xs leading-relaxed text-amber-800">
-              形式: <strong>OneLink</strong>。アプリ・ストアへの振り分けはリンク先の設定に従います。招待成立は未確認です。
-            </span>
-          )}
-          {mode === 'unknown' && (
-            <span data-id="prizeMode" className="text-xs leading-relaxed text-amber-800">
-              形式: <strong>不明</strong>。TikTok Liteの招待リンクとして認識できない形です。
-              当たりURLを入れ直してください。
-            </span>
-          )}
-
-          {/* 当選者が実際に踏むのと同じURLを、その場で試せるようにしておく。
-              「当たりURLだけ挙動がおかしい」ときに、抽選を経由せず直接切り分けられる。 */}
-          <div className="mt-1 flex flex-wrap items-center gap-3">
-            <a
-              data-id="testPrize"
-              href={optimized}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="text-xs font-medium text-slate-900 underline"
-            >
-              このURLを開いてテストする
-            </a>
-            <button
-              type="button"
-              data-id="copyPrize"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(optimized);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                } catch {
-                  /* クリップボードが使えない環境では何もしない(URLは上に表示済み) */
-                }
-              }}
-              className="text-xs text-slate-500 underline"
-            >
-              {copied ? 'コピーしました' : 'URLをコピー'}
-            </button>
-          </div>
-          <span className="text-xs leading-relaxed text-slate-400">
-            スマホで開いてアプリが起動しない場合、原因は抽選ではなくこのURL自体です。
-            その場合はこのURLをそのまま共有してください（当たりURLは他人の招待リンクのため、
-            当選しても自分の招待は成立しません。テストは必ずこのURLで行ってください）。
-          </span>
-        </div>
-      )}
 
       <button
         type="submit"
         disabled={saving}
         className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:opacity-60"
       >
-        {saving ? '当たりURLを最適化して保存中...' : '保存する'}
+        {saving ? '保存中...' : '保存する'}
       </button>
 
       {result?.ok && <p className="text-xs text-emerald-600">保存しました。</p>}

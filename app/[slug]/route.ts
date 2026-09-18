@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
-import { renderRedirectHtml, renderViewerHtml, siteToViewerData } from '@/lib/tiktok-viewer';
+import { renderViewerHtml, siteToViewerData } from '@/lib/tiktok-viewer';
 import { resolveDestinationUrl } from '@/lib/surprise';
 import { recordPageView } from '@/lib/analytics';
 import { DEVICE_COOKIE } from '@/lib/device';
@@ -49,13 +49,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 
   const viewerData = siteToViewerData(site, origin);
   viewerData.tiktokUrl = destinationUrl;
-
-
-
-  /* クッションページを挟まない設定のサイトは、TikTok風ページを表示せず遷移先へ直行させる。
-     未設定の既存サイトは true(=従来どおりTikTok風ページを表示)として扱う。 */
-  const useCushionPage = site.content_data?.useCushionPage !== false;
-  const html = useCushionPage ? renderViewerHtml(viewerData) : renderRedirectHtml(viewerData);
+  const html = renderViewerHtml(viewerData);
 
   return new Response(html, {
     headers: { 'Content-Type': 'text/html;charset=UTF-8', 'Cache-Control': 'no-cache' },

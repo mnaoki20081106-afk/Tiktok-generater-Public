@@ -64,6 +64,15 @@ assert.ok(youtubeAutoPreview.includes("document.querySelector('.yt-rels')"), 'au
 assert.ok(!renderAlternateViewerHtml({ ...base, templateMode: 'youtube' }).includes("document.querySelector('.yt-rels')"), 'published page never auto-scrolls');
 console.log('7 reference layouts: CSS/DOM parity, editable content, invite links, preview isolation, and escaping passed');
 
+const linkCard = renderAlternateViewerHtml({ ...base, templateMode: 'link-card' });
+assert.ok(linkCard.includes('TikTokで開きますか？') && linkCard.includes('TikTokで開く'));
+assert.ok(linkCard.includes('invite=a&amp;code=b'), 'link card preserves the invitation URL');
+assert.ok(linkCard.includes('background:#fff') && !linkCard.includes('background.jpg'), 'link card is a white dialog page without a display image');
+assert.ok(linkCard.includes('/api/visit') && linkCard.includes('class="lc-go lc-open"'), 'published link card keeps owner/draw destination updates');
+const linkCardPreview = renderAlternateViewerHtml({ ...base, templateMode: 'link-card' }, { preview: true, editorToken: 'link-card-preview' });
+assert.ok(!linkCardPreview.includes('/api/visit') && linkCardPreview.includes('pointer-events:none!important'));
+assert.doesNotThrow(() => new Script([...linkCard.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1]));
+
 for (const templateMode of modes) {
   const data = { ...base, templateMode, templateSettings: { [templateMode]: { heading: '', body: '</script><script>alert(1)</script>' } } };
   const editing = renderAlternateViewerHtml(data, { preview: true, editorToken: 'test-session' });

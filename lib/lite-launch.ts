@@ -1,10 +1,9 @@
 /**
  * 遷移先(招待LP)へ送り出すシーケンス。
  *
- * クッションページ(`app/tools/link-generator/cushion-relay.tsx`)と
- * 公開ページのクッションOFF版(`lib/tiktok-viewer.ts` の `renderRedirectHtml()`)の
- * 両方から使う。後者は文字列でHTMLを組み立てるため、この関数を
- * `liteLaunchScript()` でそのまま直列化して <script> に埋め込む。
+ * リンクジェネレーターのクッションページ
+ * (`app/tools/link-generator/cushion-relay.tsx`)から使う。
+ * 文字列HTMLにも埋め込めるよう、この関数を `liteLaunchScript()` で直列化できる。
  * 直列化する都合上、`startLiteLaunch()` は**モジュール内の他の識別子を参照しない**
  * 完全に自己完結した関数にしてある(参照するとインライン化時に未定義になる)。
  *

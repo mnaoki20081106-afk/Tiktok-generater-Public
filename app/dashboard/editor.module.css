@@ -73,6 +73,7 @@
 }
 .altPreview { position: absolute; inset: 0; z-index: 8; background: #000; }
 .phone[data-mode="tiktok"] .altPreview { display: none; }
+.previewCol[data-mode="link-card"] .previewActions { display: none; }
 .altFrame { width: 390px; height: 845px; border: 0; transform: scale(0.7692307692); transform-origin: top left; background: #000; }
 .bg {
   position: absolute;
@@ -900,36 +901,6 @@
   font-size: 13px;
   color: rgba(255, 255, 255, .7);
   cursor: pointer;
-}
-
-/* ===== クッションページOFF時の「使われない設定」の見せ方 =====
-   欄ごと消すと入力済みの内容が失われたように見えるため、暗くして操作だけを止める。
-   値・画像・下書きは保持したまま、必須項目からも外れる。 */
-.previewNote {
-  display: none;
-  max-width: 300px;
-  background: rgba(255, 184, 0, .1);
-  border: 1px solid rgba(255, 184, 0, .35);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 11.5px;
-  color: #ffc94d;
-  line-height: 1.7;
-}
-.previewNote.visible {
-  display: block;
-}
-/* 注意書きだけは暗くせず、それ以外の中身を暗くする */
-.previewDisabled > *:not([data-id="previewNote"]),
-.fieldDisabled {
-  opacity: .3;
-  pointer-events: none;
-  filter: grayscale(.5);
-}
-.previewDisabled > *:not([data-id="previewNote"]),
-.fieldDisabled,
-.previewNote {
-  transition: opacity .2s;
 }
 
 /* Cyan studio styling affects controls, not the generated page previews. */

@@ -6,15 +6,6 @@
  */
 import type { Site } from '@/lib/types';
 import { renderAlternateViewerHtml, type TemplateMode, type TemplateSettings } from '@/lib/template-viewer';
-import { lpToPrefetch, parseHttpUrl } from '@/lib/link-generator';
-import {
-  ERROR_TEXT,
-  ERROR_TEXT_ID,
-  IAB_SCREEN_ID,
-  LITE_IAB_CSS,
-  liteLaunchOptions,
-  liteLaunchScript,
-} from '@/lib/lite-launch';
 
 export interface ViewerData {
   templateMode: TemplateMode;
@@ -134,8 +125,7 @@ export function renderViewerHtml(d: ViewerData): string {
   const av = esc(avatarUrl);
   const ogp = esc(ogpImageUrl);
   const icon = esc(appIconUrl);
-  /* クッションOFF版と同じ規則で出し分ける(アプリ内ブラウザはカスタムスキーム)。 */
-  /* クッションOFF版と同じく招待LPのURL(renderRedirectHtml のコメントを参照)。 */
+  /* 保存時に解決したTikTok公式のアプリ／ストア分岐URLを、そのままリンクへ設定する。 */
   const tkUrl = esc(tiktokUrl);
   const descHtml = renderDescription(description);
   const descJson = JSON.stringify(String(description || '')).replace(/</g, '\\u003c');
@@ -394,168 +384,5 @@ setVh();addEventListener('resize',setVh);addEventListener('orientationchange',se
      遷移は <a> のネイティブな挙動に任せ、照合結果は href の差し替えだけで反映する。 */
 })();
 </script>
-</body></html>`;
-}
-
-/**
- * クッションページを挟まない(content_data.useCushionPage === false)サイト用のHTML。
- *
- * TikTok風ページは表示せず、遷移先へ直接送る。ただし単純な HTTP 302 にはしない。
- * リダイレクトしてしまうとSNSのクローラーまで遷移先へ飛んでしまい、
- * サイトに設定したOGPタイトル・OGP画像ではなく遷移先のカードが表示されてしまうため。
- * クローラーはJSを実行しないので、OGPタグを含むHTMLを返したうえで
- * location.replace() で飛ばすことで、カード表示と自動遷移を両立させる。
- *
- * meta http-equiv="refresh" を使わないのも同じ理由(追従するクローラーがいるため)。
- * JSが無効な環境では <noscript> の手動リンクが避難口になる。
- *
- * 遷移の直前にフィンガープリント照合(/api/visit)の結果を待つ。サプライズ抽選で
- * 当たりURLが選ばれていても、作成者本人・同一アカウントの端末なら本来のURLへ
- * 差し替えるため(自作自演での不正取得を防ぐ)。照合が終わり次第すぐ遷移し、
- * 遅くとも WAIT_MS で打ち切る。
- *
- * 手動リンク(「タップして続行」)は出さない。以前は自動遷移が働かなかった場合の
- * 避難口として4.5秒後に表示していたが、遷移自体は始まっているのに遷移先(OneLink)の
- * 応答が遅いだけのケースでも出てしまっていた。代わりに遷移手段を重ねてかけ、
- * タップ無しで確実に飛ばす。JSが無効な環境向けの <noscript> だけ残している。
- */
-/* かつてここに launchHref() があり、アプリ内ブラウザには
-   カスタムスキーム(snssdk473824://...)を、通常のブラウザには https のラッパーを
-   出し分けていた。**実機で否定されたので撤回した。**
-
-   Xのアプリ内ブラウザ(WKWebView)は、<a> のタップであっても未知のスキームへの
-   ナビゲーションを黙って破棄する。黒画面を何度タップしても何も起きず、
-   2秒後のエラー文言のまま固まる状態になった。
-   一方 https のラッパー(Universal Link)なら、タップでアプリが起動し招待ページも描画される。
-
-   したがって遷移先はどの環境でも https のラッパーを使う。 */
-
-export function renderRedirectHtml(d: ViewerData): string {
-  const dest = parseHttpUrl(d.tiktokUrl);
-  const destUrl = dest ? dest.toString() : '';
-
-  const t = esc(d.title);
-  const ogp = esc(d.ogpImageUrl);
-  const pageUrl = esc(`${d.origin}/${d.slug}`);
-  /* ===== <a href> に入れるのは招待LPのURL =====
-
-     招待のトラッキングは「招待LPのページがブラウザで読み込まれ、**そのページから**
-     アプリに入ること」で成立する。実機で確認済み。
-
-       招待LPのURL → そのページからアプリへ … 「自身を招待できません」が出る(成立)
-       カスタムスキームで直接アプリを開く   … アプリは開くがトラッキングは消える
-       OneLinkラッパーで直接アプリを開く    … 同上
-
-     カスタムスキームは2種類を**それぞれバイト単位で再現**して試した
-     (公式HTMLの url_schemes と1バイト一致のもの / マージ#35 と1バイト一致のもの)。
-     どちらもアプリは開くがトラッキングは落ちた。ペイロードの中身の問題ではなく、
-     LPのページを経由するかどうかが分かれ目だった。
-
-     したがってアプリを開く役目はLP自身に任せる。こちらの仕事は、黒画面のタップ誘導で
-     利用者を確実にLPへ送り届けるところまで。 */
-  const href = esc(destUrl);
-  const destJson = JSON.stringify(destUrl).replace(/</g, '\\u003c');
-  const slugJson = JSON.stringify(String(d.slug || '')).replace(/</g, '\\u003c');
-
-  /* 黒画面(<a>)はサーバー側で href を入れた状態で最初から出す。JSの完了を待たない。
-     待たせると、その間のタップが <a> に届かず取りこぼしになるため。
-
-     フィンガープリント照合(/api/visit)は裏で走らせ、当たりURLが本人向けに
-     差し替わったときだけ href を書き換える。サプライズ抽選で当たりURLが
-     選ばれていても、作成者本人・同一アカウントの端末なら本来のURLへ戻すための保険
-     (dvid Cookieが削除されていた場合)。
-
-     照合の完了を待って遷移する作りにはしない。タップの瞬間にJSがhrefを差し替えたり
-     preventDefault() でルーティングを横取りしたりすると、iOSがそのタップを
-     ユーザーが辿ったリンクとみなさず、Universal Link が発火しなくなるため。 */
-  const body = destUrl
-    ? `<noscript><a href="${href}" rel="noreferrer noopener">続行</a></noscript>
-<!-- アプリ内ブラウザ(X など)専用の読み込み画面。画面全体が1枚のリンクになっていて、
-     利用者のタップでUniversal Linkを発火させる。通常のブラウザでは表示されない。 -->
-<a id="${IAB_SCREEN_ID}" href="${href}" target="_top" rel="noreferrer noopener">
-  <span id="${ERROR_TEXT_ID}" hidden>${ERROR_TEXT}</span>
-</a>
-<script>
-var startLiteLaunch = ${liteLaunchScript()};
-(function(){
-  var dest = ${destJson};
-  var slug = ${slugJson};
-
-  var LAUNCH = ${JSON.stringify(liteLaunchOptions('', lpToPrefetch(destUrl)))};
-  LAUNCH.webUrl = dest;
-
-  /* 「2秒後にエラー文言」のタイマーと、hideLp のときの裏でのLP読み込みを仕掛けるだけ。
-     <a> の href はサーバー側でセット済みなので startLiteLaunch は触らない。 */
-  startLiteLaunch(LAUNCH);
-
-  function loadScript(src){
-    return new Promise(function(resolve,reject){
-      var s=document.createElement('script');
-      s.src=src;s.async=true;s.onload=resolve;s.onerror=reject;
-      document.head.appendChild(s);
-    });
-  }
-
-  loadScript('/fp.js').then(function(){
-    if(!window.FingerprintJS) return null;
-    return window.FingerprintJS.load().then(function(agent){ return agent.get(); });
-  }).then(function(result){
-    if(!result) return null;
-    return fetch('/api/visit',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({slug:slug,fp:result.visitorId})
-    }).then(function(res){ return res.ok?res.json():null; });
-  }).then(function(data){
-    /* 本人判定で遷移先が変わったときだけ書き換える。変わらないなら触らない
-       (無意味な setAttribute でも、タップ直前に走れば余計な疑いを招くため)。 */
-    var next = (data && data.href) || dest;
-    if (next === dest) return;
-    var screen = document.getElementById(LAUNCH.iabScreenId);
-    if (!screen) return;
-    screen.setAttribute('href', next);
-
-    /* 当たりURLに差し替わったときは、裏で踏む先も差し替え後のものに揃える。
-       元のLPを踏んだままだと、開くアプリと踏んだ招待が食い違う。
-       サーバーが next 用の踏み先を返していれば従い、無ければ何も踏まない。 */
-    if (data && data.prefetch) {
-      var LAUNCH2 = {
-        webUrl: next,
-        iabScreenId: LAUNCH.iabScreenId,
-        errorTextId: LAUNCH.errorTextId,
-        holdMs: LAUNCH.holdMs,
-        prefetchUrl: data.prefetch
-      };
-      /* 画面の再表示とタイマーの再設定は起きるが、どちらも冪等。
-         狙いは prefetch の踏み直しだけ。 */
-      startLiteLaunch(LAUNCH2);
-    }
-  }).catch(function(){});
-})();
-</script>`
-    : '<p>リンクが設定されていません。</p>';
-
-  return `<!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<!-- 遷移先へこのサイトのドメインをRefererとして渡さない(location.replace にも効く) -->
-<meta name="referrer" content="no-referrer">
-<title>${t}</title>
-<meta property="og:title" content="${t}">
-<meta property="og:description" content="TikTokのアプリで全機能をお試しください">
-<meta property="og:image" content="${ogp}">
-<meta property="og:url" content="${pageUrl}">
-<meta property="og:type" content="website">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="${ogp}">
-<style>
-html,body{height:100%;margin:0;background:#000;}
-body{display:flex;align-items:center;justify-content:center;font-family:-apple-system,"Hiragino Sans",sans-serif;}
-a,p{color:#8ab4f8;font-size:13px;text-align:center;padding:24px;margin:0;word-break:break-all;}
-p{color:#b9b9b9;}
-${LITE_IAB_CSS}
-</style>
-</head><body>
-${body}
 </body></html>`;
 }

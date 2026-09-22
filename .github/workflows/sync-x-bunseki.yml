@@ -45,7 +45,7 @@ jobs:
           changed="$(git -C X-Bunseki diff --name-only "$current" "$latest" || true)"
           printf '%s\n' "$changed"
 
-          meaningful="$(printf '%s\n' "$changed" | grep -Ev '^(hits\.(json|md)|status\.json|docs/(hits\.(json|md)|status\.json)|data/log/|data/notify_state\.json|data/training_snapshots\.jsonl|data/training_outcomes\.json|data/watchlist\.json)$' || true)"
+          meaningful="$(printf '%s\n' "$changed" | node scripts/x-submodule-change-filter.mjs)"
           if [ -z "$meaningful" ]; then
             echo "Only runtime observation/output files changed; parent pointer stays unchanged."
             echo "update=false" >> "$GITHUB_OUTPUT"

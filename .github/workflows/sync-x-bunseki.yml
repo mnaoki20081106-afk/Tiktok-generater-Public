@@ -18,7 +18,14 @@ jobs:
   sync:
     if: github.event_name != 'push' || github.actor != 'x-engine-sync[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-service-role-key
+      ADMIN_EMAILS: ci@example.com
+      IP_HASH_SECRET: ci-only-secret-0123456789abcdef0123456789
+      NEXT_PUBLIC_SITE_URL: https://example.com
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,6 +63,23 @@ jobs:
           git -C X-Bunseki checkout --detach "$latest"
           echo "update=true" >> "$GITHUB_OUTPUT"
           echo "sha=$latest" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.engine.outputs.update == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install parent dependencies
+        if: steps.engine.outputs.update == 'true'
+        run: npm ci
+
+      - name: Validate parent with updated engine
+        if: steps.engine.outputs.update == 'true'
+        run: |
+          npm test
+          npm run lint
+          npm run build
 
       - name: Commit updated submodule pointer
         if: steps.engine.outputs.update == 'true'

@@ -68,6 +68,7 @@ function record(value: unknown): UnknownRecord {
 }
 
 function numberOrNull(value: unknown): number | null {
+  if (value == null || value === '') return null;
   const n = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(n) ? n : null;
 }

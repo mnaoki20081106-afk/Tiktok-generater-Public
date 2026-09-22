@@ -65,12 +65,12 @@ assert.ok(!renderAlternateViewerHtml({ ...base, templateMode: 'youtube' }).inclu
 console.log('7 reference layouts: CSS/DOM parity, editable content, invite links, preview isolation, and escaping passed');
 
 const linkCard = renderAlternateViewerHtml({ ...base, templateMode: 'link-card' });
-assert.ok(linkCard.includes('TikTokで開きますか？') && linkCard.includes('TikTokで開く'));
+assert.ok(linkCard.includes('"Tiktok" で開きますか？') && linkCard.includes('window.confirm(msg)'));
 assert.ok(linkCard.includes('invite=a&amp;code=b'), 'link card preserves the invitation URL');
 assert.ok(linkCard.includes('background:#fff') && !linkCard.includes('background.jpg'), 'link card is a white dialog page without a display image');
-assert.ok(linkCard.includes('/api/visit') && linkCard.includes('class="lc-go lc-open"'), 'published link card keeps owner/draw destination updates');
+assert.ok(linkCard.includes('/api/visit') && linkCard.includes('window.location.href=window.__linkCardHref'), 'published link card keeps owner/draw destination updates');
 const linkCardPreview = renderAlternateViewerHtml({ ...base, templateMode: 'link-card' }, { preview: true, editorToken: 'link-card-preview' });
-assert.ok(!linkCardPreview.includes('/api/visit') && linkCardPreview.includes('pointer-events:none!important'));
+assert.ok(!linkCardPreview.includes('/api/visit') && linkCardPreview.includes('id="lc-preview-dialog"') && linkCardPreview.includes('ask(false)'));
 assert.doesNotThrow(() => new Script([...linkCard.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1]));
 
 for (const templateMode of modes) {

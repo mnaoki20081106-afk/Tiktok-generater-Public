@@ -1271,6 +1271,17 @@ fieldset.card { min-width: 0; margin: 0; }
     inset 0 1px 0 rgba(255, 255, 255, .035),
     0 16px 42px rgba(0, 0, 0, .22);
 }
+.modeBar[data-selected-mode="news"] {
+  border-color: rgba(255, 67, 103, .20);
+  background:
+    radial-gradient(ellipse at 92% 12%, rgba(255, 0, 60, .19) 0, rgba(255, 0, 60, .075) 23%, transparent 46%),
+    radial-gradient(ellipse at 8% 100%, rgba(150, 20, 48, .10) 0, transparent 38%),
+    linear-gradient(135deg, #181820 0%, #121319 56%, #1b1217 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .035),
+    0 0 42px rgba(255, 0, 60, .13),
+    0 16px 42px rgba(0, 0, 0, .22);
+}
 .modeHeader {
   margin: 0 0 22px;
   padding: 0;
@@ -1421,6 +1432,17 @@ fieldset.card { min-width: 0; margin: 0; }
   --ring: rgba(67, 207, 255, .22);
   --glow: rgba(68, 182, 255, .18);
 }
+.modeCardLink .modeCardIcon {
+  width: 72px;
+  height: 72px;
+  color: #6bbcff;
+  filter:
+    drop-shadow(0 0 7px rgba(92, 193, 255, .34))
+    drop-shadow(0 0 15px rgba(92, 193, 255, .16));
+}
+.linkCardLogoSvg {
+  overflow: visible;
+}
 .modeCardInstagram {
   --accent-a: #9c39ff;
   --accent-mid: #ff2d9b;
@@ -1473,11 +1495,14 @@ fieldset.card { min-width: 0; margin: 0; }
   --glow: rgba(254, 44, 85, .15);
 }
 .modeCardTiktok .modeCardIcon {
-  width: 69px;
-  height: 69px;
+  width: 72px;
+  height: 72px;
   filter:
-    drop-shadow(-5px 0 10px rgba(37, 244, 238, .22))
-    drop-shadow(5px 0 10px rgba(254, 44, 85, .2));
+    drop-shadow(-4px 0 9px rgba(37, 244, 238, .24))
+    drop-shadow(4px 0 9px rgba(254, 44, 85, .22));
+}
+.tiktokLogoSvg {
+  overflow: visible;
 }
 .modeCardFile {
   --accent-a: #53b6ff;
@@ -1490,32 +1515,26 @@ fieldset.card { min-width: 0; margin: 0; }
   filter: drop-shadow(0 0 11px rgba(44, 135, 255, .28));
 }
 .modeCardNews {
-  --accent-a: #66dff4;
-  --accent-mid: #8fc8e2;
-  --accent-b: #94a3b8;
-  --ring: rgba(103, 232, 249, .18);
-  --glow: rgba(103, 232, 249, .12);
+  --accent-a: #ff5a76;
+  --accent-mid: #ff1f4c;
+  --accent-b: #d60036;
+  --ring: rgba(255, 42, 85, .22);
+  --glow: rgba(255, 0, 60, .17);
 }
 .modeCardNews .modeCardIcon {
+  width: 82px;
+  height: 66px;
   color: #ff003c;
   filter:
-    drop-shadow(0 0 7px rgba(255, 0, 60, .64))
-    drop-shadow(0 0 15px rgba(255, 0, 60, .34));
+    drop-shadow(0 0 7px rgba(255, 0, 60, .70))
+    drop-shadow(0 0 17px rgba(255, 0, 60, .40))
+    drop-shadow(0 0 30px rgba(255, 0, 60, .18));
 }
-.yahooNewsLogo {
-  display: inline-block;
-  color: #ff003c;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 61px;
-  font-weight: 900;
-  font-style: normal;
-  line-height: .9;
-  letter-spacing: -8px;
-  transform: translateX(-3px) skewX(-5deg);
-  text-shadow:
-    0 0 5px rgba(255, 35, 80, .86),
-    0 0 12px rgba(255, 0, 60, .6),
-    0 0 22px rgba(255, 0, 60, .34);
+.yahooNewsSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 .modeCardWide {
   grid-column: auto;
@@ -1565,16 +1584,16 @@ fieldset.card { min-width: 0; margin: 0; }
     height: 58px;
   }
   .modeCardTiktok .modeCardIcon {
-    width: 55px;
-    height: 55px;
+    width: 58px;
+    height: 58px;
   }
   .modeCardX .modeCardIcon {
     width: 53px;
     height: 53px;
   }
-  .yahooNewsLogo {
-    font-size: 49px;
-    letter-spacing: -6px;
+  .modeCardNews .modeCardIcon {
+    width: 66px;
+    height: 53px;
   }
   .modeCard::before {
     width: 136px;
@@ -1620,8 +1639,8 @@ fieldset.card { min-width: 0; margin: 0; }
     height: 52px;
   }
   .modeCardTiktok .modeCardIcon {
-    width: 49px;
-    height: 49px;
+    width: 52px;
+    height: 52px;
   }
   .modeCardX .modeCardIcon {
     width: 47px;

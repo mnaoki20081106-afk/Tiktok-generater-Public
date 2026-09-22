@@ -130,6 +130,12 @@ assert.match(
   /feed === 'trending' \? trendingPosts : earlyPosts/,
   'only the selected source feed should be rendered',
 );
+assert.match(switcher, /useState<SortMode>\('default'\)/);
+assert.match(switcher, /インプレッション順/);
+assert.match(switcher, /新着順/);
+assert.match(switcher, /Date\.parse\(a\.postedAt\)/);
+assert.match(switcher, /return bTime - aTime/);
+assert.match(switcher, /return aAge - bAge/);
 assert.match(postCard, /isTrending \? '現在' : '予測最終'/);
 assert.match(
   postCard,
@@ -179,6 +185,7 @@ const css = fs.readFileSync(new URL('../app/globals.css', import.meta.url), 'utf
 assert.match(css, /@media \(max-width: 760px\)/);
 assert.match(css, /\.xmon-prediction/);
 assert.match(css, /\.xmon-flame-emoji/);
+assert.match(css, /\.xmon-sort-toggle/);
 assert.match(css, /data:image\/png;base64/);
 assert.match(css, /overflow-x: clip/);
 

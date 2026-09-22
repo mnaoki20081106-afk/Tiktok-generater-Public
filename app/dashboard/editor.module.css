@@ -36,22 +36,36 @@
   font-size: clamp(13px, 1.4vw, 17px);
   line-height: 1.7;
 }
+.modePicker {
+  position: relative;
+}
 .modeNativeSelect {
   position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  margin: -1px !important;
+  inset: 0 !important;
+  z-index: 20;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
   padding: 0 !important;
-  overflow: hidden !important;
-  clip: rect(0 0 0 0) !important;
-  clip-path: inset(50%) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
 .modeGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px 22px;
+  display: block;
+}
+.modePickerChevron {
+  position: absolute;
+  z-index: 12;
+  right: 18px;
+  bottom: 13px;
+  color: rgba(255,255,255,.62);
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 2px 12px rgba(0,0,0,.5);
 }
 .modeCard {
   --accent-a: #56d7ff;
@@ -62,7 +76,7 @@
   isolation: isolate;
   min-height: 168px;
   overflow: hidden;
-  display: flex;
+  display: none;
   align-items: center;
   width: 100%;
   padding: 28px 31px;
@@ -106,23 +120,20 @@
   border: 1px solid var(--ring);
   background: radial-gradient(circle at 52% 24%, var(--ring), transparent 62%);
 }
-.modeCard:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.06);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.06),
-    0 0 34px var(--glow),
-    0 16px 30px rgba(0,0,0,.2);
-}
-.modeCard:focus-visible {
-  outline: 3px solid rgba(255,255,255,.92);
-  outline-offset: 4px;
-}
 .modeCard[data-selected="true"] {
+  display: flex;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,.2),
     0 0 38px var(--glow),
     0 18px 34px rgba(0,0,0,.23);
+}
+.modePicker:hover .modeCard[data-selected="true"] {
+  transform: translateY(-1px);
+  filter: brightness(1.045);
+}
+.modePicker:focus-within .modeCard[data-selected="true"] {
+  outline: 3px solid rgba(255,255,255,.88);
+  outline-offset: 4px;
 }
 .modeCardCopy {
   position: relative;
@@ -239,7 +250,10 @@
 }
 .modeCardNews .modeCardIcon {
   color: #ff003c;
-  filter: drop-shadow(0 0 16px rgba(255, 0, 60, .3));
+  filter:
+    drop-shadow(0 0 10px rgba(255, 0, 60, .78))
+    drop-shadow(0 0 24px rgba(255, 0, 60, .52))
+    drop-shadow(0 0 42px rgba(255, 0, 60, .3));
 }
 .yahooNewsLogo {
   display: inline-block;
@@ -251,10 +265,14 @@
   line-height: .9;
   letter-spacing: -10px;
   transform: translateX(-4px) skewX(-5deg);
-  text-shadow: 0 0 18px rgba(255, 0, 60, .18);
+  text-shadow:
+    0 0 6px rgba(255, 35, 80, .98),
+    0 0 16px rgba(255, 0, 60, .82),
+    0 0 32px rgba(255, 0, 60, .56),
+    0 0 54px rgba(255, 0, 60, .28);
 }
 .modeCardWide {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
 
@@ -1216,8 +1234,8 @@ fieldset.card { min-width: 0; margin: 0; }
 @media (max-width: 760px) {
   .modeBar { margin-bottom: 22px; }
   .modeHeader { margin-bottom: 16px; padding: 0 4px; }
-  .modeGrid { grid-template-columns: 1fr; gap: 14px; }
-  .modeCard, .modeCardWide { grid-column: auto; min-height: 142px; padding: 22px 22px; border-radius: 20px; }
+  .modeGrid { display: block; }
+  .modeCard, .modeCardWide { min-height: 142px; padding: 22px 22px; border-radius: 20px; }
   .modeCardCopy { padding-right: 94px; }
   .modeCardTitle { font-size: 24px; }
   .modeCardDescription { margin-top: 10px; font-size: 12px; }
@@ -1235,3 +1253,284 @@ fieldset.card { min-width: 0; margin: 0; }
   .modeCardTitle { font-size: 21px; }
   .modeCardIcon { right: 14px; width: 66px; height: 66px; }
 }
+
+/* ===== Reference-inspired slim creation mode selector ===== */
+.modeBar {
+  --mode-panel-glow: rgba(64, 183, 255, .13);
+  position: relative;
+  width: min(100%, 1120px);
+  margin: 0 auto 32px;
+  padding: 34px 38px 30px;
+  overflow: hidden;
+  border: 1px solid rgba(160, 186, 214, .14);
+  border-radius: 28px;
+  background:
+    radial-gradient(ellipse at 88% 28%, var(--mode-panel-glow) 0, transparent 39%),
+    radial-gradient(ellipse at 10% 100%, rgba(69, 114, 169, .055) 0, transparent 42%),
+    linear-gradient(135deg, rgba(23, 27, 36, .94), rgba(13, 17, 24, .97));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .035),
+    0 22px 54px rgba(0, 0, 0, .18);
+}
+.modeBar:has(.modeCardInstagram[data-selected="true"]) {
+  --mode-panel-glow: rgba(226, 45, 154, .15);
+}
+.modeBar:has(.modeCardLive[data-selected="true"]),
+.modeBar:has(.modeCardYoutube[data-selected="true"]),
+.modeBar:has(.modeCardTiktok[data-selected="true"]) {
+  --mode-panel-glow: rgba(235, 50, 92, .12);
+}
+.modeBar:has(.modeCardX[data-selected="true"]) {
+  --mode-panel-glow: rgba(148, 163, 184, .09);
+}
+.modeBar:has(.modeCardFile[data-selected="true"]) {
+  --mode-panel-glow: rgba(54, 136, 255, .13);
+}
+.modeHeader {
+  margin: 0 0 22px;
+  padding: 0;
+}
+.modeHeading {
+  color: #eef3f9;
+  font-size: clamp(23px, 2.2vw, 29px);
+  font-weight: 700;
+  letter-spacing: -.035em;
+  line-height: 1.15;
+}
+.modeSubheading {
+  display: none;
+}
+.modePicker {
+  position: relative;
+}
+.modeGrid {
+  display: block;
+}
+.modePickerChevron {
+  display: none;
+}
+.modeCard {
+  --accent-mid: #52baff;
+  min-height: 138px;
+  padding: 23px 28px;
+  border-width: 2px;
+  border-radius: 20px;
+  background:
+    radial-gradient(ellipse at 88% 50%, var(--glow) 0, transparent 29%) padding-box,
+    linear-gradient(135deg, rgba(9, 13, 21, .965), rgba(19, 20, 29, .935)) padding-box,
+    linear-gradient(90deg, var(--accent-a), var(--accent-mid), var(--accent-b)) border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .045),
+    0 0 24px rgba(0, 0, 0, .16);
+}
+.modeCard::before {
+  width: 205px;
+  height: 205px;
+  right: -70px;
+  top: -84px;
+  opacity: .72;
+}
+.modeCard::after {
+  width: 150px;
+  height: 150px;
+  right: 48px;
+  bottom: -103px;
+  opacity: .58;
+}
+.modeCard[data-selected="true"] {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .09),
+    0 0 24px var(--glow),
+    0 13px 30px rgba(0, 0, 0, .2);
+}
+.modePicker:hover .modeCard[data-selected="true"] {
+  transform: none;
+  filter: brightness(1.025);
+}
+.modePicker:focus-within .modeCard[data-selected="true"] {
+  outline: 2px solid rgba(230, 242, 255, .78);
+  outline-offset: 3px;
+}
+.modeCardCopy {
+  padding-right: 118px;
+}
+.modeCardTitle {
+  font-size: clamp(24px, 2vw, 29px);
+  font-weight: 750;
+  letter-spacing: -.04em;
+}
+.modeCardDescription {
+  margin-top: 11px;
+  color: #9da9b9;
+  font-size: clamp(12.5px, 1.1vw, 15px);
+  font-weight: 430;
+  line-height: 1.55;
+}
+.modeCardIcon {
+  right: 25px;
+  width: 84px;
+  height: 84px;
+  filter: drop-shadow(0 0 15px var(--glow));
+}
+.modeCardLink {
+  --accent-a: #45cfff;
+  --accent-mid: #55b6ff;
+  --accent-b: #76b3ff;
+}
+.modeCardInstagram {
+  --accent-a: #9a35ff;
+  --accent-mid: #ff2d95;
+  --accent-b: #ffc64d;
+}
+.modeCardLive {
+  --accent-a: #ff6672;
+  --accent-mid: #ff3859;
+  --accent-b: #d91d35;
+}
+.modeCardX {
+  --accent-a: #aab8c6;
+  --accent-mid: #8799aa;
+  --accent-b: #64748b;
+}
+.modeCardYoutube {
+  --accent-a: #ff5863;
+  --accent-mid: #ff2033;
+  --accent-b: #cf1024;
+}
+.modeCardTiktok {
+  --accent-a: #25f4ee;
+  --accent-mid: #e52f75;
+  --accent-b: #fe2c55;
+}
+.modeCardFile {
+  --accent-a: #53b6ff;
+  --accent-mid: #2d89ff;
+  --accent-b: #1768e8;
+}
+.modeCardNews {
+  --accent-a: #65dcf4;
+  --accent-mid: #8dc9e4;
+  --accent-b: #94a3b8;
+}
+.modeCardInstagram .modeCardIcon {
+  filter:
+    drop-shadow(0 0 10px rgba(255, 45, 149, .38))
+    drop-shadow(0 0 22px rgba(154, 53, 255, .2));
+}
+.modeCardTiktok .modeCardIcon {
+  width: 80px;
+  height: 80px;
+}
+.modeCardX .modeCardIcon {
+  width: 76px;
+  height: 76px;
+}
+.modeCardNews .modeCardIcon {
+  filter:
+    drop-shadow(0 0 9px rgba(255, 0, 60, .72))
+    drop-shadow(0 0 22px rgba(255, 0, 60, .42))
+    drop-shadow(0 0 40px rgba(255, 0, 60, .22));
+}
+.yahooNewsLogo {
+  font-size: 69px;
+  text-shadow:
+    0 0 5px rgba(255, 35, 80, .95),
+    0 0 14px rgba(255, 0, 60, .74),
+    0 0 28px rgba(255, 0, 60, .48),
+    0 0 48px rgba(255, 0, 60, .23);
+}
+.modeFooterHint {
+  margin: 19px 2px 0;
+  color: #8793a3;
+  font-size: clamp(12px, 1.05vw, 14px);
+  line-height: 1.75;
+  letter-spacing: -.015em;
+}
+@media (max-width: 760px) {
+  .modeBar {
+    margin-bottom: 24px;
+    padding: 24px 20px 22px;
+    border-radius: 22px;
+  }
+  .modeHeader {
+    margin-bottom: 17px;
+    padding: 0;
+  }
+  .modeHeading {
+    font-size: 23px;
+  }
+  .modeCard,
+  .modeCardWide {
+    min-height: 118px;
+    padding: 19px 18px;
+    border-radius: 17px;
+  }
+  .modeCardCopy {
+    padding-right: 88px;
+  }
+  .modeCardTitle {
+    font-size: 22px;
+  }
+  .modeCardDescription {
+    margin-top: 8px;
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+  .modeCardIcon {
+    right: 15px;
+    width: 68px;
+    height: 68px;
+  }
+  .modeCardTiktok .modeCardIcon {
+    width: 64px;
+    height: 64px;
+  }
+  .modeCardX .modeCardIcon {
+    width: 61px;
+    height: 61px;
+  }
+  .yahooNewsLogo {
+    font-size: 57px;
+    letter-spacing: -7px;
+  }
+  .modeCard::before {
+    width: 160px;
+    height: 160px;
+    right: -58px;
+    top: -67px;
+  }
+  .modeCard::after {
+    width: 116px;
+    height: 116px;
+    right: 34px;
+    bottom: -81px;
+  }
+  .modeFooterHint {
+    margin-top: 15px;
+    font-size: 11.5px;
+  }
+}
+@media (max-width: 390px) {
+  .modeBar {
+    padding: 21px 16px 20px;
+  }
+  .modeCard {
+    min-height: 112px;
+    padding: 18px 16px;
+  }
+  .modeCardCopy {
+    padding-right: 75px;
+  }
+  .modeCardTitle {
+    font-size: 20px;
+  }
+  .modeCardDescription {
+    font-size: 10.8px;
+  }
+  .modeCardIcon {
+    right: 12px;
+    width: 60px;
+    height: 60px;
+  }
+}
+

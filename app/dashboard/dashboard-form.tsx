@@ -1505,7 +1505,7 @@ export function DashboardForm({
             </div>
 
             <div className={styles.altPreview}>
-              <iframe data-id="altFrame" title="公開ページのプレビュー" className={styles.altFrame} sandbox="allow-scripts" referrerPolicy="no-referrer" />
+              <iframe data-id="altFrame" title="公開ページのプレビュー" className={styles.altFrame} sandbox="allow-scripts allow-modals" referrerPolicy="no-referrer" />
             </div>
 
             <div className={`${styles.rail} ${styles.tiktokOnly}`}>

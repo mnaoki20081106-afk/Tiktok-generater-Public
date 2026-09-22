@@ -25,10 +25,10 @@ export default async function XMonitorPage() {
       <section className="xmon-hero">
         <div>
           <p className="studio-eyebrow">X VIRAL SIGNAL</p>
-          <h1>伸び切る前の投稿を、<span>予測最終imp</span>で見る。</h1>
+          <h1>X-Bunsekiの監視結果を、<span>2つの段階</span>で見る。</h1>
           <p>
-            X-Bunsekiの実測時系列と予測モデルを、最終インプレッション予測が
-            大きい順に表示しています。
+            元リポジトリの分類をそのまま使い、「早期発見」と「バズっている」を
+            混ぜずに表示しています。
           </p>
         </div>
         <div className="xmon-live-card">
@@ -57,19 +57,41 @@ export default async function XMonitorPage() {
 
       <section className="xmon-feed-head">
         <div>
-          <p className="studio-eyebrow">PREDICTED FINAL RANKING</p>
-          <h2>バズ候補</h2>
+          <p className="studio-eyebrow">EARLY DISCOVERY</p>
+          <h2>早期発見</h2>
         </div>
-        <span>{data.posts.length} posts · 予測値なしは後順位</span>
+        <span>
+          {data.earlyPosts.length} posts · 4時間以内・予測最終100万imp以上 · 予測最終imp順
+        </span>
       </section>
 
       <div className="xmon-feed">
-        {data.posts.length ? (
-          data.posts.map((post, index) => (
+        {data.earlyPosts.length ? (
+          data.earlyPosts.map((post, index) => (
             <XPostCard key={post.id} post={post} rank={index + 1} />
           ))
         ) : (
-          <div className="xmon-empty">現在表示できる投稿がありません。</div>
+          <div className="xmon-empty">現在、早期発見に該当する投稿はありません。</div>
+        )}
+      </div>
+
+      <section className="xmon-feed-head">
+        <div>
+          <p className="studio-eyebrow">TRENDING NOW</p>
+          <h2>バズっている</h2>
+        </div>
+        <span>
+          {data.trendingPosts.length} posts · 4〜24時間・現在150万imp以上 · imp/分順
+        </span>
+      </section>
+
+      <div className="xmon-feed">
+        {data.trendingPosts.length ? (
+          data.trendingPosts.map((post, index) => (
+            <XPostCard key={post.id} post={post} rank={index + 1} />
+          ))
+        ) : (
+          <div className="xmon-empty">現在、バズっている投稿はありません。</div>
         )}
       </div>
     </main>

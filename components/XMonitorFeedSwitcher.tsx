@@ -28,7 +28,6 @@ export function XMonitorFeedSwitcher({
           onClick={() => setFeed('early')}
         >
           早期発見
-          <span>{earlyPosts.length}</span>
         </button>
         <button
           type="button"
@@ -38,7 +37,6 @@ export function XMonitorFeedSwitcher({
           onClick={() => setFeed('trending')}
         >
           🔥 バズっている
-          <span>{trendingPosts.length}</span>
         </button>
       </div>
 

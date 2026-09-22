@@ -928,22 +928,13 @@ export function DashboardForm({
       toggle('tapAll', '画面のどこでもタップで移動');
       const hint = document.createElement('p'); hint.className = styles.hint; hint.textContent = 'プレビュー内ではリンク先へ移動しません。コメントや反応数は見た目用の表示です。'; modeFields.append(hint);
     }
-    const modeChoices = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-mode-choice]'));
+    const modeChoices = Array.from(root.querySelectorAll<HTMLElement>('[data-mode-choice]'));
     function syncModeCards() {
       const selectedMode = templateMode.value || 'tiktok';
       for (const choice of modeChoices) {
         const selected = choice.dataset.modeChoice === selectedMode;
         choice.dataset.selected = selected ? 'true' : 'false';
-        choice.setAttribute('aria-pressed', selected ? 'true' : 'false');
       }
-    }
-    for (const choice of modeChoices) {
-      choice.addEventListener('click', () => {
-        const nextMode = choice.dataset.modeChoice;
-        if (!nextMode || templateMode.value === nextMode) return;
-        templateMode.value = nextMode;
-        templateMode.dispatchEvent(new Event('change', { bubbles: true }));
-      });
     }
     templateMode.addEventListener('change', () => {
       syncModeCards(); renderModeFields(); syncAlternatePreview(); saveState(); check();
@@ -1511,6 +1502,7 @@ export function DashboardForm({
           <p className={styles.modeSubheading}>作成するリンクページのデザインを選択してください。</p>
         </div>
 
+        <div className={styles.modePicker}>
         <select data-id="templateMode" defaultValue="tiktok" className={styles.modeNativeSelect} tabIndex={-1} aria-hidden="true">
           <option value="link-card">リンクカード</option>
           <option value="news">ニュース風</option>
@@ -1522,9 +1514,8 @@ export function DashboardForm({
           <option value="youtube">YouTube風</option>
           <option value="file">ファイル共有風</option>
         </select>
-
         <div className={styles.modeGrid}>
-          <button type="button" className={`${styles.modeCard} ${styles.modeCardLink}`} data-mode-choice="link-card" data-selected="false" aria-pressed="false">
+          <div className={`${styles.modeCard} ${styles.modeCardLink}`} data-mode-choice="link-card" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>リンクカード</span>
               <span className={styles.modeCardDescription}>シンプルなリンク誘導ページを<br className={styles.modeDesktopBreak} />作成します。</span>
@@ -1536,9 +1527,9 @@ export function DashboardForm({
                 <path d="m35 61 26-26" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
               </svg>
             </span>
-          </button>
+          </div>
 
-          <button type="button" className={`${styles.modeCard} ${styles.modeCardInstagram}`} data-mode-choice="instagram" data-selected="false" aria-pressed="false">
+          <div className={`${styles.modeCard} ${styles.modeCardInstagram}`} data-mode-choice="instagram" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>インスタ風</span>
               <span className={styles.modeCardDescription}>Instagram風のリンクページを<br className={styles.modeDesktopBreak} />作成します。</span>
@@ -1551,9 +1542,9 @@ export function DashboardForm({
                 <circle cx="69" cy="28" r="5" fill="url(#ig-mode-gradient)"/>
               </svg>
             </span>
-          </button>
+          </div>
 
-          <button type="button" className={`${styles.modeCard} ${styles.modeCardInstagram}`} data-mode-choice="instagram-live" data-selected="false" aria-pressed="false">
+          <div className={`${styles.modeCard} ${styles.modeCardInstagram}`} data-mode-choice="instagram-live" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>インスタライブ風</span>
               <span className={styles.modeCardDescription}>Instagramのライブ配信風の<br className={styles.modeDesktopBreak} />リンクページを作成します。</span>
@@ -1566,9 +1557,9 @@ export function DashboardForm({
                 <circle cx="69" cy="28" r="5" fill="url(#ig-live-mode-gradient)"/>
               </svg>
             </span>
-          </button>
+          </div>
 
-          <button type="button" className={`${styles.modeCard} ${styles.modeCardLive}`} data-mode-choice="live" data-selected="false" aria-pressed="false">
+          <div className={`${styles.modeCard} ${styles.modeCardLive}`} data-mode-choice="live" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>ライブ配信風</span>
               <span className={styles.modeCardDescription}>ライブ配信サービス風の<br className={styles.modeDesktopBreak} />リンクページを作成します。</span>
@@ -1579,9 +1570,9 @@ export function DashboardForm({
                 <path d="M31 31a24 24 0 0 0 0 34M65 31a24 24 0 0 1 0 34M19 20a40 40 0 0 0 0 56M77 20a40 40 0 0 1 0 56" fill="none" stroke="currentColor" strokeWidth="7" strokeLinecap="round"/>
               </svg>
             </span>
-          </button>
+          </div>
 
-          <button type="button" className={`${styles.modeCard} ${styles.modeCardX}`} data-mode-choice="x" data-selected="false" aria-pressed="false">
+          <div className={`${styles.modeCard} ${styles.modeCardX}`} data-mode-choice="x" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>X風</span>
               <span className={styles.modeCardDescription}>X（旧Twitter）風のリンクページを<br className={styles.modeDesktopBreak} />作成します。</span>
@@ -1589,9 +1580,9 @@ export function DashboardForm({
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 24 24" role="img"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.451-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"/></svg>
             </span>
-          </button>
+          </div>
 
-          <button type="button" className={`${styles.modeCard} ${styles.modeCardYoutube}`} data-mode-choice="youtube" data-selected="false" aria-pressed="false">
+          <div className={`${styles.modeCard} ${styles.modeCardYoutube}`} data-mode-choice="youtube" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>YouTube風</span>
               <span className={styles.modeCardDescription}>YouTube風のリンクページを<br className={styles.modeDesktopBreak} />作成します。</span>
@@ -1602,9 +1593,9 @@ export function DashboardForm({
                 <path d="m41 36 24 12-24 12V36Z" fill="#fff"/>
               </svg>
             </span>
-          </button>
+          </div>
 
-          <button type="button" className={`${styles.modeCard} ${styles.modeCardTiktok}`} data-mode-choice="tiktok" data-selected="true" aria-pressed="true">
+          <div className={`${styles.modeCard} ${styles.modeCardTiktok}`} data-mode-choice="tiktok" data-selected="true">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>TikTok風</span>
               <span className={styles.modeCardDescription}>TikTok風のリンクページを<br className={styles.modeDesktopBreak} />作成します。</span>
@@ -1616,9 +1607,9 @@ export function DashboardForm({
                 <path fill="#fff" d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03a11.8 11.8 0 0 1-5.82-1.9c-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.03-.5-.04-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37a3.5 3.5 0 0 0-1.36 1.74c-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.11-.01 2.17-.66 2.75-1.6.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07Z"/>
               </svg>
             </span>
-          </button>
+          </div>
 
-          <button type="button" className={`${styles.modeCard} ${styles.modeCardFile}`} data-mode-choice="file" data-selected="false" aria-pressed="false">
+          <div className={`${styles.modeCard} ${styles.modeCardFile}`} data-mode-choice="file" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>ファイル共有風</span>
               <span className={styles.modeCardDescription}>ファイル共有サービス風の<br className={styles.modeDesktopBreak} />リンクページを作成します。</span>
@@ -1630,9 +1621,9 @@ export function DashboardForm({
                 <path d="M13 38h70v31c0 6-4 10-10 10H23c-6 0-10-4-10-10V38Z" fill="#258cff" opacity=".88"/>
               </svg>
             </span>
-          </button>
+          </div>
 
-          <button type="button" className={`${styles.modeCard} ${styles.modeCardNews} ${styles.modeCardWide}`} data-mode-choice="news" data-selected="false" aria-pressed="false">
+          <div className={`${styles.modeCard} ${styles.modeCardNews} ${styles.modeCardWide}`} data-mode-choice="news" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>ニュース風</span>
               <span className={styles.modeCardDescription}>ニュース記事風のリンクページを作成します。</span>
@@ -1640,7 +1631,9 @@ export function DashboardForm({
             <span className={styles.modeCardIcon} aria-hidden="true">
               <span className={styles.yahooNewsLogo}>Y!</span>
             </span>
-          </button>
+          </div>
+        </div>
+          <span className={styles.modePickerChevron} aria-hidden="true">⌄</span>
         </div>
       </section>
       <div className={styles.layout}>

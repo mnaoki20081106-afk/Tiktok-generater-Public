@@ -122,7 +122,9 @@ assert.match(switcher, /useState<Feed>\('early'\)/, 'source UI defaults to early
 assert.match(switcher, /setFeed\('early'\)/);
 assert.match(switcher, /setFeed\('trending'\)/);
 assert.match(switcher, />\s*早期発見\s*</);
-assert.match(switcher, /🔥 バズっている/);
+assert.match(switcher, /xmon-flame-emoji/);
+assert.match(switcher, /バズっている/);
+assert.doesNotMatch(switcher, /🔥/, 'native red fire emoji must not be used in X monitor labels');
 assert.match(
   switcher,
   /feed === 'trending' \? trendingPosts : earlyPosts/,
@@ -176,6 +178,8 @@ assert.doesNotMatch(github, /NEXT_PUBLIC_X_BUNSEKI_GITHUB_TOKEN/, 'GitHub token 
 const css = fs.readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
 assert.match(css, /@media \(max-width: 760px\)/);
 assert.match(css, /\.xmon-prediction/);
+assert.match(css, /\.xmon-flame-emoji/);
+assert.match(css, /data:image\/png;base64/);
 assert.match(css, /overflow-x: clip/);
 
 console.log('✅ X monitor source-section contract checks passed');

@@ -36,11 +36,11 @@ export default async function DashboardPage() {
           {isAdminEmail(user.email) && (
             <Link
               href="/admin"
-              title="サプライズ抽選設定"
+              title="管理画面"
               className="flex items-center gap-1 rounded-lg border border-cyan-300/15 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-[#0c1c2d]"
             >
               <Settings size={13} />
-              抽選設定
+              管理画面
             </Link>
           )}
           <LogoutButton />

@@ -44,7 +44,7 @@ assert.equal(sorted[1].id, '456', 'missing prediction must be pushed behind');
 assert.equal(formatCompactNumber(12_400_000), '12.4M');
 assert.equal(formatCompactNumber(438_000), '438.0K');
 
-const actions = fs.readFileSync(new URL('../app/admin/x-monitor/actions.ts', import.meta.url), 'utf8');
+const actions = fs.readFileSync(new URL('../app/admin/x-keyword-actions.ts', import.meta.url), 'utf8');
 const github = fs.readFileSync(new URL('../lib/x-monitor-github.ts', import.meta.url), 'utf8');
 assert.match(actions, /assertAdmin\(\)/, 'keyword writes must re-check admin on the server');
 assert.match(github, /X_BUNSEKI_GITHUB_TOKEN/, 'keyword writes must use server-only token');

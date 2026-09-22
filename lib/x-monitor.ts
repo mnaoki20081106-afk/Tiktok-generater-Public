@@ -200,7 +200,8 @@ function mergeForDetail(
 }
 
 async function fetchEngineJson(path: string): Promise<UnknownRecord> {
-  const response = await fetch(`${RAW_BASE}/${path}`, {
+  const separator = path.includes('?') ? '&' : '?';
+  const response = await fetch(`${RAW_BASE}/${path}${separator}t=${Date.now()}`, {
     cache: 'no-store',
     headers: { Accept: 'application/json' },
   });

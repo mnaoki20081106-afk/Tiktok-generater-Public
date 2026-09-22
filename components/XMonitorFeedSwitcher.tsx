@@ -36,7 +36,7 @@ export function XMonitorFeedSwitcher({
           className={!isEarly ? 'active' : ''}
           onClick={() => setFeed('trending')}
         >
-          🔥 バズっている
+          <span className="xmon-trending-label"><span className="xmon-flame-emoji" aria-hidden="true" />バズっている</span>
         </button>
       </div>
 
@@ -45,7 +45,7 @@ export function XMonitorFeedSwitcher({
           <p className="studio-eyebrow">
             {isEarly ? 'EARLY DISCOVERY' : 'TRENDING NOW'}
           </p>
-          <h2>{isEarly ? '早期発見' : '🔥 バズっている'}</h2>
+          <h2>{isEarly ? '早期発見' : <span className="xmon-trending-label"><span className="xmon-flame-emoji" aria-hidden="true" />バズっている</span>}</h2>
         </div>
         <span>
           {isEarly

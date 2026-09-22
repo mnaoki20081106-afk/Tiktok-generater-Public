@@ -1499,7 +1499,6 @@ export function DashboardForm({
       <section className={styles.modeBar} aria-labelledby="creation-mode-heading">
         <div className={styles.modeHeader}>
           <h2 id="creation-mode-heading" className={styles.modeHeading}>作成モード</h2>
-          <p className={styles.modeSubheading}>作成するリンクページのデザインを選択してください。</p>
         </div>
 
         <div className={styles.modePicker}>
@@ -1518,7 +1517,7 @@ export function DashboardForm({
           <div className={`${styles.modeCard} ${styles.modeCardLink}`} data-mode-choice="link-card" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>リンクカード</span>
-              <span className={styles.modeCardDescription}>シンプルなリンク誘導ページを<br className={styles.modeDesktopBreak} />作成します。</span>
+              <span className={styles.modeCardDescription}>シンプルなリンク誘導ページを 作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 96 96" role="img">
@@ -1532,7 +1531,7 @@ export function DashboardForm({
           <div className={`${styles.modeCard} ${styles.modeCardInstagram}`} data-mode-choice="instagram" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>インスタ風</span>
-              <span className={styles.modeCardDescription}>Instagram風のリンクページを<br className={styles.modeDesktopBreak} />作成します。</span>
+              <span className={styles.modeCardDescription}>Instagram風のリンクページを 作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 96 96" role="img">
@@ -1547,7 +1546,7 @@ export function DashboardForm({
           <div className={`${styles.modeCard} ${styles.modeCardInstagram}`} data-mode-choice="instagram-live" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>インスタライブ風</span>
-              <span className={styles.modeCardDescription}>Instagramのライブ配信風の<br className={styles.modeDesktopBreak} />リンクページを作成します。</span>
+              <span className={styles.modeCardDescription}>Instagramのライブ配信風の リンクページを作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 96 96" role="img">
@@ -1562,7 +1561,7 @@ export function DashboardForm({
           <div className={`${styles.modeCard} ${styles.modeCardLive}`} data-mode-choice="live" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>ライブ配信風</span>
-              <span className={styles.modeCardDescription}>ライブ配信サービス風の<br className={styles.modeDesktopBreak} />リンクページを作成します。</span>
+              <span className={styles.modeCardDescription}>ライブ配信サービス風の リンクページを作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 96 96" role="img">
@@ -1575,7 +1574,7 @@ export function DashboardForm({
           <div className={`${styles.modeCard} ${styles.modeCardX}`} data-mode-choice="x" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>X風</span>
-              <span className={styles.modeCardDescription}>X（旧Twitter）風のリンクページを<br className={styles.modeDesktopBreak} />作成します。</span>
+              <span className={styles.modeCardDescription}>X（旧Twitter）風のリンクページを 作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 24 24" role="img"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.451-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"/></svg>
@@ -1585,7 +1584,7 @@ export function DashboardForm({
           <div className={`${styles.modeCard} ${styles.modeCardYoutube}`} data-mode-choice="youtube" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>YouTube風</span>
-              <span className={styles.modeCardDescription}>YouTube風のリンクページを<br className={styles.modeDesktopBreak} />作成します。</span>
+              <span className={styles.modeCardDescription}>YouTube風のリンクページを 作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 96 96" role="img">
@@ -1598,7 +1597,7 @@ export function DashboardForm({
           <div className={`${styles.modeCard} ${styles.modeCardTiktok}`} data-mode-choice="tiktok" data-selected="true">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>TikTok風</span>
-              <span className={styles.modeCardDescription}>TikTok風のリンクページを<br className={styles.modeDesktopBreak} />作成します。</span>
+              <span className={styles.modeCardDescription}>TikTok風のリンクページを 作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 24 24" role="img">
@@ -1612,7 +1611,7 @@ export function DashboardForm({
           <div className={`${styles.modeCard} ${styles.modeCardFile}`} data-mode-choice="file" data-selected="false">
             <span className={styles.modeCardCopy}>
               <span className={styles.modeCardTitle}>ファイル共有風</span>
-              <span className={styles.modeCardDescription}>ファイル共有サービス風の<br className={styles.modeDesktopBreak} />リンクページを作成します。</span>
+              <span className={styles.modeCardDescription}>ファイル共有サービス風の リンクページを作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 96 96" role="img">
@@ -1633,8 +1632,8 @@ export function DashboardForm({
             </span>
           </div>
         </div>
-          <span className={styles.modePickerChevron} aria-hidden="true">⌄</span>
         </div>
+        <p className={styles.modeFooterHint}>プレビューは公開ページと同じレイアウトです。内容は保存・公開ボタンで反映します。</p>
       </section>
       <div className={styles.layout}>
         <div className={styles.previewCol} data-id="previewCol">

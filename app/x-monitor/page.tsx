@@ -81,7 +81,7 @@ export default async function XMonitorPage() {
           <h2>バズっている</h2>
         </div>
         <span>
-          {data.trendingPosts.length} posts · 4〜24時間・現在150万imp以上 · imp/分順
+          {data.trendingPosts.length} posts · 4時間超〜24時間・現在150万imp以上 · imp/分順
         </span>
       </section>
 

@@ -1254,50 +1254,37 @@ fieldset.card { min-width: 0; margin: 0; }
   .modeCardIcon { right: 14px; width: 66px; height: 66px; }
 }
 
-/* ===== Reference-inspired slim creation mode selector ===== */
+/* ===== Pixel-focused slim creation mode selector ===== */
 .modeBar {
-  --mode-panel-glow: rgba(64, 183, 255, .13);
   position: relative;
-  width: min(100%, 1120px);
-  margin: 0 auto 32px;
-  padding: 34px 38px 30px;
+  width: min(100%, 1180px);
+  margin: 0 auto 28px;
+  padding: 30px 40px 26px;
   overflow: hidden;
-  border: 1px solid rgba(160, 186, 214, .14);
+  border: 1px solid rgba(144, 161, 188, .18);
   border-radius: 28px;
   background:
-    radial-gradient(ellipse at 88% 28%, var(--mode-panel-glow) 0, transparent 39%),
-    radial-gradient(ellipse at 10% 100%, rgba(69, 114, 169, .055) 0, transparent 42%),
-    linear-gradient(135deg, rgba(23, 27, 36, .94), rgba(13, 17, 24, .97));
+    radial-gradient(ellipse at 92% 12%, rgba(111, 72, 170, .13) 0, rgba(111, 72, 170, .055) 22%, transparent 44%),
+    radial-gradient(ellipse at 8% 100%, rgba(40, 105, 160, .08) 0, transparent 38%),
+    linear-gradient(135deg, #171922 0%, #11141b 56%, #17141d 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .035),
-    0 22px 54px rgba(0, 0, 0, .18);
-}
-.modeBar:has(.modeCardInstagram[data-selected="true"]) {
-  --mode-panel-glow: rgba(226, 45, 154, .15);
-}
-.modeBar:has(.modeCardLive[data-selected="true"]),
-.modeBar:has(.modeCardYoutube[data-selected="true"]),
-.modeBar:has(.modeCardTiktok[data-selected="true"]) {
-  --mode-panel-glow: rgba(235, 50, 92, .12);
-}
-.modeBar:has(.modeCardX[data-selected="true"]) {
-  --mode-panel-glow: rgba(148, 163, 184, .09);
-}
-.modeBar:has(.modeCardFile[data-selected="true"]) {
-  --mode-panel-glow: rgba(54, 136, 255, .13);
+    0 16px 42px rgba(0, 0, 0, .22);
 }
 .modeHeader {
   margin: 0 0 22px;
   padding: 0;
 }
 .modeHeading {
-  color: #eef3f9;
-  font-size: clamp(23px, 2.2vw, 29px);
+  margin: 0;
+  color: #eef2f7;
+  font-size: clamp(24px, 2vw, 31px);
   font-weight: 700;
   letter-spacing: -.035em;
-  line-height: 1.15;
+  line-height: 1.12;
 }
-.modeSubheading {
+.modeSubheading,
+.modePickerChevron {
   display: none;
 }
 .modePicker {
@@ -1306,231 +1293,339 @@ fieldset.card { min-width: 0; margin: 0; }
 .modeGrid {
   display: block;
 }
-.modePickerChevron {
-  display: none;
+.modeNativeSelect {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 30;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
 .modeCard {
-  --accent-mid: #52baff;
-  min-height: 138px;
-  padding: 23px 28px;
-  border-width: 2px;
-  border-radius: 20px;
+  --accent-a: #52cfff;
+  --accent-mid: #61baff;
+  --accent-b: #8ab4ff;
+  --ring: rgba(82, 207, 255, .22);
+  --glow: rgba(82, 207, 255, .16);
+  position: relative;
+  isolation: isolate;
+  display: none;
+  align-items: center;
+  width: 100%;
+  height: clamp(108px, 11.4vw, 132px);
+  min-height: 0;
+  padding: 0 30px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 19px;
+  color: #fff;
+  text-align: left;
   background:
-    radial-gradient(ellipse at 88% 50%, var(--glow) 0, transparent 29%) padding-box,
-    linear-gradient(135deg, rgba(9, 13, 21, .965), rgba(19, 20, 29, .935)) padding-box,
-    linear-gradient(90deg, var(--accent-a), var(--accent-mid), var(--accent-b)) border-box;
+    radial-gradient(ellipse at 88% 50%, var(--glow) 0, transparent 34%) padding-box,
+    linear-gradient(135deg, rgba(9, 12, 19, .98), rgba(20, 18, 27, .95)) padding-box,
+    linear-gradient(90deg, var(--accent-a) 0%, var(--accent-mid) 52%, var(--accent-b) 100%) border-box;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .045),
-    0 0 24px rgba(0, 0, 0, .16);
-}
-.modeCard::before {
-  width: 205px;
-  height: 205px;
-  right: -70px;
-  top: -84px;
-  opacity: .72;
-}
-.modeCard::after {
-  width: 150px;
-  height: 150px;
-  right: 48px;
-  bottom: -103px;
-  opacity: .58;
+    inset 0 1px 0 rgba(255, 255, 255, .035),
+    0 8px 18px rgba(0, 0, 0, .13);
+  transition: none;
 }
 .modeCard[data-selected="true"] {
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, .09),
-    0 0 24px var(--glow),
-    0 13px 30px rgba(0, 0, 0, .2);
+  display: flex;
 }
-.modePicker:hover .modeCard[data-selected="true"] {
+.modePicker:hover .modeCard[data-selected="true"],
+.modePicker:focus-within .modeCard[data-selected="true"] {
   transform: none;
-  filter: brightness(1.025);
+  filter: none;
 }
 .modePicker:focus-within .modeCard[data-selected="true"] {
-  outline: 2px solid rgba(230, 242, 255, .78);
+  outline: 2px solid rgba(232, 240, 249, .78);
   outline-offset: 3px;
 }
+.modeCard::before,
+.modeCard::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+  border: 1px solid var(--ring);
+  background: radial-gradient(circle, var(--ring) 0, transparent 68%);
+}
+.modeCard::before {
+  width: 184px;
+  height: 184px;
+  right: -45px;
+  top: -66px;
+  opacity: .78;
+}
+.modeCard::after {
+  width: 142px;
+  height: 142px;
+  right: 66px;
+  bottom: -100px;
+  opacity: .62;
+}
 .modeCardCopy {
-  padding-right: 118px;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding-right: 116px;
 }
 .modeCardTitle {
-  font-size: clamp(24px, 2vw, 29px);
-  font-weight: 750;
-  letter-spacing: -.04em;
+  display: block;
+  color: #f4f6f9;
+  font-size: clamp(22px, 1.8vw, 28px);
+  font-weight: 700;
+  letter-spacing: -.035em;
+  line-height: 1.1;
 }
 .modeCardDescription {
-  margin-top: 11px;
-  color: #9da9b9;
-  font-size: clamp(12.5px, 1.1vw, 15px);
-  font-weight: 430;
-  line-height: 1.55;
+  display: block;
+  margin-top: 9px;
+  color: #9aa3b2;
+  font-size: clamp(12px, 1vw, 14px);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: -.012em;
 }
 .modeCardIcon {
-  right: 25px;
-  width: 84px;
-  height: 84px;
-  filter: drop-shadow(0 0 15px var(--glow));
+  position: absolute;
+  z-index: 3;
+  right: 31px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  transform: translateY(-50%);
+  color: var(--accent-a);
+  filter: drop-shadow(0 0 11px var(--glow));
+}
+.modeCardIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .modeCardLink {
-  --accent-a: #45cfff;
-  --accent-mid: #55b6ff;
-  --accent-b: #76b3ff;
+  --accent-a: #43cfff;
+  --accent-mid: #58b9ff;
+  --accent-b: #82b7ff;
+  --ring: rgba(67, 207, 255, .22);
+  --glow: rgba(68, 182, 255, .18);
 }
 .modeCardInstagram {
-  --accent-a: #9a35ff;
-  --accent-mid: #ff2d95;
-  --accent-b: #ffc64d;
+  --accent-a: #9c39ff;
+  --accent-mid: #ff2d9b;
+  --accent-b: #ffc752;
+  --ring: rgba(241, 57, 181, .23);
+  --glow: rgba(244, 57, 181, .18);
+}
+.modeCardInstagram .modeCardIcon {
+  filter:
+    drop-shadow(0 0 8px rgba(255, 49, 162, .42))
+    drop-shadow(0 0 15px rgba(153, 57, 255, .24));
 }
 .modeCardLive {
-  --accent-a: #ff6672;
-  --accent-mid: #ff3859;
+  --accent-a: #ff626e;
+  --accent-mid: #ff3856;
   --accent-b: #d91d35;
+  --ring: rgba(255, 68, 82, .22);
+  --glow: rgba(255, 44, 62, .17);
+}
+.modeCardLive .modeCardIcon {
+  color: #ff515d;
 }
 .modeCardX {
   --accent-a: #aab8c6;
   --accent-mid: #8799aa;
   --accent-b: #64748b;
+  --ring: rgba(174, 194, 214, .18);
+  --glow: rgba(175, 197, 218, .12);
+}
+.modeCardX .modeCardIcon {
+  color: #f6f8fb;
+  width: 66px;
+  height: 66px;
 }
 .modeCardYoutube {
   --accent-a: #ff5863;
   --accent-mid: #ff2033;
   --accent-b: #cf1024;
+  --ring: rgba(255, 45, 58, .22);
+  --glow: rgba(255, 20, 40, .18);
+}
+.modeCardYoutube .modeCardIcon {
+  filter: drop-shadow(0 0 11px rgba(255, 20, 40, .34));
 }
 .modeCardTiktok {
   --accent-a: #25f4ee;
-  --accent-mid: #e52f75;
+  --accent-mid: #d53478;
   --accent-b: #fe2c55;
+  --ring: rgba(37, 244, 238, .18);
+  --glow: rgba(254, 44, 85, .15);
+}
+.modeCardTiktok .modeCardIcon {
+  width: 69px;
+  height: 69px;
+  filter:
+    drop-shadow(-5px 0 10px rgba(37, 244, 238, .22))
+    drop-shadow(5px 0 10px rgba(254, 44, 85, .2));
 }
 .modeCardFile {
   --accent-a: #53b6ff;
   --accent-mid: #2d89ff;
   --accent-b: #1768e8;
+  --ring: rgba(55, 139, 255, .2);
+  --glow: rgba(32, 103, 255, .17);
+}
+.modeCardFile .modeCardIcon {
+  filter: drop-shadow(0 0 11px rgba(44, 135, 255, .28));
 }
 .modeCardNews {
-  --accent-a: #65dcf4;
-  --accent-mid: #8dc9e4;
+  --accent-a: #66dff4;
+  --accent-mid: #8fc8e2;
   --accent-b: #94a3b8;
-}
-.modeCardInstagram .modeCardIcon {
-  filter:
-    drop-shadow(0 0 10px rgba(255, 45, 149, .38))
-    drop-shadow(0 0 22px rgba(154, 53, 255, .2));
-}
-.modeCardTiktok .modeCardIcon {
-  width: 80px;
-  height: 80px;
-}
-.modeCardX .modeCardIcon {
-  width: 76px;
-  height: 76px;
+  --ring: rgba(103, 232, 249, .18);
+  --glow: rgba(103, 232, 249, .12);
 }
 .modeCardNews .modeCardIcon {
+  color: #ff003c;
   filter:
-    drop-shadow(0 0 9px rgba(255, 0, 60, .72))
-    drop-shadow(0 0 22px rgba(255, 0, 60, .42))
-    drop-shadow(0 0 40px rgba(255, 0, 60, .22));
+    drop-shadow(0 0 7px rgba(255, 0, 60, .64))
+    drop-shadow(0 0 15px rgba(255, 0, 60, .34));
 }
 .yahooNewsLogo {
-  font-size: 69px;
+  display: inline-block;
+  color: #ff003c;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 61px;
+  font-weight: 900;
+  font-style: normal;
+  line-height: .9;
+  letter-spacing: -8px;
+  transform: translateX(-3px) skewX(-5deg);
   text-shadow:
-    0 0 5px rgba(255, 35, 80, .95),
-    0 0 14px rgba(255, 0, 60, .74),
-    0 0 28px rgba(255, 0, 60, .48),
-    0 0 48px rgba(255, 0, 60, .23);
+    0 0 5px rgba(255, 35, 80, .86),
+    0 0 12px rgba(255, 0, 60, .6),
+    0 0 22px rgba(255, 0, 60, .34);
+}
+.modeCardWide {
+  grid-column: auto;
 }
 .modeFooterHint {
-  margin: 19px 2px 0;
-  color: #8793a3;
-  font-size: clamp(12px, 1.05vw, 14px);
-  line-height: 1.75;
-  letter-spacing: -.015em;
+  margin: 17px 2px 0;
+  color: #858e9d;
+  font-size: clamp(11.5px, .95vw, 13.5px);
+  line-height: 1.65;
+  letter-spacing: -.014em;
 }
+
 @media (max-width: 760px) {
   .modeBar {
-    margin-bottom: 24px;
-    padding: 24px 20px 22px;
+    width: 100%;
+    margin-bottom: 22px;
+    padding: 22px 18px 19px;
     border-radius: 22px;
   }
   .modeHeader {
-    margin-bottom: 17px;
-    padding: 0;
+    margin-bottom: 15px;
   }
   .modeHeading {
-    font-size: 23px;
+    font-size: 22px;
   }
   .modeCard,
   .modeCardWide {
-    min-height: 118px;
-    padding: 19px 18px;
-    border-radius: 17px;
+    height: 96px;
+    min-height: 0;
+    padding: 0 18px;
+    border-radius: 16px;
   }
   .modeCardCopy {
-    padding-right: 88px;
-  }
-  .modeCardTitle {
-    font-size: 22px;
-  }
-  .modeCardDescription {
-    margin-top: 8px;
-    font-size: 11.5px;
-    line-height: 1.5;
-  }
-  .modeCardIcon {
-    right: 15px;
-    width: 68px;
-    height: 68px;
-  }
-  .modeCardTiktok .modeCardIcon {
-    width: 64px;
-    height: 64px;
-  }
-  .modeCardX .modeCardIcon {
-    width: 61px;
-    height: 61px;
-  }
-  .yahooNewsLogo {
-    font-size: 57px;
-    letter-spacing: -7px;
-  }
-  .modeCard::before {
-    width: 160px;
-    height: 160px;
-    right: -58px;
-    top: -67px;
-  }
-  .modeCard::after {
-    width: 116px;
-    height: 116px;
-    right: 34px;
-    bottom: -81px;
-  }
-  .modeFooterHint {
-    margin-top: 15px;
-    font-size: 11.5px;
-  }
-}
-@media (max-width: 390px) {
-  .modeBar {
-    padding: 21px 16px 20px;
-  }
-  .modeCard {
-    min-height: 112px;
-    padding: 18px 16px;
-  }
-  .modeCardCopy {
-    padding-right: 75px;
+    padding-right: 80px;
   }
   .modeCardTitle {
     font-size: 20px;
   }
   .modeCardDescription {
-    font-size: 10.8px;
+    margin-top: 7px;
+    font-size: 11px;
+    line-height: 1.4;
   }
   .modeCardIcon {
-    right: 12px;
-    width: 60px;
-    height: 60px;
+    right: 15px;
+    width: 58px;
+    height: 58px;
+  }
+  .modeCardTiktok .modeCardIcon {
+    width: 55px;
+    height: 55px;
+  }
+  .modeCardX .modeCardIcon {
+    width: 53px;
+    height: 53px;
+  }
+  .yahooNewsLogo {
+    font-size: 49px;
+    letter-spacing: -6px;
+  }
+  .modeCard::before {
+    width: 136px;
+    height: 136px;
+    right: -38px;
+    top: -51px;
+  }
+  .modeCard::after {
+    width: 108px;
+    height: 108px;
+    right: 38px;
+    bottom: -80px;
+  }
+  .modeFooterHint {
+    margin-top: 13px;
+    font-size: 11px;
+    line-height: 1.55;
+  }
+}
+
+@media (max-width: 390px) {
+  .modeBar {
+    padding: 20px 15px 18px;
+  }
+  .modeCard,
+  .modeCardWide {
+    height: 90px;
+    padding: 0 15px;
+  }
+  .modeCardCopy {
+    padding-right: 68px;
+  }
+  .modeCardTitle {
+    font-size: 18px;
+  }
+  .modeCardDescription {
+    margin-top: 6px;
+    font-size: 10px;
+  }
+  .modeCardIcon {
+    right: 11px;
+    width: 52px;
+    height: 52px;
+  }
+  .modeCardTiktok .modeCardIcon {
+    width: 49px;
+    height: 49px;
+  }
+  .modeCardX .modeCardIcon {
+    width: 47px;
+    height: 47px;
   }
 }
 

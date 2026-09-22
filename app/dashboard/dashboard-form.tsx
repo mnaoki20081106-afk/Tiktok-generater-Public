@@ -1524,34 +1524,19 @@ export function DashboardForm({
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 96 96" role="img" className={styles.linkCardLogoSvg}>
                 <defs>
-                  <linearGradient id="link-card-logo-gradient" x1="15" y1="82" x2="82" y2="15" gradientUnits="userSpaceOnUse">
+                  <linearGradient id="link-card-logo-gradient" x1="14" y1="82" x2="82" y2="14" gradientUnits="userSpaceOnUse">
                     <stop stopColor="#2F91F6"/>
-                    <stop offset=".48" stopColor="#50B3F7"/>
+                    <stop offset=".5" stopColor="#50B3F7"/>
                     <stop offset="1" stopColor="#98DEFF"/>
                   </linearGradient>
                 </defs>
                 <path
-                  d="M52 39 61 30c7-7 18-7 25 0s7 18 0 25L73 68c-7 7-18 7-25 0-3-3-5-7-5-11"
-                  fill="none"
-                  stroke="url(#link-card-logo-gradient)"
-                  strokeWidth="10"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  fill="url(#link-card-logo-gradient)"
+                  d="M 52.00 36.48 L 49.60 35.36 L 46.24 34.56 L 42.56 34.56 L 40.80 34.88 L 36.80 36.48 L 34.56 38.08 L 17.28 55.36 L 16.32 56.64 L 14.72 59.68 L 13.92 62.72 L 13.76 66.08 L 14.40 69.60 L 15.36 72.00 L 16.80 74.24 L 20.80 78.40 L 22.24 79.52 L 25.76 81.28 L 28.32 81.92 L 31.68 82.08 L 33.92 81.76 L 36.16 81.12 L 39.20 79.52 L 40.48 78.56 L 44.32 74.72 L 39.04 69.28 L 35.36 72.80 L 33.44 73.92 L 31.52 74.40 L 29.76 74.40 L 28.00 73.92 L 26.08 72.80 L 23.04 69.76 L 22.40 68.80 L 21.44 66.08 L 21.60 63.36 L 23.04 60.48 L 39.68 43.84 L 41.44 42.72 L 43.04 42.24 L 45.92 42.24 L 47.36 42.72 L 49.12 43.84 L 53.76 48.32 L 59.04 42.88 L 54.40 38.24 Z"
                 />
                 <path
-                  d="m44 57-9 9c-7 7-18 7-25 0s-7-18 0-25l13-13c7-7 18-7 25 0 3 3 5 7 5 11"
-                  fill="none"
-                  stroke="url(#link-card-logo-gradient)"
-                  strokeWidth="10"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M34 62 62 34"
-                  fill="none"
-                  stroke="url(#link-card-logo-gradient)"
-                  strokeWidth="10"
-                  strokeLinecap="round"
+                  fill="url(#link-card-logo-gradient)"
+                  d="M 73.12 16.00 L 70.08 14.56 L 67.52 13.92 L 64.16 13.76 L 61.92 14.08 L 59.68 14.72 L 56.64 16.32 L 55.36 17.28 L 51.52 21.12 L 56.80 26.56 L 60.48 23.04 L 62.40 21.92 L 64.16 21.44 L 66.08 21.44 L 67.84 21.92 L 69.92 23.20 L 72.64 25.92 L 73.44 27.04 L 74.40 29.76 L 74.24 32.48 L 72.80 35.36 L 56.16 52.00 L 54.40 53.12 L 52.80 53.60 L 50.08 53.60 L 48.48 53.12 L 46.72 52.00 L 42.08 47.52 L 36.80 52.96 L 42.40 58.40 L 46.24 60.48 L 49.60 61.28 L 53.28 61.28 L 55.04 60.96 L 59.04 59.36 L 61.28 57.76 L 78.56 40.48 L 79.52 39.20 L 81.12 36.16 L 81.92 33.12 L 82.08 29.76 L 81.44 26.24 L 80.48 23.84 L 78.40 20.80 L 75.04 17.44 Z"
                 />
               </svg>
             </span>

@@ -190,11 +190,17 @@ body {
 .xmon-mini-label { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #7ddff933; border-radius: 10px; font-size: 7px; line-height: 1.1; text-align: center; }
 .xmon-summary span:not(.xmon-mini-label) { color: #7f8993; font-size: 9px; letter-spacing: .04em; }
 .xmon-summary strong { min-width: 0; color: #effaff; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.xmon-feed-section { min-width: 0; }
+.xmon-feed-tabs { display: flex; gap: 6px; margin: 0 4px 24px; border-bottom: 1px solid #ffffff12; }
+.xmon-feed-tabs button { display: inline-flex; align-items: center; gap: 8px; padding: 11px 14px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: #69747e; font-size: 12px; font-weight: 600; letter-spacing: .02em; cursor: pointer; }
+.xmon-feed-tabs button:hover { color: #c3d0d8; background: transparent; }
+.xmon-feed-tabs button.active { color: #8be4ff; border-bottom-color: #78d9f7; }
+.xmon-feed-tabs button span { display: inline-grid; min-width: 22px; height: 19px; place-items: center; padding: 0 6px; border: 1px solid #ffffff12; border-radius: 999px; color: #88949e; font-size: 9px; font-variant-numeric: tabular-nums; }
+.xmon-feed-tabs button.active span { color: #bcefff; border-color: #78d9f733; background: #78d9f70b; }
 .xmon-feed-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 0 4px 18px; }
 .xmon-feed-head .studio-eyebrow { margin-bottom: 7px; }
 .xmon-feed-head h2 { font-size: 28px; font-weight: 600; letter-spacing: -.04em; }
 .xmon-feed-head > span { color: #79848e; font-size: 10px; }
-.xmon-feed + .xmon-feed-head { margin-top: 54px; }
 .xmon-feed { overflow: hidden; border: 1px solid #ffffff12; border-radius: 26px; background: #0c0f12; box-shadow: 0 28px 90px #0005; }
 .xmon-post { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 13px; padding: 20px 21px; border-bottom: 1px solid #ffffff0d; transition: background .18s; }
 .xmon-post:last-child { border-bottom: 0; }
@@ -254,6 +260,8 @@ body {
   .xmon-hero h1 { font-size: 34px; }
   .xmon-live-card { width: 100%; min-width: 0; }
   .xmon-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 18px 18px 42px; }
+  .xmon-feed-tabs { margin: 0 18px 22px; overflow-x: auto; }
+  .xmon-feed-tabs button { white-space: nowrap; }
   .xmon-feed-head { padding: 0 18px 14px; align-items: start; }
   .xmon-feed-head > span { max-width: 130px; text-align: right; line-height: 1.5; }
   .xmon-feed { border-left: 0; border-right: 0; border-radius: 0; }

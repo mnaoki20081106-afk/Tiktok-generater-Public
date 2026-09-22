@@ -96,6 +96,18 @@ const monitorLib = fs.readFileSync(
   new URL('../lib/x-monitor.ts', import.meta.url),
   'utf8',
 );
+const studioHeader = fs.readFileSync(
+  new URL('../components/StudioHeader.tsx', import.meta.url),
+  'utf8',
+);
+const dashboardLayout = fs.readFileSync(
+  new URL('../app/dashboard/layout.tsx', import.meta.url),
+  'utf8',
+);
+const adminLayout = fs.readFileSync(
+  new URL('../app/admin/layout.tsx', import.meta.url),
+  'utf8',
+);
 
 assert.match(page, /<XMonitorFeedSwitcher/);
 assert.match(page, /earlyPosts=\{data\.earlyPosts\}/);
@@ -137,6 +149,23 @@ assert.match(
   'runtime JSON fetches must bypass upstream raw-file caches',
 );
 assert.match(monitorLib, /cache: 'no-store'/);
+
+assert.doesNotMatch(
+  studioHeader,
+  /リンクツール|\/tools\/link-generator/,
+  'broken link tool must not appear in studio navigation',
+);
+assert.match(studioHeader, />\s*X監視\s*</);
+assert.match(studioHeader, />\s*マイサイト\s*</);
+assert.match(studioHeader, /studio-nav-current/);
+assert.match(layout, /<StudioHeader current="x-monitor" \/>/);
+assert.match(dashboardLayout, /<StudioHeader current="dashboard" \/>/);
+assert.match(adminLayout, /<StudioHeader current="dashboard" \/>/);
+assert.doesNotMatch(
+  layout,
+  /publicView/,
+  'X monitor must use the same two-tab studio navigation as authenticated pages',
+);
 
 const actions = fs.readFileSync(new URL('../app/admin/x-keyword-actions.ts', import.meta.url), 'utf8');
 const github = fs.readFileSync(new URL('../lib/x-monitor-github.ts', import.meta.url), 'utf8');

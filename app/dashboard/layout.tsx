@@ -5,7 +5,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="studio-shell">
       <FingerprintRecorder />
-      <StudioHeader />
+      <StudioHeader current="dashboard" />
       {children}
     </div>
   );

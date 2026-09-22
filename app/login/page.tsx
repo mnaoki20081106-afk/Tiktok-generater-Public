@@ -12,7 +12,7 @@ export default async function LoginPage({
 
   return (
     <div className="studio-shell login-shell">
-      <StudioHeader publicView />
+      <StudioHeader />
       <main className="login-layout">
         <section className="login-intro">
           <p className="studio-eyebrow">A SPACE FOR YOUR IDEAS</p>

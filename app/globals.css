@@ -202,6 +202,12 @@ body {
 .xmon-feed-head .studio-eyebrow { margin-bottom: 7px; }
 .xmon-feed-head h2 { font-size: 28px; font-weight: 600; letter-spacing: -.04em; }
 .xmon-feed-head > span { color: #79848e; font-size: 10px; }
+.xmon-feed-controls { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; }
+.xmon-feed-controls > span { color: #79848e; font-size: 10px; }
+.xmon-sort-toggle { display: inline-flex; padding: 3px; border: 1px solid #ffffff12; border-radius: 999px; background: #0b0f13; }
+.xmon-sort-toggle button { padding: 7px 10px; border: 0; border-radius: 999px; background: transparent; color: #74808a; font-size: 10px; cursor: pointer; }
+.xmon-sort-toggle button:hover { color: #c8d4db; background: transparent; }
+.xmon-sort-toggle button.active { color: #d9f7ff; background: #17303c; }
 .xmon-feed { overflow: hidden; border: 1px solid #ffffff12; border-radius: 26px; background: #0c0f12; box-shadow: 0 28px 90px #0005; }
 .xmon-post { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 13px; padding: 20px 21px; border-bottom: 1px solid #ffffff0d; transition: background .18s; }
 .xmon-post:last-child { border-bottom: 0; }
@@ -264,7 +270,9 @@ body {
   .xmon-feed-tabs { margin: 0 18px 22px; overflow-x: auto; }
   .xmon-feed-tabs button { white-space: nowrap; }
   .xmon-feed-head { padding: 0 18px 14px; align-items: start; }
-  .xmon-feed-head > span { max-width: 130px; text-align: right; line-height: 1.5; }
+  .xmon-feed-controls { align-items: flex-end; }
+  .xmon-feed-controls > span { max-width: 150px; text-align: right; line-height: 1.5; }
+  .xmon-sort-toggle button { padding: 7px 9px; }
   .xmon-feed { border-left: 0; border-right: 0; border-radius: 0; }
   .xmon-post { grid-template-columns: 38px minmax(0, 1fr); gap: 10px; padding: 17px 14px; }
   .xmon-avatar { width: 38px; height: 38px; font-size: 13px; }

@@ -1,0 +1,4 @@
+[submodule "X-Bunseki"]
+	path = X-Bunseki
+	url = https://github.com/mnaoki20081106-afk/X-Bunseki.git
+	branch = main

@@ -18,13 +18,13 @@ The existing watchlist already includes the requested 15, 30, 45, 60, 90, 120, 1
 
 ## Public data contract
 
-X-Bunseki `hits.json` schema_version 2 adds `post_id`, `author_name`, `posted_at` and `quotes` while keeping the previous fields. The parent is backwards compatible and ranks `predicted_final_impressions` descending; missing predictions are placed later.
+X-Bunseki `hits.json` schema_version 2 exposes two separate public lists. `early_posts` is the engine's early-discovery list (age <= 240 minutes and predicted final impressions >= 1,000,000), already ordered by predicted final impressions. `trending_posts` is the actively viral list (240 < age <= 1440 minutes and current impressions >= 1,500,000), already ordered by impressions/minute and then current impressions. `posts` is only a backwards-compatible alias of `early_posts`; the parent must never merge it with `trending_posts` into one ranking.
 
 ## Keyword administration
 
 The old browser-direct Cloudflare Worker write path is not used by the parent integration.
 
-Flow: `/admin/x-monitor` -> existing Supabase session + ADMIN_EMAILS -> Server Action re-check -> server-only GitHub Contents API -> existing `keywords.txt`, `keywords_combo.txt`, or `keywords_ng.txt` -> next X-Bunseki monitor run.
+Flow: `/admin` (and the legacy `/admin/x-monitor` view) -> existing Supabase session + ADMIN_EMAILS -> Server Action re-check -> server-only GitHub Contents API -> existing `keywords.txt`, `keywords_combo.txt`, or `keywords_ng.txt` -> next X-Bunseki monitor run.
 
 Required hosting secret: `X_BUNSEKI_GITHUB_TOKEN`.
 Create a GitHub fine-grained token scoped only to `mnaoki20081106-afk/X-Bunseki` with repository permission `Contents: Read and write`. Do not prefix it with `NEXT_PUBLIC_`.
@@ -35,7 +35,7 @@ Create a GitHub fine-grained token scoped only to `mnaoki20081106-afk/X-Bunseki`
 
 ## Parent routes
 
-- `/x-monitor`: read-only predicted-final-imp ranking.
+- `/x-monitor`: read-only X-Bunseki monitor view with separate `早期発見` and `バズっている` feeds.
 - `/x-monitor/[id]`: post detail metrics.
 - `/admin/x-monitor`: admin-only keywords and model status.
 

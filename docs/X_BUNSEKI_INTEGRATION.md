@@ -35,7 +35,7 @@ Create a GitHub fine-grained token scoped only to `mnaoki20081106-afk/X-Bunseki`
 
 ## Parent routes
 
-- `/x-monitor`: read-only X-Bunseki monitor view with separate `早期発見` and `バズっている` feeds.
+- `/x-monitor`: read-only X-Bunseki monitor view. The UI defaults to `早期発見` and switches in-place between `早期発見` and `🔥 バズっている`, matching the source `docs/index.html` behavior.
 - `/x-monitor/[id]`: post detail metrics.
 - `/admin/x-monitor`: admin-only keywords and model status.
 

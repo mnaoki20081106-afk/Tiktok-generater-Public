@@ -1,5 +1,5 @@
 import { Activity, BrainCircuit, Clock3, Radar } from 'lucide-react';
-import { XPostCard } from '@/components/XPostCard';
+import { XMonitorFeedSwitcher } from '@/components/XMonitorFeedSwitcher';
 import { formatCompactNumber, getXMonitorData } from '@/lib/x-monitor';
 
 export const dynamic = 'force-dynamic';
@@ -55,45 +55,10 @@ export default async function XMonitorPage() {
         <div><span className="xmon-mini-label">24H教師</span><span>完了投稿</span><strong>{formatCompactNumber(data.model.completed24hPosts)}</strong></div>
       </section>
 
-      <section className="xmon-feed-head">
-        <div>
-          <p className="studio-eyebrow">EARLY DISCOVERY</p>
-          <h2>早期発見</h2>
-        </div>
-        <span>
-          {data.earlyPosts.length} posts · 4時間以内・予測最終100万imp以上 · 予測最終imp順
-        </span>
-      </section>
-
-      <div className="xmon-feed">
-        {data.earlyPosts.length ? (
-          data.earlyPosts.map((post, index) => (
-            <XPostCard key={post.id} post={post} rank={index + 1} />
-          ))
-        ) : (
-          <div className="xmon-empty">現在、早期発見に該当する投稿はありません。</div>
-        )}
-      </div>
-
-      <section className="xmon-feed-head">
-        <div>
-          <p className="studio-eyebrow">TRENDING NOW</p>
-          <h2>バズっている</h2>
-        </div>
-        <span>
-          {data.trendingPosts.length} posts · 4時間超〜24時間・現在150万imp以上 · imp/分順
-        </span>
-      </section>
-
-      <div className="xmon-feed">
-        {data.trendingPosts.length ? (
-          data.trendingPosts.map((post, index) => (
-            <XPostCard key={post.id} post={post} rank={index + 1} />
-          ))
-        ) : (
-          <div className="xmon-empty">現在、バズっている投稿はありません。</div>
-        )}
-      </div>
+      <XMonitorFeedSwitcher
+        earlyPosts={data.earlyPosts}
+        trendingPosts={data.trendingPosts}
+      />
     </main>
   );
 }

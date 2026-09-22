@@ -26,10 +26,13 @@ function confidenceLabel(value: string | null) {
 export function XPostCard({
   post,
   rank,
+  feed,
 }: {
   post: XMonitorPost;
   rank: number;
+  feed: 'early' | 'trending';
 }) {
+  const isTrending = feed === 'trending';
   return (
     <article className="xmon-post">
       <div className="xmon-avatar" aria-hidden="true">
@@ -53,16 +56,22 @@ export function XPostCard({
 
         <div className="xmon-prediction">
           <div className="xmon-prediction-primary">
-            <span className="xmon-kicker">予測最終</span>
+            <span className="xmon-kicker">{isTrending ? '現在' : '予測最終'}</span>
             <strong>
-              {formatCompactNumber(post.predictedFinalImpressions)}
+              {formatCompactNumber(
+                isTrending ? post.impressions : post.predictedFinalImpressions,
+              )}
               <small> imp</small>
             </strong>
           </div>
           <div className="xmon-prediction-grid">
             <div>
-              <span>現在</span>
-              <b>{formatCompactNumber(post.impressions)} imp</b>
+              <span>{isTrending ? '予測最終' : '現在'}</span>
+              <b>
+                {formatCompactNumber(
+                  isTrending ? post.predictedFinalImpressions : post.impressions,
+                )} imp
+              </b>
             </div>
             <div>
               <span>速度</span>

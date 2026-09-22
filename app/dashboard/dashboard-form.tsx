@@ -1638,10 +1638,7 @@ export function DashboardForm({
               <span className={styles.modeCardDescription}>ニュース記事風のリンクページを作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
-              <svg viewBox="0 0 96 96" role="img">
-                <rect x="16" y="18" width="64" height="60" rx="9" fill="none" stroke="currentColor" strokeWidth="6"/>
-                <path d="M28 32h40M28 45h24M28 58h40M59 45h9" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round"/>
-              </svg>
+              <span className={styles.yahooNewsLogo}>Y!</span>
             </span>
           </button>
         </div>

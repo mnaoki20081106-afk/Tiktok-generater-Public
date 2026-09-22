@@ -36,22 +36,36 @@
   font-size: clamp(13px, 1.4vw, 17px);
   line-height: 1.7;
 }
+.modePicker {
+  position: relative;
+}
 .modeNativeSelect {
   position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  margin: -1px !important;
+  inset: 0 !important;
+  z-index: 20;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
   padding: 0 !important;
-  overflow: hidden !important;
-  clip: rect(0 0 0 0) !important;
-  clip-path: inset(50%) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
 .modeGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px 22px;
+  display: block;
+}
+.modePickerChevron {
+  position: absolute;
+  z-index: 12;
+  right: 18px;
+  bottom: 13px;
+  color: rgba(255,255,255,.62);
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 2px 12px rgba(0,0,0,.5);
 }
 .modeCard {
   --accent-a: #56d7ff;
@@ -62,7 +76,7 @@
   isolation: isolate;
   min-height: 168px;
   overflow: hidden;
-  display: flex;
+  display: none;
   align-items: center;
   width: 100%;
   padding: 28px 31px;
@@ -106,23 +120,20 @@
   border: 1px solid var(--ring);
   background: radial-gradient(circle at 52% 24%, var(--ring), transparent 62%);
 }
-.modeCard:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.06);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.06),
-    0 0 34px var(--glow),
-    0 16px 30px rgba(0,0,0,.2);
-}
-.modeCard:focus-visible {
-  outline: 3px solid rgba(255,255,255,.92);
-  outline-offset: 4px;
-}
 .modeCard[data-selected="true"] {
+  display: flex;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,.2),
     0 0 38px var(--glow),
     0 18px 34px rgba(0,0,0,.23);
+}
+.modePicker:hover .modeCard[data-selected="true"] {
+  transform: translateY(-1px);
+  filter: brightness(1.045);
+}
+.modePicker:focus-within .modeCard[data-selected="true"] {
+  outline: 3px solid rgba(255,255,255,.88);
+  outline-offset: 4px;
 }
 .modeCardCopy {
   position: relative;
@@ -254,7 +265,7 @@
   text-shadow: 0 0 18px rgba(255, 0, 60, .18);
 }
 .modeCardWide {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
 
@@ -1216,8 +1227,8 @@ fieldset.card { min-width: 0; margin: 0; }
 @media (max-width: 760px) {
   .modeBar { margin-bottom: 22px; }
   .modeHeader { margin-bottom: 16px; padding: 0 4px; }
-  .modeGrid { grid-template-columns: 1fr; gap: 14px; }
-  .modeCard, .modeCardWide { grid-column: auto; min-height: 142px; padding: 22px 22px; border-radius: 20px; }
+  .modeGrid { display: block; }
+  .modeCard, .modeCardWide { min-height: 142px; padding: 22px 22px; border-radius: 20px; }
   .modeCardCopy { padding-right: 94px; }
   .modeCardTitle { font-size: 24px; }
   .modeCardDescription { margin-top: 10px; font-size: 12px; }

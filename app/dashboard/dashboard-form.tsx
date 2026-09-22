@@ -929,8 +929,10 @@ export function DashboardForm({
       const hint = document.createElement('p'); hint.className = styles.hint; hint.textContent = 'プレビュー内ではリンク先へ移動しません。コメントや反応数は見た目用の表示です。'; modeFields.append(hint);
     }
     const modeChoices = Array.from(root.querySelectorAll<HTMLElement>('[data-mode-choice]'));
+    const creationModeBar = root.querySelector<HTMLElement>('[aria-labelledby="creation-mode-heading"]');
     function syncModeCards() {
       const selectedMode = templateMode.value || 'tiktok';
+      if (creationModeBar) creationModeBar.dataset.selectedMode = selectedMode;
       for (const choice of modeChoices) {
         const selected = choice.dataset.modeChoice === selectedMode;
         choice.dataset.selected = selected ? 'true' : 'false';
@@ -1520,10 +1522,12 @@ export function DashboardForm({
               <span className={styles.modeCardDescription}>シンプルなリンク誘導ページを作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
-              <svg viewBox="0 0 96 96" role="img">
-                <path d="M38.2 57.8 28.8 67.2a15 15 0 0 1-21.2-21.2l15.6-15.6a15 15 0 0 1 21.2 0 14.7 14.7 0 0 1 3.8 6.4" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
-                <path d="m57.8 38.2 9.4-9.4a15 15 0 0 1 21.2 21.2L72.8 65.6a15 15 0 0 1-21.2 0 14.7 14.7 0 0 1-3.8-6.4" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
-                <path d="m35 61 26-26" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+              <svg viewBox="0 0 96 96" role="img" className={styles.linkCardLogoSvg}>
+                <g transform="rotate(90 48 48)">
+                  <path d="M38.2 57.8 28.8 67.2a15 15 0 0 1-21.2-21.2l15.6-15.6a15 15 0 0 1 21.2 0 14.7 14.7 0 0 1 3.8 6.4" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+                  <path d="m57.8 38.2 9.4-9.4a15 15 0 0 1 21.2 21.2L72.8 65.6a15 15 0 0 1-21.2 0 14.7 14.7 0 0 1-3.8-6.4" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+                  <path d="m35 61 26-26" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+                </g>
               </svg>
             </span>
           </div>
@@ -1600,10 +1604,10 @@ export function DashboardForm({
               <span className={styles.modeCardDescription}>TikTok風のリンクページを作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
-              <svg viewBox="0 0 24 24" role="img">
-                <path transform="translate(-.75 .65)" fill="#25f4ee" d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03a11.8 11.8 0 0 1-5.82-1.9c-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.03-.5-.04-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37a3.5 3.5 0 0 0-1.36 1.74c-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.11-.01 2.17-.66 2.75-1.6.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07Z"/>
-                <path transform="translate(.75 -.35)" fill="#fe2c55" d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03a11.8 11.8 0 0 1-5.82-1.9c-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.03-.5-.04-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37a3.5 3.5 0 0 0-1.36 1.74c-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.11-.01 2.17-.66 2.75-1.6.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07Z"/>
-                <path fill="#fff" d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03a11.8 11.8 0 0 1-5.82-1.9c-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.03-.5-.04-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37a3.5 3.5 0 0 0-1.36 1.74c-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.11-.01 2.17-.66 2.75-1.6.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07Z"/>
+              <svg viewBox="0 0 64 64" role="img" className={styles.tiktokLogoSvg}>
+                <path fill="#25F4EE" d="M35.4 7.2h8.2c.8 4.8 3.6 8.3 8.4 10v8.2a24 24 0 0 1-8.4-2.2v17c0 9.7-7.6 17.2-17.3 17.2-8.7 0-15.9-6.2-17-14.7 2.8 4.2 7.5 6.9 12.8 6.9 8.5 0 15.2-6.6 15.2-15.1V7.2h-1.9Z"/>
+                <path fill="#FE2C55" d="M38.6 5.1h8.1c.9 4.7 3.7 8.2 8.5 9.9v8.3a24 24 0 0 1-8.5-2.3v17.1c0 9.7-7.6 17.2-17.3 17.2-4.5 0-8.5-1.6-11.5-4.4 2.3.9 4.7 1.4 7.3 1.4 8.5 0 15.2-6.6 15.2-15.1V5.1h-1.8Z"/>
+                <path fill="#F8F8FA" d="M37 6.1h7.6c.8 4.2 3.3 7.3 7.5 8.9v6.2a20.5 20.5 0 0 1-7.5-2.4v18.3c0 8.5-6.6 15-15 15-7.3 0-13.2-5-14.5-11.8 2.1 3.3 5.8 5.4 10.1 5.4 6.7 0 11.8-5.1 11.8-11.8 0-6.1-4.3-10.7-10.4-11.6v-6.5c3.8.2 7.2 1.3 10.4 3.4V6.1Z"/>
               </svg>
             </span>
           </div>
@@ -1628,7 +1632,10 @@ export function DashboardForm({
               <span className={styles.modeCardDescription}>ニュース記事風のリンクページを作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
-              <span className={styles.yahooNewsLogo}>Y!</span>
+              <svg viewBox="0 0 128 96" role="img" className={styles.yahooNewsSvg}>
+                <path fill="currentColor" d="M7 12h34l20 27 29-27h29L75 56v17c0 7-2 12-7 16-5 3-12 5-22 5H24l4-13h10c6 0 10-1 12-3 2-1 3-4 3-8V56L7 12Z"/>
+                <path fill="currentColor" d="M97 18h23l-16 49H83l14-49Zm-18 57 21 6-7 18-21-6 7-18Z"/>
+              </svg>
             </span>
           </div>
         </div>

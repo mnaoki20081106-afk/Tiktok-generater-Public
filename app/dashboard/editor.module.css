@@ -1488,7 +1488,17 @@ fieldset.card { min-width: 0; margin: 0; }
   --glow: rgba(255, 20, 40, .18);
 }
 .modeCardYoutube .modeCardIcon {
-  filter: drop-shadow(0 0 11px rgba(255, 20, 40, .34));
+  width: 80px;
+  height: 58px;
+  filter:
+    drop-shadow(0 0 8px rgba(255, 0, 51, .42))
+    drop-shadow(0 0 18px rgba(255, 0, 51, .20));
+}
+.youtubeLogoSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 .modeCardTiktok {
   --accent-a: #25f4ee;
@@ -1594,6 +1604,10 @@ fieldset.card { min-width: 0; margin: 0; }
     width: 60px;
     height: 60px;
   }
+  .modeCardYoutube .modeCardIcon {
+    width: 64px;
+    height: 46px;
+  }
   .modeCardLink .modeCardIcon {
     width: 61px;
     height: 63px;
@@ -1652,6 +1666,10 @@ fieldset.card { min-width: 0; margin: 0; }
   .modeCardTiktok .modeCardIcon {
     width: 53px;
     height: 53px;
+  }
+  .modeCardYoutube .modeCardIcon {
+    width: 56px;
+    height: 40px;
   }
   .modeCardLink .modeCardIcon {
     width: 54px;

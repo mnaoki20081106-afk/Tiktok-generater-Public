@@ -238,7 +238,20 @@
   --glow: rgba(103, 232, 249, .16);
 }
 .modeCardNews .modeCardIcon {
-  color: #b8f2ff;
+  color: #ff003c;
+  filter: drop-shadow(0 0 16px rgba(255, 0, 60, .3));
+}
+.yahooNewsLogo {
+  display: inline-block;
+  color: #ff003c;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 76px;
+  font-weight: 900;
+  font-style: normal;
+  line-height: .9;
+  letter-spacing: -10px;
+  transform: translateX(-4px) skewX(-5deg);
+  text-shadow: 0 0 18px rgba(255, 0, 60, .18);
 }
 .modeCardWide {
   grid-column: 1 / -1;
@@ -1211,6 +1224,7 @@ fieldset.card { min-width: 0; margin: 0; }
   .modeCardIcon { right: 18px; width: 76px; height: 76px; }
   .modeCardX .modeCardIcon { width: 68px; height: 68px; }
   .modeCardTiktok .modeCardIcon { width: 72px; height: 72px; }
+  .yahooNewsLogo { font-size: 62px; letter-spacing: -8px; }
   .modeCard::before { width: 190px; height: 190px; right: -70px; top: -78px; }
   .modeCard::after { width: 140px; height: 140px; right: 20px; bottom: -92px; }
   .modeDesktopBreak { display: none; }

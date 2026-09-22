@@ -1524,17 +1524,35 @@ export function DashboardForm({
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 96 96" role="img" className={styles.linkCardLogoSvg}>
                 <defs>
-                  <linearGradient id="link-card-logo-gradient" x1="18" y1="82" x2="79" y2="15" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="#2F96FF"/>
-                    <stop offset=".52" stopColor="#55B9FF"/>
-                    <stop offset="1" stopColor="#8BDEFF"/>
+                  <linearGradient id="link-card-logo-gradient" x1="15" y1="82" x2="82" y2="15" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#2F91F6"/>
+                    <stop offset=".48" stopColor="#50B3F7"/>
+                    <stop offset="1" stopColor="#98DEFF"/>
                   </linearGradient>
                 </defs>
-                <g transform="translate(48 48) scale(.88 1.06) translate(-48 -48)">
-                  <path d="M42 59 31 70a14.5 14.5 0 1 1-20.5-20.5L26 34a14.5 14.5 0 0 1 20.5 0c2.5 2.5 3.9 5.7 4.2 9.1" fill="none" stroke="url(#link-card-logo-gradient)" strokeWidth="10.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="m54 37 11-11a14.5 14.5 0 1 1 20.5 20.5L70 62a14.5 14.5 0 0 1-20.5 0c-2.5-2.5-3.9-5.7-4.2-9.1" fill="none" stroke="url(#link-card-logo-gradient)" strokeWidth="10.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M35.5 60.5 60.5 35.5" fill="none" stroke="url(#link-card-logo-gradient)" strokeWidth="10.5" strokeLinecap="round"/>
-                </g>
+                <path
+                  d="M52 39 61 30c7-7 18-7 25 0s7 18 0 25L73 68c-7 7-18 7-25 0-3-3-5-7-5-11"
+                  fill="none"
+                  stroke="url(#link-card-logo-gradient)"
+                  strokeWidth="10"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="m44 57-9 9c-7 7-18 7-25 0s-7-18 0-25l13-13c7-7 18-7 25 0 3 3 5 7 5 11"
+                  fill="none"
+                  stroke="url(#link-card-logo-gradient)"
+                  strokeWidth="10"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M34 62 62 34"
+                  fill="none"
+                  stroke="url(#link-card-logo-gradient)"
+                  strokeWidth="10"
+                  strokeLinecap="round"
+                />
               </svg>
             </span>
           </div>

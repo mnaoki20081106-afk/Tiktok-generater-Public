@@ -1487,6 +1487,23 @@ export function DashboardForm({
 
   return (
     <div ref={rootRef} className={styles.root}>
+      <div className={styles.modeBar}>
+        <div className={styles.field}>
+          <label className={styles.fl}>作成モード</label>
+          <select data-id="templateMode" defaultValue="tiktok" className={styles.modeSelect}>
+            <option value="link-card">リンクカード</option>
+            <option value="news">ニュース風</option>
+            <option value="instagram">インスタ風</option>
+            <option value="instagram-live">インスタライブ風</option>
+            <option value="live">ライブ配信風</option>
+            <option value="x">X風</option>
+            <option value="tiktok">TikTok風</option>
+            <option value="youtube">YouTube風</option>
+            <option value="file">ファイル共有風</option>
+          </select>
+          <div className={styles.hint}>プレビューは公開ページと同じレイアウトです。内容は保存・公開ボタンで反映します。</div>
+        </div>
+      </div>
       <div className={styles.layout}>
         <div className={styles.previewCol} data-id="previewCol">
           <div className={styles.previewActions}>
@@ -1806,23 +1823,6 @@ export function DashboardForm({
             <div className={styles.info}>この端末に保存されていた未保存の編集内容を復元しました。</div>
           )}
 
-          <div className={styles.card}>
-            <div className={styles.field}>
-              <label className={styles.fl}>作成モード</label>
-              <select data-id="templateMode" defaultValue="tiktok" className={styles.modeSelect}>
-                <option value="link-card">リンクカード</option>
-                <option value="news">ニュース風</option>
-                <option value="instagram">インスタ風</option>
-                <option value="instagram-live">インスタライブ風</option>
-                <option value="live">ライブ配信風</option>
-                <option value="x">X風</option>
-                <option value="tiktok">TikTok風</option>
-                <option value="youtube">YouTube風</option>
-                <option value="file">ファイル共有風</option>
-              </select>
-              <div className={styles.hint}>プレビューは公開ページと同じレイアウトです。内容は保存・公開ボタンで反映します。</div>
-            </div>
-          </div>
           <fieldset className={styles.card} data-id="modeFields" hidden />
           <div className={styles.card}>
             <div className={styles.sec}>公開設定</div>

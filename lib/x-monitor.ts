@@ -53,7 +53,9 @@ export interface XModelStatus {
 
 export interface XMonitorData {
   updatedAt: string | null;
-  posts: XMonitorPost[];
+  earlyPosts: XMonitorPost[];
+  trendingPosts: XMonitorPost[];
+  allPosts: XMonitorPost[];
   status: XMonitorStatus;
   model: XModelStatus;
   sourceError: string | null;
@@ -118,33 +120,61 @@ export function normalizeXMonitorPost(value: unknown): XMonitorPost | null {
   };
 }
 
-export function sortXMonitorPosts(posts: XMonitorPost[]): XMonitorPost[] {
-  return [...posts].sort((a, b) => {
-    const ap = a.predictedFinalImpressions;
-    const bp = b.predictedFinalImpressions;
-    if (ap == null && bp != null) return 1;
-    if (ap != null && bp == null) return -1;
-    if (ap != null && bp != null && bp !== ap) return bp - ap;
-    return b.impressions - a.impressions;
-  });
+function normalizePostList(values: unknown[]): XMonitorPost[] {
+  const result: XMonitorPost[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of values) {
+    const post = normalizeXMonitorPost(raw);
+    if (!post || seen.has(post.id)) continue;
+    seen.add(post.id);
+    result.push(post);
+  }
+
+  return result;
 }
 
-function mergePosts(hits: UnknownRecord): XMonitorPost[] {
-  const candidates = [
-    ...(Array.isArray(hits.early_posts) ? hits.early_posts : []),
-    ...(Array.isArray(hits.trending_posts) ? hits.trending_posts : []),
-    ...(Array.isArray(hits.posts) ? hits.posts : []),
-  ];
+/**
+ * Preserve the engine's own two-list contract.
+ *
+ * X-Bunseki writes:
+ * - early_posts: early discovery (already sorted by predicted final impressions)
+ * - trending_posts: actively viral posts (already sorted by impressions/min, then impressions)
+ * - posts: backwards-compatible alias of early_posts only
+ *
+ * Never merge early_posts and trending_posts into one public ranking.
+ */
+export function splitXMonitorHits(hits: UnknownRecord): {
+  earlyPosts: XMonitorPost[];
+  trendingPosts: XMonitorPost[];
+} {
+  const earlySource = Array.isArray(hits.early_posts)
+    ? hits.early_posts
+    : Array.isArray(hits.posts)
+      ? hits.posts
+      : [];
+  const trendingSource = Array.isArray(hits.trending_posts)
+    ? hits.trending_posts
+    : [];
 
+  return {
+    earlyPosts: normalizePostList(earlySource),
+    trendingPosts: normalizePostList(trendingSource),
+  };
+}
+
+function mergeForDetail(
+  earlyPosts: XMonitorPost[],
+  trendingPosts: XMonitorPost[],
+): XMonitorPost[] {
   const byId = new Map<string, XMonitorPost>();
-  for (const raw of candidates) {
-    const post = normalizeXMonitorPost(raw);
-    if (!post) continue;
+  for (const post of [...earlyPosts, ...trendingPosts]) {
     const previous = byId.get(post.id);
     if (!previous) {
       byId.set(post.id, post);
       continue;
     }
+
     byId.set(post.id, {
       ...previous,
       ...post,
@@ -166,7 +196,7 @@ function mergePosts(hits: UnknownRecord): XMonitorPost[] {
       bookmarks: Math.max(previous.bookmarks, post.bookmarks),
     });
   }
-  return sortXMonitorPosts([...byId.values()]);
+  return [...byId.values()];
 }
 
 async function fetchEngineJson(path: string): Promise<UnknownRecord> {
@@ -219,10 +249,13 @@ export async function getXMonitorData(): Promise<XMonitorData> {
       fetchEngineJson('data/model_registry.json').catch(() => ({})),
       fetchEngineJson('data/impression_model.json').catch(() => ({})),
     ]);
+    const { earlyPosts, trendingPosts } = splitXMonitorHits(hits);
     return {
       updatedAt:
         stringOrNull(hits.updated_at) || stringOrNull(status.updated_at),
-      posts: mergePosts(hits),
+      earlyPosts,
+      trendingPosts,
+      allPosts: mergeForDetail(earlyPosts, trendingPosts),
       status: parseStatus(status),
       model: parseModel(registry, model),
       sourceError: null,
@@ -230,7 +263,9 @@ export async function getXMonitorData(): Promise<XMonitorData> {
   } catch (error) {
     return {
       updatedAt: null,
-      posts: [],
+      earlyPosts: [],
+      trendingPosts: [],
+      allPosts: [],
       status: parseStatus({}),
       model: parseModel({}, {}),
       sourceError: error instanceof Error ? error.message : 'monitor data unavailable',

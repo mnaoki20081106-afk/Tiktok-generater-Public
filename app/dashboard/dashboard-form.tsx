@@ -1503,7 +1503,7 @@ export function DashboardForm({
         </div>
 
         <div className={styles.modePicker}>
-        <select data-id="templateMode" defaultValue="tiktok" className={styles.modeNativeSelect} tabIndex={-1} aria-hidden="true">
+        <select data-id="templateMode" defaultValue="tiktok" className={styles.modeNativeSelect} aria-label="作成モードを選択">
           <option value="link-card">リンクカード</option>
           <option value="news">ニュース風</option>
           <option value="instagram">インスタ風</option>

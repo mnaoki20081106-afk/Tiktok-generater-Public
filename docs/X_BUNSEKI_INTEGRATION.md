@@ -36,6 +36,7 @@ Create a GitHub fine-grained token scoped only to `mnaoki20081106-afk/X-Bunseki`
 ## Parent routes
 
 - `/x-monitor`: read-only X-Bunseki monitor view. The UI defaults to `早期発見` and switches in-place between `早期発見` and `🔥 バズっている`, matching the source `docs/index.html` behavior.
+- `/x-monitor` and `/x-monitor/[id]` refresh their Server Component data every 15 minutes while open, and refresh on return/focus when the last client refresh is 15+ minutes old. Runtime JSON fetches are `no-store` with a cache-busting query parameter.
 - `/x-monitor/[id]`: post detail metrics.
 - `/admin/x-monitor`: admin-only keywords and model status.
 

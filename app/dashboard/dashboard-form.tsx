@@ -1523,10 +1523,17 @@ export function DashboardForm({
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
               <svg viewBox="0 0 96 96" role="img" className={styles.linkCardLogoSvg}>
-                <g transform="rotate(90 48 48)">
-                  <path d="M38.2 57.8 28.8 67.2a15 15 0 0 1-21.2-21.2l15.6-15.6a15 15 0 0 1 21.2 0 14.7 14.7 0 0 1 3.8 6.4" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
-                  <path d="m57.8 38.2 9.4-9.4a15 15 0 0 1 21.2 21.2L72.8 65.6a15 15 0 0 1-21.2 0 14.7 14.7 0 0 1-3.8-6.4" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
-                  <path d="m35 61 26-26" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+                <defs>
+                  <linearGradient id="link-card-logo-gradient" x1="18" y1="82" x2="79" y2="15" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#2F96FF"/>
+                    <stop offset=".52" stopColor="#55B9FF"/>
+                    <stop offset="1" stopColor="#8BDEFF"/>
+                  </linearGradient>
+                </defs>
+                <g transform="translate(48 48) scale(.88 1.06) translate(-48 -48)">
+                  <path d="M42 59 31 70a14.5 14.5 0 1 1-20.5-20.5L26 34a14.5 14.5 0 0 1 20.5 0c2.5 2.5 3.9 5.7 4.2 9.1" fill="none" stroke="url(#link-card-logo-gradient)" strokeWidth="10.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="m54 37 11-11a14.5 14.5 0 1 1 20.5 20.5L70 62a14.5 14.5 0 0 1-20.5 0c-2.5-2.5-3.9-5.7-4.2-9.1" fill="none" stroke="url(#link-card-logo-gradient)" strokeWidth="10.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M35.5 60.5 60.5 35.5" fill="none" stroke="url(#link-card-logo-gradient)" strokeWidth="10.5" strokeLinecap="round"/>
                 </g>
               </svg>
             </span>
@@ -1604,10 +1611,14 @@ export function DashboardForm({
               <span className={styles.modeCardDescription}>TikTok風のリンクページを作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
-              <svg viewBox="0 0 64 64" role="img" className={styles.tiktokLogoSvg}>
-                <path fill="#25F4EE" d="M35.4 7.2h8.2c.8 4.8 3.6 8.3 8.4 10v8.2a24 24 0 0 1-8.4-2.2v17c0 9.7-7.6 17.2-17.3 17.2-8.7 0-15.9-6.2-17-14.7 2.8 4.2 7.5 6.9 12.8 6.9 8.5 0 15.2-6.6 15.2-15.1V7.2h-1.9Z"/>
-                <path fill="#FE2C55" d="M38.6 5.1h8.1c.9 4.7 3.7 8.2 8.5 9.9v8.3a24 24 0 0 1-8.5-2.3v17.1c0 9.7-7.6 17.2-17.3 17.2-4.5 0-8.5-1.6-11.5-4.4 2.3.9 4.7 1.4 7.3 1.4 8.5 0 15.2-6.6 15.2-15.1V5.1h-1.8Z"/>
-                <path fill="#F8F8FA" d="M37 6.1h7.6c.8 4.2 3.3 7.3 7.5 8.9v6.2a20.5 20.5 0 0 1-7.5-2.4v18.3c0 8.5-6.6 15-15 15-7.3 0-13.2-5-14.5-11.8 2.1 3.3 5.8 5.4 10.1 5.4 6.7 0 11.8-5.1 11.8-11.8 0-6.1-4.3-10.7-10.4-11.6v-6.5c3.8.2 7.2 1.3 10.4 3.4V6.1Z"/>
+              <svg viewBox="0 0 512 512" role="img" className={styles.tiktokLogoSvg}>
+                <path fill="#01F7EF" fillRule="evenodd" d="M352 66L285 67L284 354L283 359L281 361L282 362L281 365L278 369L276 375L272 379L271 382L263 390L246 400L235 403L233 402L225 404L217 402L215 403L208 400L207 401L205 399L204 400L190 392L189 390L181 384L179 380L176 378L176 376L174 377L159 364L151 351L146 336L147 335L146 334L146 319L150 303L157 291L168 280L179 273L199 267L200 268L204 267L209 268L210 267L222 270L222 216L206 217L195 220L194 219L191 221L190 220L188 222L185 222L182 224L181 223L179 225L170 228L157 236L155 236L154 238L152 238L151 240L148 241L147 243L133 254L129 260L125 263L119 273L117 274L117 276L111 285L106 298L104 300L105 301L100 313L101 314L97 330L98 331L97 335L97 353L98 357L97 358L99 363L98 365L100 369L101 374L100 375L103 381L102 382L105 387L104 388L106 390L114 409L129 429L134 434L142 439L162 448L186 454L188 453L195 455L199 454L201 455L211 455L212 454L214 455L222 453L223 454L224 453L229 453L233 451L234 452L247 447L253 446L255 444L257 444L271 437L291 422L306 406L318 388L322 380L323 375L325 373L331 353L330 352L333 340L332 338L333 337L333 186L334 185L350 195L380 208L384 208L387 210L395 212L396 211L400 213L401 212L406 214L431 215L431 162L414 157L393 145L376 128L366 121L353 107L342 89L342 87L338 80L335 68L336 66Z"/>
+                <path fill="#FF0150" fillRule="evenodd" d="M221 199L222 200L222 215L223 216L223 270L220 271L215 269L207 269L206 268L200 269L199 268L190 270L177 275L168 281L158 291L157 294L154 297L149 309L147 319L147 334L148 335L147 336L150 346L160 364L174 376L175 376L167 359L165 343L169 323L179 306L187 298L197 291L210 286L222 285L223 284L236 285L241 287L242 286L242 218L233 216L223 216L222 215L222 200Z"/>
+                <path fill="#FF0150" fillRule="evenodd" d="M450 164L441 164L432 162L432 215L431 216L406 215L396 212L395 213L387 211L384 209L380 209L375 206L372 206L367 203L362 202L334 186L334 337L333 338L334 340L331 352L332 353L326 373L324 375L323 380L319 388L307 406L291 423L271 438L253 447L247 448L234 453L233 452L229 454L224 454L223 455L222 454L214 456L212 455L211 456L201 456L200 455L195 456L194 455L189 455L188 454L186 455L168 451L157 446L152 445L135 435L150 448L175 462L196 469L206 470L207 471L215 471L216 472L243 471L258 468L273 463L291 454L311 439L326 423L335 410L344 392L351 368L352 354L353 353L353 202L354 201L369 211L387 220L404 226L427 231L450 232Z"/>
+                <path fill="#FF0150" fillRule="evenodd" d="M284 66L284 138L284 67L285 66L335 66L337 69L338 77L343 89L351 103L359 113L375 127L367 117L359 101L354 83L353 67Z"/>
+                <path fill="#FFF" fillRule="evenodd" d="M219 199L207 199L205 198L204 199L182 200L160 206L143 214L125 226L112 238L95 260L86 278L79 301L78 314L77 315L77 337L78 338L78 346L80 356L87 377L96 394L107 409L127 428L120 420L107 398L100 379L97 366L97 360L96 359L96 329L97 328L98 317L104 297L111 282L123 264L144 243L163 230L178 223L203 216L221 215L221 200Z"/>
+                <path fill="#FFF" fillRule="evenodd" d="M382 133L390 141L403 150L421 158L430 160L430 147L429 146L418 146L404 143L390 138Z"/>
+                <path fill="#FFF" fillRule="evenodd" d="M332 49L265 49L264 50L264 335L260 349L252 363L242 373L233 379L221 384L211 386L192 385L188 383L185 383L180 380L192 392L203 398L219 402L231 402L247 398L261 390L270 381L279 366L283 350L283 66L284 65L334 65L333 50Z"/>
               </svg>
             </span>
           </div>
@@ -1632,9 +1643,10 @@ export function DashboardForm({
               <span className={styles.modeCardDescription}>ニュース記事風のリンクページを作成します。</span>
             </span>
             <span className={styles.modeCardIcon} aria-hidden="true">
-              <svg viewBox="0 0 128 96" role="img" className={styles.yahooNewsSvg}>
-                <path fill="currentColor" d="M7 12h34l20 27 29-27h29L75 56v17c0 7-2 12-7 16-5 3-12 5-22 5H24l4-13h10c6 0 10-1 12-3 2-1 3-4 3-8V56L7 12Z"/>
-                <path fill="currentColor" d="M97 18h23l-16 49H83l14-49Zm-18 57 21 6-7 18-21-6 7-18Z"/>
+              <svg viewBox="0 0 512 512" role="img" className={styles.yahooNewsSvg}>
+                <path fill="#FF0134" fillRule="evenodd" d="M346 333L334 360L367 370L378 343Z"/>
+                <path fill="#FF0134" fillRule="evenodd" d="M458 194L436 187L433 187L423 183L420 183L410 179L407 179L403 177L402 178L388 222L388 225L384 235L384 238L380 248L380 251L376 261L373 274L369 284L369 287L365 297L365 300L361 310L386 318L439 227L459 195Z"/>
+                <path fill="#FF0134" fillRule="evenodd" d="M52 162L52 167L55 168L76 170L77 171L83 171L98 174L118 194L147 228L167 253L187 281L187 333L180 341L173 344L163 346L155 346L154 347L142 347L138 360L139 362L284 362L286 353L286 345L247 343L239 341L239 281L245 273L267 252L300 225L323 208L336 200L363 194L373 193L382 179L251 179L250 181L253 193L292 198L294 200L285 212L271 225L235 254L227 262L225 262L176 198L158 172L159 170L163 169L205 166L207 154L53 154L53 161Z"/>
               </svg>
             </span>
           </div>

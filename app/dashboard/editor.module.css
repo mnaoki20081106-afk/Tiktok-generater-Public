@@ -1433,12 +1433,12 @@ fieldset.card { min-width: 0; margin: 0; }
   --glow: rgba(68, 182, 255, .18);
 }
 .modeCardLink .modeCardIcon {
-  width: 76px;
+  width: 78px;
   height: 78px;
-  color: #6bbcff;
+  color: #66bdf8;
   filter:
-    drop-shadow(0 0 7px rgba(76, 177, 255, .44))
-    drop-shadow(0 0 17px rgba(76, 177, 255, .20));
+    drop-shadow(0 0 6px rgba(73, 170, 242, .42))
+    drop-shadow(0 0 16px rgba(73, 170, 242, .20));
 }
 .linkCardLogoSvg {
   display: block;
@@ -1488,8 +1488,8 @@ fieldset.card { min-width: 0; margin: 0; }
   --glow: rgba(255, 20, 40, .18);
 }
 .modeCardYoutube .modeCardIcon {
-  width: 80px;
-  height: 58px;
+  width: 72px;
+  height: 72px;
   filter:
     drop-shadow(0 0 8px rgba(255, 0, 51, .42))
     drop-shadow(0 0 18px rgba(255, 0, 51, .20));
@@ -1605,12 +1605,12 @@ fieldset.card { min-width: 0; margin: 0; }
     height: 60px;
   }
   .modeCardYoutube .modeCardIcon {
-    width: 64px;
-    height: 46px;
+    width: 58px;
+    height: 58px;
   }
   .modeCardLink .modeCardIcon {
-    width: 61px;
-    height: 63px;
+    width: 62px;
+    height: 62px;
   }
   .modeCardX .modeCardIcon {
     width: 53px;
@@ -1668,12 +1668,12 @@ fieldset.card { min-width: 0; margin: 0; }
     height: 53px;
   }
   .modeCardYoutube .modeCardIcon {
-    width: 56px;
-    height: 40px;
+    width: 52px;
+    height: 52px;
   }
   .modeCardLink .modeCardIcon {
     width: 54px;
-    height: 56px;
+    height: 54px;
   }
   .modeCardNews .modeCardIcon {
     width: 55px;

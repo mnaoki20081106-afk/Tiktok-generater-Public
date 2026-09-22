@@ -44,7 +44,7 @@ for (const path of ['/', '/login', '/login?error=old', '/admin']) {
   assert.equal(response.headers.get('location'), 'https://example.com/dashboard');
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
 }
-for (const path of ['/dashboard', '/admin']) {
+for (const path of ['/dashboard', '/admin', '/admin/x-monitor']) {
   assert.equal((await request(path, { user: null })).headers.get('location'), 'https://example.com/login');
 }
 for (const path of ['/', '/login']) {
@@ -55,4 +55,6 @@ assert.equal((await request('/dashboard')).status, 200);
 assert.equal((await request('/p/public-page')).status, 200);
 assert.equal((await request('/login', { method: 'HEAD' })).status, 307);
 assert.equal((await request('/admin', { user: { id: 'admin-1', email: 'admin@example.com' } })).status, 200);
+assert.equal((await request('/admin/x-monitor', { user: { id: 'member-1', email: 'member@example.com' } })).headers.get('location'), 'https://example.com/dashboard');
+assert.equal((await request('/admin/x-monitor', { user: { id: 'admin-1', email: 'admin@example.com' } })).status, 200);
 console.log('Session routing and refreshed/deleted cookie retention: passed');

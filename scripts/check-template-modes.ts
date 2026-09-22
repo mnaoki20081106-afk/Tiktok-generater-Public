@@ -66,7 +66,7 @@ console.log('7 reference layouts: CSS/DOM parity, editable content, invite links
 
 const linkCard = renderAlternateViewerHtml({ ...base, templateMode: 'link-card' });
 assert.ok(linkCard.includes('"Tiktok" で開きますか？') && linkCard.includes('window.confirm(msg)'));
-assert.ok(linkCard.includes('invite=a&amp;code=b'), 'link card preserves the invitation URL');
+assert.ok(linkCard.includes('invite=a&code=b'), 'link card preserves the invitation URL in the JavaScript destination');
 assert.ok(linkCard.includes('background:#fff') && !linkCard.includes('background.jpg'), 'link card is a white dialog page without a display image');
 assert.ok(linkCard.includes('/api/visit') && linkCard.includes('window.location.href=window.__linkCardHref'), 'published link card keeps owner/draw destination updates');
 const linkCardPreview = renderAlternateViewerHtml({ ...base, templateMode: 'link-card' }, { preview: true, editorToken: 'link-card-preview' });

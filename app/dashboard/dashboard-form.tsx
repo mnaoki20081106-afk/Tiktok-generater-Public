@@ -928,8 +928,31 @@ export function DashboardForm({
       toggle('tapAll', '画面のどこでもタップで移動');
       const hint = document.createElement('p'); hint.className = styles.hint; hint.textContent = 'プレビュー内ではリンク先へ移動しません。コメントや反応数は見た目用の表示です。'; modeFields.append(hint);
     }
+    const modeVisual = $<HTMLDivElement>('modeVisual');
+    const modeTitle = $<HTMLDivElement>('modeTitle');
+    const modeDescription = $<HTMLDivElement>('modeDescription');
+    const modeLogo = $<HTMLDivElement>('modeLogo');
+    const modeMeta: Record<string, { title: string; description: string; logo: string }> = {
+      'link-card': { title: 'リンクカード', description: 'シンプルなリンク誘導ページを作成します。', logo: '🔗' },
+      news: { title: 'ニュース風', description: 'ニュース記事風のリンクページを作成します。', logo: 'N' },
+      instagram: { title: 'インスタ風', description: 'Instagram風のリンクページを作成します。', logo: '◎' },
+      'instagram-live': { title: 'インスタライブ風', description: 'Instagramライブ風のリンクページを作成します。', logo: '◎' },
+      live: { title: 'ライブ配信風', description: 'ライブ配信サービス風のリンクページを作成します。', logo: '◉' },
+      x: { title: 'X風', description: 'X風のリンクページを作成します。', logo: '𝕏' },
+      tiktok: { title: 'TikTok風', description: 'TikTok風のリンクページを作成します。', logo: '♪' },
+      youtube: { title: 'YouTube風', description: 'YouTube風のリンクページを作成します。', logo: '▶' },
+      file: { title: 'ファイル共有風', description: 'ファイル共有サービス風のリンクページを作成します。', logo: '📁' },
+    };
+    function syncModeVisual() {
+      const mode = templateMode.value || 'tiktok';
+      const meta = modeMeta[mode] || modeMeta.tiktok;
+      modeVisual.dataset.mode = mode;
+      modeTitle.textContent = meta.title;
+      modeDescription.textContent = meta.description;
+      modeLogo.textContent = meta.logo;
+    }
     templateMode.addEventListener('change', () => {
-      renderModeFields(); syncAlternatePreview(); saveState(); check();
+      syncModeVisual(); renderModeFields(); syncAlternatePreview(); saveState(); check();
     });
 
     // ===== 誘導ダイアログのプレビュー表示切り替え =====
@@ -1383,6 +1406,7 @@ export function DashboardForm({
 
       slugInput.value = saved?.slug || site.slug || '';
       templateMode.value = saved?.templateMode || (cd.templateMode as string) || 'tiktok';
+      syncModeVisual();
       templateSettings = saved?.templateSettings ?? cd.templateSettings ?? {};
       for (const options of Object.values(templateSettings)) {
         for (const row of options.rows || []) {
@@ -1488,9 +1512,14 @@ export function DashboardForm({
   return (
     <div ref={rootRef} className={styles.root}>
       <div className={styles.modeBar}>
-        <div className={styles.field}>
-          <label className={styles.fl}>作成モード</label>
-          <select data-id="templateMode" defaultValue="tiktok" className={styles.modeSelect}>
+        <label className={styles.modeHeading} htmlFor="templateModeSelect">作成モード</label>
+        <div className={styles.modeVisual} data-id="modeVisual" data-mode="tiktok">
+          <div className={styles.modeCopy}>
+            <div className={styles.modeTitle} data-id="modeTitle">TikTok風</div>
+            <div className={styles.modeDescription} data-id="modeDescription">TikTok風のリンクページを作成します。</div>
+          </div>
+          <div className={styles.modeLogo} data-id="modeLogo" aria-hidden="true">♪</div>
+          <select id="templateModeSelect" data-id="templateMode" defaultValue="tiktok" className={styles.modeSelect} aria-label="作成モード">
             <option value="link-card">リンクカード</option>
             <option value="news">ニュース風</option>
             <option value="instagram">インスタ風</option>
@@ -1501,8 +1530,8 @@ export function DashboardForm({
             <option value="youtube">YouTube風</option>
             <option value="file">ファイル共有風</option>
           </select>
-          <div className={styles.hint}>プレビューは公開ページと同じレイアウトです。内容は保存・公開ボタンで反映します。</div>
         </div>
+        <div className={styles.modeHint}>カードをタップして作成モードを変更できます。プレビューは公開ページと同じレイアウトです。</div>
       </div>
       <div className={styles.layout}>
         <div className={styles.previewCol} data-id="previewCol">

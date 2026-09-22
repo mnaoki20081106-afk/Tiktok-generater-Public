@@ -194,6 +194,7 @@ body {
 .xmon-feed-head .studio-eyebrow { margin-bottom: 7px; }
 .xmon-feed-head h2 { font-size: 28px; font-weight: 600; letter-spacing: -.04em; }
 .xmon-feed-head > span { color: #79848e; font-size: 10px; }
+.xmon-feed + .xmon-feed-head { margin-top: 54px; }
 .xmon-feed { overflow: hidden; border: 1px solid #ffffff12; border-radius: 26px; background: #0c0f12; box-shadow: 0 28px 90px #0005; }
 .xmon-post { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 13px; padding: 20px 21px; border-bottom: 1px solid #ffffff0d; transition: background .18s; }
 .xmon-post:last-child { border-bottom: 0; }

@@ -24,12 +24,12 @@ export default async function XMonitorDetailPage({
 }) {
   const { id } = await params;
   const data = await getXMonitorData();
-  const post = data.posts.find((row) => row.id === id);
+  const post = data.allPosts.find((row) => row.id === id);
   if (!post) notFound();
 
   return (
     <main className="xmon-wrap xmon-detail-wrap">
-      <Link href="/x-monitor" className="xmon-back"><ArrowLeft size={16} /> ランキングへ</Link>
+      <Link href="/x-monitor" className="xmon-back"><ArrowLeft size={16} /> X監視へ</Link>
       <article className="xmon-detail-card">
         <header>
           <div className="xmon-avatar xmon-avatar-lg">{post.authorName.slice(0, 1).toUpperCase()}</div>

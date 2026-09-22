@@ -5,7 +5,7 @@ import { StudioHeader } from '@/components/StudioHeader';
 export default function HomePage() {
   return (
     <div className="studio-shell marketing-shell">
-      <StudioHeader publicView />
+      <StudioHeader />
       <main>
         <section className="studio-hero">
           <p className="studio-eyebrow">YOUR LINK. YOUR EXPRESSION.</p>

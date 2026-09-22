@@ -25,11 +25,7 @@ export default async function XMonitorPage() {
       <section className="xmon-hero">
         <div>
           <p className="studio-eyebrow">X VIRAL SIGNAL</p>
-          <h1>X-Bunsekiの監視結果を、<span>2つの段階</span>で見る。</h1>
-          <p>
-            元リポジトリの分類をそのまま使い、「早期発見」と「バズっている」を
-            混ぜずに表示しています。
-          </p>
+          <h1>X監視</h1>
         </div>
         <div className="xmon-live-card">
           <div className={`xmon-live-dot ${data.status.status === 'success' ? 'is-live' : ''}`} />

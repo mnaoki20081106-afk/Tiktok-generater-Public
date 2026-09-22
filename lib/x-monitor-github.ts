@@ -15,7 +15,7 @@ const FILES: Record<XKeywordKind, string> = {
   ng: 'keywords_ng.txt',
 };
 
-interface KeywordFile {
+export interface XKeywordFile {
   kind: XKeywordKind;
   path: string;
   sha: string;
@@ -38,7 +38,7 @@ function decodeBase64(value: string): string {
   return Buffer.from(value.replace(/\n/g, ''), 'base64').toString('utf8');
 }
 
-async function readKeywordFile(kind: XKeywordKind): Promise<KeywordFile> {
+async function readKeywordFile(kind: XKeywordKind): Promise<XKeywordFile> {
   const path = FILES[kind];
   const response = await fetch(
     `https://api.github.com/repos/${ENGINE_REPO}/contents/${path}?ref=${ENGINE_BRANCH}`,
@@ -59,7 +59,9 @@ async function readKeywordFile(kind: XKeywordKind): Promise<KeywordFile> {
   return { kind, path, sha: body.sha, text, values: parseXKeywordValues(kind, text) };
 }
 
-export async function getXKeywordConfig(): Promise<Record<XKeywordKind, KeywordFile>> {
+export type XKeywordConfig = Record<XKeywordKind, XKeywordFile>;
+
+export async function getXKeywordConfig(): Promise<XKeywordConfig> {
   const [keywords, combo, ng] = await Promise.all([
     readKeywordFile('keywords'),
     readKeywordFile('combo'),
@@ -73,7 +75,7 @@ export function isXKeywordWriteConfigured(): boolean {
 }
 
 async function writeKeywordFile(
-  file: KeywordFile,
+  file: XKeywordFile,
   text: string,
 ): Promise<void> {
   const token = process.env.X_BUNSEKI_GITHUB_TOKEN?.trim();

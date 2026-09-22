@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Radar } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -31,6 +31,14 @@ export default async function AdminPage() {
       <Link href="/dashboard" className="mb-6 flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft size={14} />
         マイサイト一覧に戻る
+      </Link>
+
+      <Link
+        href="/admin/x-monitor"
+        className="mb-8 flex items-center justify-between rounded-2xl border border-cyan-300/15 bg-cyan-300/5 p-4 text-sm text-cyan-100 transition hover:bg-cyan-300/10"
+      >
+        <span className="flex items-center gap-2"><Radar size={17} /> X監視・キーワード・学習状況</span>
+        <span>開く →</span>
       </Link>
 
       <h1 className="mb-2 text-xl font-semibold text-slate-900">利用状況</h1>

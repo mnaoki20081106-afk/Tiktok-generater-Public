@@ -195,8 +195,6 @@ body {
 .xmon-feed-tabs button { display: inline-flex; align-items: center; gap: 8px; padding: 11px 14px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: #69747e; font-size: 12px; font-weight: 600; letter-spacing: .02em; cursor: pointer; }
 .xmon-feed-tabs button:hover { color: #c3d0d8; background: transparent; }
 .xmon-feed-tabs button.active { color: #8be4ff; border-bottom-color: #78d9f7; }
-.xmon-feed-tabs button span { display: inline-grid; min-width: 22px; height: 19px; place-items: center; padding: 0 6px; border: 1px solid #ffffff12; border-radius: 999px; color: #88949e; font-size: 9px; font-variant-numeric: tabular-nums; }
-.xmon-feed-tabs button.active span { color: #bcefff; border-color: #78d9f733; background: #78d9f70b; }
 .xmon-feed-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 0 4px 18px; }
 .xmon-feed-head .studio-eyebrow { margin-bottom: 7px; }
 .xmon-feed-head h2 { font-size: 28px; font-weight: 600; letter-spacing: -.04em; }

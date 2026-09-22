@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, Radar } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Radar } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -8,6 +8,10 @@ import { getGlobalAnalytics, getGlobalAnalyticsHourly } from '@/lib/analytics';
 import { AnalyticsPanel } from '@/components/AnalyticsPanel';
 import { AdminSurpriseForm } from './admin-surprise-form';
 import { isIpHashingConfigured } from '@/lib/request-identity';
+import { getXKeywordConfig, isXKeywordWriteConfigured } from '@/lib/x-monitor-github';
+import { XKeywordSettings } from './x-keyword-settings';
+
+export const dynamic = 'force-dynamic';
 
 export default async function AdminPage() {
   const supabase = await createClient();
@@ -19,29 +23,44 @@ export default async function AdminPage() {
   if (!isAdminEmail(user.email)) redirect('/dashboard');
 
   const admin = createAdminClient();
-  const [{ data: config }, summary24h, summary7, summary30] = await Promise.all([
+  const [{ data: config }, summary24h, summary7, summary30, xKeywordsResult] = await Promise.all([
     admin.from('surprise_config').select('*').eq('id', 1).maybeSingle(),
     getGlobalAnalyticsHourly(admin, 24),
     getGlobalAnalytics(admin, 7),
     getGlobalAnalytics(admin, 30),
+    getXKeywordConfig()
+      .then((keywords) => ({ keywords, error: null as string | null }))
+      .catch((error: unknown) => ({
+        keywords: null,
+        error: error instanceof Error ? error.message : 'キーワード設定の取得に失敗しました',
+      })),
   ]);
+  const canWriteXKeywords = isXKeywordWriteConfigured();
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-6 py-12">
+    <main className="mx-auto min-h-screen max-w-5xl px-5 py-10 sm:px-6 sm:py-12">
       <Link href="/dashboard" className="mb-6 flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft size={14} />
         マイサイト一覧に戻る
       </Link>
 
-      <Link
-        href="/admin/x-monitor"
-        className="mb-8 flex items-center justify-between rounded-2xl border border-cyan-300/15 bg-cyan-300/5 p-4 text-sm text-cyan-100 transition hover:bg-cyan-300/10"
-      >
-        <span className="flex items-center gap-2"><Radar size={17} /> X監視・キーワード・学習状況</span>
-        <span>開く →</span>
-      </Link>
+      <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="studio-eyebrow">ADMIN CONSOLE</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">管理画面</h1>
+          <p className="mt-2 text-sm text-slate-500">
+            利用状況、X監視キーワード、サプライズ抽選を管理します。
+          </p>
+        </div>
+        <Link
+          href="/x-monitor"
+          className="inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-medium text-cyan-800 transition hover:bg-cyan-100"
+        >
+          <Radar size={15} /> X監視ランキング <ExternalLink size={13} />
+        </Link>
+      </div>
 
-      <h1 className="mb-2 text-xl font-semibold text-slate-900">利用状況</h1>
+      <h2 className="mb-2 text-xl font-semibold text-slate-900">利用状況</h2>
       <p className="mb-4 text-sm text-slate-500">管理者のみが見られる、ジェネレーター全体の利用状況です。</p>
 
       <div className="mb-6 grid grid-cols-2 gap-3">
@@ -65,6 +84,15 @@ export default async function AdminPage() {
         />
       </div>
 
+      <div className="mb-14 border-t border-slate-200 pt-10">
+        <XKeywordSettings
+          config={xKeywordsResult.keywords}
+          canWrite={canWriteXKeywords}
+          loadError={xKeywordsResult.error}
+        />
+      </div>
+
+      <div className="border-t border-slate-200 pt-10">
       <h2 className="mb-2 text-xl font-semibold text-slate-900">サプライズ抽選設定</h2>
       <p className="mb-8 text-sm leading-relaxed text-slate-500">
         訪問者が公開ページの「TikTokを開く」ボタンをタップした際、指定した確率でユーザー入力のURLの代わりに
@@ -80,6 +108,7 @@ export default async function AdminPage() {
         </div>
       )}
       <AdminSurpriseForm config={config} />
+      </div>
     </main>
   );
 }

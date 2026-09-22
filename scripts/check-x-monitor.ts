@@ -76,14 +76,39 @@ assert.equal(formatCompactNumber(12_400_000), '12.4M');
 assert.equal(formatCompactNumber(438_000), '438.0K');
 
 const page = fs.readFileSync(new URL('../app/x-monitor/page.tsx', import.meta.url), 'utf8');
-assert.match(page, />早期発見</);
-assert.match(page, />バズっている</);
-assert.match(page, /data\.earlyPosts/);
-assert.match(page, /data\.trendingPosts/);
+const switcher = fs.readFileSync(
+  new URL('../components/XMonitorFeedSwitcher.tsx', import.meta.url),
+  'utf8',
+);
+const postCard = fs.readFileSync(
+  new URL('../components/XPostCard.tsx', import.meta.url),
+  'utf8',
+);
+
+assert.match(page, /<XMonitorFeedSwitcher/);
+assert.match(page, /earlyPosts=\{data\.earlyPosts\}/);
+assert.match(page, /trendingPosts=\{data\.trendingPosts\}/);
 assert.doesNotMatch(
   page,
   /data\.posts/,
   'public X monitor page must not render a merged post feed',
+);
+
+assert.match(switcher, /useState<Feed>\('early'\)/, 'source UI defaults to early discovery');
+assert.match(switcher, /setFeed\('early'\)/);
+assert.match(switcher, /setFeed\('trending'\)/);
+assert.match(switcher, />\s*早期発見\s*</);
+assert.match(switcher, /🔥 バズっている/);
+assert.match(
+  switcher,
+  /feed === 'trending' \? trendingPosts : earlyPosts/,
+  'only the selected source feed should be rendered',
+);
+assert.match(postCard, /isTrending \? '現在' : '予測最終'/);
+assert.match(
+  postCard,
+  /isTrending \? post\.impressions : post\.predictedFinalImpressions/,
+  'trending must lead with current impressions while early leads with predicted final impressions',
 );
 
 const actions = fs.readFileSync(new URL('../app/admin/x-keyword-actions.ts', import.meta.url), 'utf8');

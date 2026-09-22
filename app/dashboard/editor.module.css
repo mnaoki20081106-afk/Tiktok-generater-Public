@@ -250,7 +250,10 @@
 }
 .modeCardNews .modeCardIcon {
   color: #ff003c;
-  filter: drop-shadow(0 0 16px rgba(255, 0, 60, .3));
+  filter:
+    drop-shadow(0 0 10px rgba(255, 0, 60, .78))
+    drop-shadow(0 0 24px rgba(255, 0, 60, .52))
+    drop-shadow(0 0 42px rgba(255, 0, 60, .3));
 }
 .yahooNewsLogo {
   display: inline-block;
@@ -262,7 +265,11 @@
   line-height: .9;
   letter-spacing: -10px;
   transform: translateX(-4px) skewX(-5deg);
-  text-shadow: 0 0 18px rgba(255, 0, 60, .18);
+  text-shadow:
+    0 0 6px rgba(255, 35, 80, .98),
+    0 0 16px rgba(255, 0, 60, .82),
+    0 0 32px rgba(255, 0, 60, .56),
+    0 0 54px rgba(255, 0, 60, .28);
 }
 .modeCardWide {
   grid-column: auto;

@@ -84,6 +84,18 @@ const postCard = fs.readFileSync(
   new URL('../components/XPostCard.tsx', import.meta.url),
   'utf8',
 );
+const layout = fs.readFileSync(
+  new URL('../app/x-monitor/layout.tsx', import.meta.url),
+  'utf8',
+);
+const autoRefresh = fs.readFileSync(
+  new URL('../components/XMonitorAutoRefresh.tsx', import.meta.url),
+  'utf8',
+);
+const monitorLib = fs.readFileSync(
+  new URL('../lib/x-monitor.ts', import.meta.url),
+  'utf8',
+);
 
 assert.match(page, /<XMonitorFeedSwitcher/);
 assert.match(page, /earlyPosts=\{data\.earlyPosts\}/);
@@ -110,6 +122,21 @@ assert.match(
   /isTrending \? post\.impressions : post\.predictedFinalImpressions/,
   'trending must lead with current impressions while early leads with predicted final impressions',
 );
+
+assert.match(layout, /<XMonitorAutoRefresh \/>/);
+assert.match(
+  autoRefresh,
+  /15 \* 60 \* 1000/,
+  'X monitor UI must refresh every 15 minutes',
+);
+assert.match(autoRefresh, /router\.refresh\(\)/);
+assert.match(autoRefresh, /visibilitychange/);
+assert.match(
+  monitorLib,
+  /t=\$\{Date\.now\(\)\}/,
+  'runtime JSON fetches must bypass upstream raw-file caches',
+);
+assert.match(monitorLib, /cache: 'no-store'/);
 
 const actions = fs.readFileSync(new URL('../app/admin/x-keyword-actions.ts', import.meta.url), 'utf8');
 const github = fs.readFileSync(new URL('../lib/x-monitor-github.ts', import.meta.url), 'utf8');

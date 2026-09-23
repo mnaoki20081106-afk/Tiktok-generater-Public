@@ -4,6 +4,7 @@ import {
   formatCompactNumber,
   normalizeXMonitorPost,
   splitXMonitorHits,
+  xMonitorHealthMessage,
 } from '../lib/x-monitor.ts';
 
 const early = {
@@ -74,6 +75,11 @@ assert.deepEqual(fallback.trendingPosts, []);
 
 assert.equal(formatCompactNumber(12_400_000), '12.4M');
 assert.equal(formatCompactNumber(438_000), '438.0K');
+assert.equal(xMonitorHealthMessage({ status: 'success', collectionError: null }), null);
+assert.match(xMonitorHealthMessage({ status: 'session_expired', collectionError: null })!, /再ログイン/);
+assert.match(xMonitorHealthMessage({ status: 'degraded', collectionError: 'rate_limited' })!, /取得できた投稿のみ/);
+assert.match(xMonitorHealthMessage({ status: 'error', collectionError: 'schema_changed' })!, /前回取得したデータ/);
+assert.doesNotMatch(xMonitorHealthMessage({ status: 'error', collectionError: 'SENSITIVE_TOKEN' })!, /SENSITIVE_TOKEN/);
 
 const page = fs.readFileSync(new URL('../app/x-monitor/page.tsx', import.meta.url), 'utf8');
 const switcher = fs.readFileSync(

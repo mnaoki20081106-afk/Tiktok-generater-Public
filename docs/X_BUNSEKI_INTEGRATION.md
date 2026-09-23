@@ -12,6 +12,14 @@ Last updated: 2026-09-22
 
 ## Existing engine behavior preserved
 
+The collector resilience update adds `collection_health` to engine status and the
+`degraded` status for partial collection. The parent displays allowlisted Japanese
+messages for authentication, rate-limit and schema failures. It never renders raw
+upstream error messages or cookies. Failed cycles retain the previous hits and their
+original update time; valid partial observations continue through the engine.
+See the engine's `docs/COLLECTOR_RESILIENCE.md` for supported compatibility changes
+and recovery settings. Unknown X changes and expired logins still require maintenance.
+
 SearchTimeline discovery, TweetDetail follow-up, observations SQLite, growth/acceleration, detector scoring, final-impression prediction, watchlist, 24h outcomes, Gen0/Gen1 separation, chronological validation, shadow evaluation and fail-closed promotion were preserved.
 
 The existing watchlist already includes the requested 15, 30, 45, 60, 90, 120, 180, 240, 360, 720 and 1440 minute checkpoints, plus extra checkpoints.

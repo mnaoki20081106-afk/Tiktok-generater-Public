@@ -1,6 +1,6 @@
 import { Activity, BrainCircuit, Clock3, Radar } from 'lucide-react';
 import { XMonitorFeedSwitcher } from '@/components/XMonitorFeedSwitcher';
-import { formatCompactNumber, getXMonitorData } from '@/lib/x-monitor';
+import { formatCompactNumber, getXMonitorData, xMonitorHealthMessage } from '@/lib/x-monitor';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +19,7 @@ function updatedLabel(value: string | null) {
 
 export default async function XMonitorPage() {
   const data = await getXMonitorData();
+  const healthMessage = xMonitorHealthMessage(data.status);
 
   return (
     <main className="xmon-wrap">
@@ -42,6 +43,10 @@ export default async function XMonitorPage() {
           監視データを取得できませんでした。既存Web機能には影響しません。
           <small>{data.sourceError}</small>
         </div>
+      )}
+
+      {!data.sourceError && healthMessage && (
+        <div className="xmon-alert" role="status">{healthMessage}</div>
       )}
 
       <section className="xmon-summary" aria-label="監視サマリー">

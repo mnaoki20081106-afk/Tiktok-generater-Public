@@ -36,6 +36,7 @@ export interface XMonitorStatus {
   watchlistActive: number;
   observationRecords: number;
   observationPosts: number;
+  collectionError: string | null;
 }
 
 export interface XModelStatus {
@@ -213,6 +214,7 @@ async function fetchEngineJson(path: string): Promise<UnknownRecord> {
 
 function parseStatus(raw: UnknownRecord): XMonitorStatus {
   const observation = record(raw.observation_db);
+  const health = record(raw.collection_health);
   return {
     updatedAt: stringOrNull(raw.updated_at),
     status: stringOrNull(raw.status) || 'unknown',
@@ -222,7 +224,26 @@ function parseStatus(raw: UnknownRecord): XMonitorStatus {
     watchlistActive: numberOrZero(raw.watchlist_active),
     observationRecords: numberOrZero(observation.total),
     observationPosts: numberOrZero(observation.posts),
+    collectionError: stringOrNull(health.error_code),
   };
+}
+
+export function xMonitorHealthMessage(status: Pick<XMonitorStatus, 'status' | 'collectionError'>): string | null {
+  if (status.status === 'success') return null;
+  const code = status.status === 'session_expired' ? 'session_expired' : status.collectionError;
+  const reasons: Record<string, string> = {
+    session_expired: 'Xへの再ログインが必要なため、取得が停止しています。',
+    account_restricted: 'Xアカウントの確認が必要なため、取得が停止しています。',
+    access_denied: 'Xへのアクセスが拒否されています。',
+    rate_limited: 'Xの取得制限に達しました。次回の巡回で再試行します。',
+    schema_changed: 'Xの応答形式の変更を検出しました。取得処理の確認が必要です。',
+    upstream_error: 'X側の一時的なエラーが発生しています。',
+    network_error: 'Xとの通信に失敗しました。次回の巡回で再試行します。',
+  };
+  const reason = (code && reasons[code]) || '監視データの取得を完了できませんでした。';
+  return status.status === 'degraded'
+    ? `一部の取得に失敗しました。${reason} 取得できた投稿のみ更新しています。`
+    : `${reason} 投稿一覧は前回取得したデータです。`;
 }
 
 function parseModel(registry: UnknownRecord, model: UnknownRecord): XModelStatus {

@@ -14,6 +14,8 @@ const runtimeOnly = [
   'data/log/2026-09-22.jsonl',
   'data/notify_state.json',
   'data/training_snapshots.jsonl',
+  'data/training_snapshots/part-000001.jsonl',
+  'data/training_snapshots/part-000123.jsonl',
   'data/training_outcomes.json',
   'data/watchlist.json',
   'data/model_registry.json',

@@ -14,6 +14,12 @@ TikTok風プロフィールページをGoogleアカウントでログインし�
 - 公開ページの「TikTokを開く」ボタンには、管理者が `/admin` で設定した確率でユーザー入力のURLの代わりに「サプライズの当たりURL」(TikTok Liteの招待リンク)が使われることがある。Googleログイン、端末識別Cookie、ブラウザ指紋、秘密鍵付きIPハッシュを照合し、サイト作成者本人からのアクセスは常にユーザー入力のURLへ遷移させる(詳細は下記「サプライズ抽選機能」を参照)。
 - 公開ページが閲覧されるたびに `page_views` テーブルへ1行記録され、サイト作成者は `/dashboard/[id]/analytics` で自分のサイトのPV(ページビュー)・UU(訪問者数)・前週/前月比・日別推移グラフを見られる。管理者は `/admin` でジェネレーター全体の利用状況(登録ユーザー数・作成サイト数・全体PV/UU)を見られる(詳細は下記「アクセス解析」を参照)。
 
+### 本番ドメイン
+
+- 正規の本番URLは **https://post-link.net**。
+- Production のOGP/公開ページ内URLは `lib/site-url.ts` で `post-link.net` に固定し、旧ドメインやVercelの払い出しURLが混ざらないようにする。
+- `NEXT_PUBLIC_SITE_URL` はローカル開発/PreviewでURLを上書きしたい場合に使う。
+
 ### セットアップ
 
 1. Supabaseプロジェクトを作成し、SQL Editorで `supabase/schema.sql` を実行する(`sites` / `known_devices` / `surprise_config` / `page_views` テーブル・RLSポリシー・`site-images` Storageバケットが作成されます)。既存環境を更新する場合は、デプロイ前に `supabase/owner-identity-migration.sql` を1回実行します。
@@ -433,7 +439,7 @@ Universal Link を発火させない。公式の招待リンク（`https://lite.
   - ON … `/tools/link-generator?to=<サニタイズ済みURL>` を出力する(従来どおり)。
   - OFF … サニタイズ処理を通過した直後の直接遷移先URLをそのまま出力する。
 - **OGP**: クッションページのURLをSNS/メッセージアプリでシェアしたときのカード表示は、`page.tsx` の `generateMetadata`(`og:title` / `og:description`)と `opengraph-image.tsx`(1200×630のカード画像を動的生成)で出力する。分岐をサーバー側で行っているのは、JSを実行しないクローラーにもメタタグを見せるため。文言はページ冒頭の `CUSHION_OG_TITLE` / `CUSHION_OG_DESCRIPTION` で変更できる。
-- **必要な環境変数**: `NEXT_PUBLIC_SITE_URL`(og:imageを絶対URLに展開するための本番ドメイン)、`NEXT_PUBLIC_STEALTH_API_HOST`(Stealth APIのURL。未設定なら既定のCloud RunサービスURL)。どちらも `.env.local.example` に記載してある。
+- **必要な環境変数**: `NEXT_PUBLIC_SITE_URL`(ローカル/Previewで公開URLを上書きする場合。Productionの正規URLは`https://post-link.net`)、`NEXT_PUBLIC_STEALTH_API_HOST`(Stealth APIのURL。未設定なら既定のCloud RunサービスURL)。どちらも `.env.local.example` に記載してある。
 
 | ファイル | 役割 |
 | --- | --- |

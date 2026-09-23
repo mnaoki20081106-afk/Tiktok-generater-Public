@@ -6,6 +6,7 @@ const RUNTIME_ONLY_PATTERNS = [
   /^docs\/(hits\.(json|md)|status\.json)$/,
   /^data\/log\/.+$/,
   /^data\/(notify_state\.json|training_snapshots\.jsonl|training_outcomes\.json|watchlist\.json|model_registry\.json)$/,
+  /^data\/training_snapshots\/part-\d{6}\.jsonl$/,
   /^keywords(_combo|_ng)?\.txt$/,
   /^docs\/keywords(_combo|_ng)?\.txt$/,
 ];

@@ -7,6 +7,7 @@ import { resolveDestinationUrl } from '@/lib/surprise';
 import { recordPageView } from '@/lib/analytics';
 import { DEVICE_COOKIE } from '@/lib/device';
 import { hashClientIp } from '@/lib/request-identity';
+import { resolvePublicSiteOrigin } from '@/lib/site-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     );
   }
 
-  const origin = new URL(request.url).origin;
+  const origin = resolvePublicSiteOrigin(request.url);
   const cookieStore = await cookies();
   const deviceId = cookieStore.get(DEVICE_COOKIE)?.value ?? null;
   const ipHash = hashClientIp(request.headers);

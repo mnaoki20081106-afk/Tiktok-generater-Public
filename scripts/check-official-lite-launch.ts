@@ -113,4 +113,23 @@ try {
   globalThis.fetch = savedFetch;
 }
 
-console.log('Official TikTok Lite launch URL: app and store routes preserve the same invite context');
+// TikTok側の一時障害・HTML変更で公式lite_redirectを抽出できない場合でも、
+// 招待導線そのものは失わない。今回ユーザーから提示された実リンク形式を固定する。
+const fallbackShort = 'https://lite.tiktok.com/t/ZS9AsxUWdSgEF-9javb/';
+try {
+  globalThis.fetch = async () => new Response('temporary upstream failure', { status: 503 });
+  const fallback = await generateDestinationUrl(fallbackShort);
+  assert.equal(fallback.url, fallbackShort,
+    'If official launch extraction fails, keep the verified TikTok Lite short invite as the last-resort referral path');
+  assert.equal(detectBuildMode(fallback.url), 'original');
+
+  await assert.rejects(
+    () => generateDestinationUrl(inviteUrl.toString()),
+    /公式|招待LP|分岐リンク|取得でき/,
+    'An expanded invite LP has no recoverable original short URL, so it still fails closed'
+  );
+} finally {
+  globalThis.fetch = savedFetch;
+}
+
+console.log('Official TikTok Lite launch URL: app/store fan-out is preferred; original short invite is retained only as a last resort');

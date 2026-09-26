@@ -21,6 +21,8 @@ inviteUrl.searchParams.set('utm_source', 'copy');
 inviteUrl.searchParams.set('share_type', 'link');
 inviteUrl.searchParams.set('share_position', 'invite_panel');
 inviteUrl.searchParams.set('gameplay', 'scan_code_support');
+// 添付HTMLのog_imageには ~tplv-... が入り、公式lite_redirectでも「~」のまま保持される。
+inviteUrl.searchParams.set('og_image', 'https://example.com/current.png~tplv-current.image');
 
 const query = Object.fromEntries(inviteUrl.searchParams.entries());
 const universalData = {
@@ -50,6 +52,8 @@ const launch = extractOfficialLiteLaunchUrl(html);
 assert.ok(launch, 'official launch URL is extracted');
 assert.equal(validateOfficialLiteLaunchUrl(launch), true);
 assert.equal(isOfficialTikTokLiteLaunchUrl(launch), true);
+assert.match(launch, /current\.png~tplv-current\.image/, 'official outer URL keeps TikTok-style raw ~ encoding');
+assert.doesNotMatch(launch, /current\.png%7Etplv-current\.image/i, 'outer URL must not be reserialized by URLSearchParams');
 assert.equal(detectBuildMode(launch), 'original');
 
 const outer = new URL(launch);

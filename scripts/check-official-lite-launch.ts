@@ -21,9 +21,6 @@ inviteUrl.searchParams.set('utm_source', 'copy');
 inviteUrl.searchParams.set('share_type', 'link');
 inviteUrl.searchParams.set('share_position', 'invite_panel');
 inviteUrl.searchParams.set('gameplay', 'scan_code_support');
-// 添付HTMLのog_imageには ~tplv-... が入り、公式lite_redirectでも「~」のまま保持される。
-inviteUrl.searchParams.set('og_image', 'https://example.com/current.png~tplv-current.image');
-
 const query = Object.fromEntries(inviteUrl.searchParams.entries());
 const universalData = {
   app_context: { href: inviteUrl.toString(), query, wid: '1234567890' },
@@ -52,8 +49,6 @@ const launch = extractOfficialLiteLaunchUrl(html);
 assert.ok(launch, 'official launch URL is extracted');
 assert.equal(validateOfficialLiteLaunchUrl(launch), true);
 assert.equal(isOfficialTikTokLiteLaunchUrl(launch), true);
-assert.match(launch, /current\.png~tplv-current\.image/, 'official outer URL keeps TikTok-style raw ~ encoding');
-assert.doesNotMatch(launch, /current\.png%7Etplv-current\.image/i, 'outer URL must not be reserialized by URLSearchParams');
 assert.equal(detectBuildMode(launch), 'original');
 
 const outer = new URL(launch);
@@ -83,6 +78,25 @@ const v2OnlyLaunch = extractOfficialLiteLaunchUrl(v2OnlyHtml);
 assert.ok(v2OnlyLaunch, 'v2/share/page alone can rebuild the official Lite launch');
 assert.equal(validateOfficialLiteLaunchUrl(v2OnlyLaunch), true);
 assert.equal(new URL(new URL(v2OnlyLaunch).searchParams.get('short_dl')!).searchParams.get('af_adset'), 'OFFICIAL_ADSET');
+
+// 添付HTMLのapp_context.hrefは画像URLの "~tplv-..." を生の "~" のまま持つ。
+// URLSearchParamsで作るテストデータとはシリアライズが違うため、実HTMLと同じraw表現を
+// 明示的に作り、lite_redirectの外側まで1バイト表現を保持できることを確認する。
+const rawInviteHref = inviteUrl.toString()
+  + '&og_image=https%3A%2F%2Fexample.com%2Fcurrent.png~tplv-current.image';
+const rawUniversalData = structuredClone(universalData) as Record<string, any>;
+rawUniversalData.app_context.href = rawInviteHref;
+rawUniversalData.app_context.query = Object.fromEntries(new URL(rawInviteHref).searchParams.entries());
+const rawStrategy = rawUniversalData['tiktok.share.api/tiktok/linker/component/strategy/get/v1/'].data.strategy;
+const rawRoma = rawStrategy.wrappers.find((item: any) => item.name === 'wrapper_incentive_share_jump_to_roma');
+rawRoma.wrapper_url.url_schemes = [
+  `snssdk473824://roma_redirect/?params_url=${encodeURIComponent(rawInviteHref)}&spark_page={{url}}`,
+];
+const rawHtml = `<!doctype html><script id="universal-data" type="application/json">${JSON.stringify(rawUniversalData)}</script>`;
+const rawLaunch = extractOfficialLiteLaunchUrl(rawHtml);
+assert.ok(rawLaunch);
+assert.match(rawLaunch, /current\.png~tplv-current\.image/, 'TikTok-style raw ~ encoding is preserved');
+assert.doesNotMatch(rawLaunch, /current\.png%7Etplv-current\.image/i, 'outer URL is not reserialized by URLSearchParams');
 
 // 旧HTML(v1/coin/share_page)も再保存・過去データ用に読み続ける。
 const legacyUniversalData = structuredClone(universalData) as Record<string, unknown>;

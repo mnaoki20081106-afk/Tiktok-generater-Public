@@ -13,6 +13,17 @@ const ONELINK_PATH = '/4P4E';
 const LITE_SCHEME = 'snssdk473824:';
 const WRAPPER_NAME = 'wrapper_incentive_share_jump_to_roma';
 
+/**
+ * 招待コードが入るshare/page APIはTikTok側で世代更新される。
+ * 2026-09-26に採取した実HTMLは v2/share/page、
+ * それ以前に採取したHTMLは v1/coin/share_page だった。
+ * 新しい方を優先しつつ旧形式も後方互換で読む。
+ */
+const SHARE_PAGE_KEYS = [
+  'tiktok.ug_incentive.client_api/tiktok/incentive/v2/share/page',
+  'tiktok.ug_incentive.client_api/tiktok/incentive/v1/coin/share_page',
+] as const;
+
 type JsonRecord = Record<string, unknown>;
 
 function record(value: unknown): JsonRecord | null {
@@ -146,10 +157,14 @@ export function buildOfficialLiteLaunchUrl(data: JsonRecord): string | null {
   const fallback = parseUrl(fallbackTemplate.replaceAll('{{schema}}', ''));
   if (!fallback || fallback.protocol !== 'https:' || fallback.hostname !== ONELINK_HOST || fallback.pathname !== ONELINK_PATH) return null;
 
-  const shareRoot = record(data['tiktok.ug_incentive.client_api/tiktok/incentive/v1/coin/share_page']);
-  const shareResponse = record(shareRoot?.data);
-  const sharePayload = record(shareResponse?.data);
-  const inviteCode = stringValue(sharePayload?.invite_code);
+  let inviteCode: string | null = null;
+  for (const key of SHARE_PAGE_KEYS) {
+    const shareRoot = record(data[key]);
+    const shareResponse = record(shareRoot?.data);
+    const sharePayload = record(shareResponse?.data);
+    inviteCode = stringValue(sharePayload?.invite_code);
+    if (inviteCode) break;
+  }
   if (!inviteCode) return null;
 
   fallback.searchParams.set('pid', stringValue(query.inc_pid) || stringValue(query.media_source) || '');
@@ -213,6 +228,15 @@ export function validateOfficialLiteLaunchUrl(raw: string): boolean {
   if (!redirect.searchParams.get('u_code') || redirect.searchParams.get('u_code') !== invite.searchParams.get('u_code')) return false;
   if (!redirect.searchParams.get('share_page_data') || redirect.searchParams.get('share_page_data') !== invite.searchParams.get('share_page_data')) return false;
   const wid = redirect.searchParams.get('wid');
-  return !!wid && /^\d+$/.test(wid) && shortDl.searchParams.get('wid') === wid
-    && !!shortDl.searchParams.get('pid') && !!shortDl.searchParams.get('af_adset');
+  if (!wid || !/^\d+$/.test(wid) || shortDl.searchParams.get('wid') !== wid) return false;
+
+  // 添付された実HTMLでは、未インストール時のOneLinkも同じ紹介文脈を持つ。
+  // widだけでなく pid/media_source までredirect_url側と一致することを確認し、
+  // 別キャンペーンのOneLinkを誤って採用しない。
+  const redirectPid = redirect.searchParams.get('inc_pid') || redirect.searchParams.get('media_source');
+  const redirectMediaSource = redirect.searchParams.get('media_source');
+  if (!redirectPid || shortDl.searchParams.get('pid') !== redirectPid) return false;
+  if (redirectMediaSource && shortDl.searchParams.get('media_source') !== redirectMediaSource) return false;
+
+  return !!shortDl.searchParams.get('af_adset');
 }

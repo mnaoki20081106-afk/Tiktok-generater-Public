@@ -890,7 +890,10 @@ async function readLimitedHtml(res: Response): Promise<string> {
  * ブラウザではSSRF対策済みの同一オリジンAPIを経由する。
  */
 export async function resolveOfficialLiteInviteUrl(raw: string): Promise<OfficialLiteInviteResolution> {
-  if (!isTikTokLiteInviteShortLink(raw)) throw new Error('TikTok Liteの公式短縮招待リンクではありません。');
+  const input = parseHttpUrl(raw);
+  if (!input || (!isTikTokLiteInviteShortLink(raw) && !isInviteLpUrl(input))) {
+    throw new Error('TikTok Liteの公式短縮招待リンクまたは招待LPではありません。');
+  }
 
   if (typeof window !== 'undefined') {
     const res = await fetch(EXPAND_ENDPOINT, {
@@ -906,9 +909,11 @@ export async function resolveOfficialLiteInviteUrl(raw: string): Promise<Officia
     return { landingUrl: data.url, launchUrl: data.launchUrl };
   }
 
-  const landingUrl = await followRedirects(raw.trim());
+  const landingUrl = isTikTokLiteInviteShortLink(raw)
+    ? await followRedirects(raw.trim())
+    : input.toString();
   const landing = parseHttpUrl(landingUrl);
-  if (!landing || !isInviteLpUrl(landing)) throw new Error('短縮リンクの着地先がTikTokの招待ページではありません。');
+  if (!landing || !isInviteLpUrl(landing)) throw new Error('着地先がTikTokの招待ページではありません。');
 
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), EXPAND_TIMEOUT_MS) : null;
@@ -1615,6 +1620,17 @@ export async function generateDestinationUrl(
         // の招待LPが表示されてしまう。公式 lite_redirect を抽出できた場合だけ保存する。
         throw new Error(
           'TikTok公式のアプリ/ストア分岐リンクを取得できませんでした。招待LPを表示しない条件を守るため、このリンクは保存しません。' +
+          (e instanceof Error ? ' (' + e.message + ')' : '')
+        );
+      }
+    }
+    if (isInviteLpUrl(input)) {
+      try {
+        const resolved = await resolveOfficialLiteInviteUrl(rawUrl);
+        return { url: resolved.launchUrl, mode: 'original', removed: [], liteForced: false };
+      } catch (e) {
+        throw new Error(
+          'TikTokの招待LPを直接の遷移先にはできません。公式のアプリ/ストア分岐リンクを取得できなかったため保存しません。' +
           (e instanceof Error ? ' (' + e.message + ')' : '')
         );
       }

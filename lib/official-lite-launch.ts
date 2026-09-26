@@ -234,18 +234,21 @@ export function extractOfficialLiteLaunchUrl(html: string): string | null {
       // redirect_url と short_dl の両方へ同じ値で載っている。
       // wid/pidだけ一致していて別キャンペーンのOneLinkが混ざる事故を避けるため、
       // universal-data側に値があるときは完成済みhref側も一致必須にする。
-      for (const key of ['gd_label', 'ug_launch_category', 'incentive_redirect'] as const) {
-        const expected = stringValue(query[key]);
-        if (expected && (redirect.searchParams.get(key) !== expected || shortDl.searchParams.get(key) !== expected)) {
-          continue;
-        }
-      }
+      const dualContextMismatch = (['gd_label', 'ug_launch_category', 'incentive_redirect'] as const)
+        .some(key => {
+          const expected = stringValue(query[key]);
+          return !!expected
+            && (redirect.searchParams.get(key) !== expected || shortDl.searchParams.get(key) !== expected);
+        });
+      if (dualContextMismatch) continue;
 
       // redirect_urlにだけ載る紹介文脈も、同じLPのuniversal-dataと一致するか確認する。
-      for (const key of ['gameplay', 'share_enter_from', 'utm_source'] as const) {
-        const expected = stringValue(query[key]);
-        if (expected && redirect.searchParams.get(key) !== expected) continue;
-      }
+      const redirectContextMismatch = (['gameplay', 'share_enter_from', 'utm_source'] as const)
+        .some(key => {
+          const expected = stringValue(query[key]);
+          return !!expected && redirect.searchParams.get(key) !== expected;
+        });
+      if (redirectContextMismatch) continue;
 
       const inviteCode = data ? inviteCodeOf(data) : null;
       if (inviteCode && shortDl.searchParams.get('af_adset') !== inviteCode) continue;

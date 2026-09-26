@@ -127,6 +127,18 @@ const wrongMediaShortDl = new URL(wrongMediaSource.searchParams.get('short_dl')!
 wrongMediaShortDl.searchParams.set('media_source', 'different_campaign');
 wrongMediaSource.searchParams.set('short_dl', wrongMediaShortDl.toString());
 assert.equal(validateOfficialLiteLaunchUrl(wrongMediaSource.toString()), false, 'mismatched media_source is rejected');
+
+for (const key of ['gd_label', 'ug_launch_category', 'incentive_redirect'] as const) {
+  const tamperedContext: URL = new URL(launch!);
+  const tamperedContextShortDl: URL = new URL(tamperedContext.searchParams.get('short_dl')!);
+  tamperedContextShortDl.searchParams.set(key, 'different_context');
+  tamperedContext.searchParams.set('short_dl', tamperedContextShortDl.toString());
+  assert.equal(
+    validateOfficialLiteLaunchUrl(tamperedContext.toString()),
+    false,
+    `mismatched ${key} between app and store routes is rejected`
+  );
+}
 assert.equal(validateOfficialLiteLaunchUrl(launch.replace('app-va.tiktokv.com', 'app-va.tiktokv.com.evil.example')), false);
 assert.equal(extractOfficialLiteLaunchUrl('<script id="universal-data">{bad json}</script>'), null);
 
@@ -160,6 +172,21 @@ assert.equal(
   extractOfficialLiteLaunchUrl(html + mixedAnchor),
   launch,
   'a rendered CTA with a mismatched invite code is ignored and rebuilt from matching universal-data'
+);
+
+// app側だけの文脈も、同じHTMLのuniversal-dataと一致しない完成済みhrefは採用しない。
+// URL単体としては有効でも、別のshare文脈が混ざったCTAを公開しないため。
+const wrongGameplayOuter = new URL(renderedLaunch);
+const wrongGameplayRedirect = new URL(wrongGameplayOuter.searchParams.get('redirect_url')!);
+wrongGameplayRedirect.searchParams.set('gameplay', 'different_gameplay');
+wrongGameplayOuter.searchParams.set('redirect_url', wrongGameplayRedirect.toString());
+assert.equal(validateOfficialLiteLaunchUrl(wrongGameplayOuter.toString()), true,
+  'gameplay is page-context validation, not a standalone lite_redirect structural requirement');
+const wrongGameplayAnchor = `<a href="${wrongGameplayOuter.toString().replaceAll('&', '&amp;')}">Open</a>`;
+assert.equal(
+  extractOfficialLiteLaunchUrl(html + wrongGameplayAnchor),
+  launch,
+  'a rendered CTA with mismatched page campaign context is ignored and rebuilt from universal-data'
 );
 
 const savedFetch = globalThis.fetch;

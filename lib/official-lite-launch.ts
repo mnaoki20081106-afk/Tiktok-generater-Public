@@ -181,11 +181,14 @@ export function buildOfficialLiteLaunchUrl(data: JsonRecord): string | null {
   fallback.searchParams.set('af_c_id', '');
   fallback.searchParams.set('af_adset_id', '');
 
-  const outer = new URL(LAUNCH_PATH, LAUNCH_ORIGIN);
-  outer.searchParams.set('redirect_url', redirectUrl);
-  outer.searchParams.set('short_dl', fallback.toString());
-  outer.searchParams.set('decode_once', '1');
-  const result = outer.toString();
+  // TikTokの実HTMLは外側lite_redirectもencodeURIComponent相当で組み立てている。
+  // URLSearchParamsで再シリアライズすると、nested params_url内の「~」が「%7E」に
+  // 変わるなどバイト表現だけがずれる。意味は同じでも、公式hrefを可能な限り
+  // 1バイト単位で再現するため外側もraw appendで組み立てる。
+  let result = new URL(LAUNCH_PATH, LAUNCH_ORIGIN).toString();
+  result = appendRawParam(result, 'redirect_url', redirectUrl);
+  result = appendRawParam(result, 'short_dl', fallback.toString());
+  result = appendRawParam(result, 'decode_once', '1');
   return validateOfficialLiteLaunchUrl(result) ? result : null;
 }
 

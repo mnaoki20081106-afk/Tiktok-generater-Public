@@ -6,7 +6,8 @@ import {
 } from '../lib/official-lite-launch.ts';
 import { detectBuildMode, isOfficialTikTokLiteLaunchUrl, generateDestinationUrl } from '../lib/link-generator.ts';
 
-const sharePageData = 'eyJpbnZpdGUiOiJhK2IvPSJ9';
+// 実HTMLのshare_page_dataはURL上の「+」がURLSearchParamsでは空白として見える。
+const sharePageData = 'MIIB current+shape/test=='.replace('+', ' ');
 const inviteUrl = new URL('https://www.tiktok.com/ug/incentive/share/pro_scan_code');
 inviteUrl.searchParams.set('u_code', 'TESTCODE');
 inviteUrl.searchParams.set('share_page_data', sharePageData);

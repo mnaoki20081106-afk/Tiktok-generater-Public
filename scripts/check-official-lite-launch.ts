@@ -154,6 +154,26 @@ assert.equal(extractUniversalData(html.replace('id="universal-data"', 'data-id="
 const renderedLaunch = launch + '&official_extra=keep%2fme';
 const anchor = `<a class="matrix-smart-wrapper" href="${renderedLaunch.replaceAll('&', '&amp;')}">Open</a>`;
 assert.equal(extractOfficialLiteLaunchUrl(html + anchor), renderedLaunch);
+
+// 実HTMLでは apple-itunes-app に iOSの公式App Store IDがあり、aid=473824は
+// 日本向けTikTok Lite。未インストール時はOneLinkの紹介パラメータを保持したまま
+// af_ios_url / af_android_url だけを追加し、TikTok側テンプレートのLPフォールバックを上書きする。
+const storeUniversalData = structuredClone(universalData);
+storeUniversalData.app_context.query.aid = '473824';
+const storeHtml = `<!doctype html><meta name="apple-itunes-app" content="app-id=6447160980, app-argument=snssdk473824://webview">
+<script id="universal-data" type="application/json">${JSON.stringify(storeUniversalData)}</script>${anchor}`;
+const storeLaunch = extractOfficialLiteLaunchUrl(storeHtml);
+assert.ok(storeLaunch, 'current invite HTML can add direct store fallbacks');
+const storeShortDl = new URL(new URL(storeLaunch).searchParams.get('short_dl')!);
+assert.equal(storeShortDl.searchParams.get('af_ios_url'), 'https://apps.apple.com/app/id6447160980');
+assert.equal(
+  storeShortDl.searchParams.get('af_android_url'),
+  'https://play.google.com/store/apps/details?id=com.ss.android.ugc.tiktok.lite'
+);
+assert.equal(storeShortDl.searchParams.get('wid'), '1234567890', 'store override preserves inviter wid');
+assert.equal(storeShortDl.searchParams.get('af_adset'), 'OFFICIAL_ADSET', 'store override preserves invite code');
+assert.equal(storeShortDl.searchParams.get('pid'), 'coin_referral_onelink_scan_code_support_mentor');
+assert.match(storeLaunch, /official_extra=keep%2fme$/, 'outer unknown TikTok parameters stay byte-preserved');
 assert.equal(extractOfficialLiteLaunchUrl(anchor), renderedLaunch);
 assert.equal(extractOfficialLiteLaunchUrl(anchor.replaceAll('&amp;', '&#38;')), renderedLaunch);
 assert.equal(extractOfficialLiteLaunchUrl(`<!--${anchor}-->`), null);

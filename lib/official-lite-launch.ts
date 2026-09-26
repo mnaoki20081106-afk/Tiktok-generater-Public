@@ -12,6 +12,9 @@ const ONELINK_HOST = 'snssdk473824.onelink.me';
 const ONELINK_PATH = '/4P4E';
 const LITE_SCHEME = 'snssdk473824:';
 const WRAPPER_NAME = 'wrapper_incentive_share_jump_to_roma';
+const TIKTOK_LITE_AID = '473824';
+const IOS_STORE_FALLBACK = 'https://apps.apple.com/app/id6447160980';
+const ANDROID_STORE_FALLBACK = 'https://play.google.com/store/apps/details?id=com.ss.android.ugc.tiktok.lite';
 
 /**
  * 招待コードが入るshare/page APIはTikTok側で世代更新される。
@@ -86,6 +89,73 @@ function decodeHtmlAttribute(value: string): string {
     const code = Number.parseInt(entity.slice(hex ? 3 : 2, -1), hex ? 16 : 10);
     return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : entity;
   });
+}
+
+/** クエリの他のバイト表現を変えず、指定した1パラメータだけ差し替える。 */
+function replaceRawQueryParam(raw: string, key: string, value: string): string {
+  const hashAt = raw.indexOf('#');
+  const hash = hashAt >= 0 ? raw.slice(hashAt) : '';
+  const withoutHash = hashAt >= 0 ? raw.slice(0, hashAt) : raw;
+  const qAt = withoutHash.indexOf('?');
+  if (qAt < 0) return raw;
+
+  const head = withoutHash.slice(0, qAt);
+  const parts = withoutHash.slice(qAt + 1).split('&');
+  let replaced = false;
+  const next = parts.map(part => {
+    const eq = part.indexOf('=');
+    const rawKey = eq >= 0 ? part.slice(0, eq) : part;
+    let decoded = rawKey;
+    try { decoded = decodeURIComponent(rawKey); } catch { /* keep raw */ }
+    if (decoded !== key) return part;
+    replaced = true;
+    return rawKey + '=' + encodeURIComponent(value);
+  });
+  if (!replaced) next.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
+  return head + '?' + next.join('&') + hash;
+}
+
+function appleStoreUrlFromHtml(html: string): string | null {
+  for (const match of html.matchAll(/<meta\b(?:"[^"]*"|'[^']*'|[^'">])*>/gi)) {
+    if ((htmlAttribute(match[0], 'name') || '').toLowerCase() !== 'apple-itunes-app') continue;
+    const content = decodeHtmlAttribute(htmlAttribute(match[0], 'content') || '');
+    const appId = /(?:^|[,\s])app-id=(\d+)/i.exec(content)?.[1] || '';
+    if (appId === '6447160980') return IOS_STORE_FALLBACK;
+  }
+  return null;
+}
+
+/**
+ * TikTok公式OneLinkのクリック/紹介パラメータはそのまま残し、
+ * 未インストール時の最終到達先だけ公式ストアへ明示する。
+ *
+ * AppsFlyerの af_ios_url / af_android_url はOneLinkテンプレートの
+ * 「アプリ未インストール時」の遷移先をリンク単位で上書きする。
+ */
+function withDirectStoreFallbacks(raw: string, html: string, data: JsonRecord | null): string {
+  const outer = parseUrl(raw);
+  if (!outer || !validateOfficialLiteLaunchUrl(raw)) return raw;
+  const shortDl = parseUrl(outer.searchParams.get('short_dl'));
+  if (!shortDl) return raw;
+
+  const query = record(record(data?.app_context)?.query);
+  const aid = stringValue(query?.aid);
+  const iosStore = appleStoreUrlFromHtml(html) || (aid === TIKTOK_LITE_AID ? IOS_STORE_FALLBACK : null);
+  const androidStore = aid === TIKTOK_LITE_AID ? ANDROID_STORE_FALLBACK : null;
+
+  let changed = false;
+  if (iosStore && !shortDl.searchParams.has('af_ios_url')) {
+    shortDl.searchParams.set('af_ios_url', iosStore);
+    changed = true;
+  }
+  if (androidStore && !shortDl.searchParams.has('af_android_url')) {
+    shortDl.searchParams.set('af_android_url', androidStore);
+    changed = true;
+  }
+  if (!changed) return raw;
+
+  // redirect_urlや外側の未知パラメータを再シリアライズしない。
+  return replaceRawQueryParam(raw, 'short_dl', shortDl.toString());
 }
 
 /** 公式LPのHTMLから universal-data JSONを読み出す。 */
@@ -253,9 +323,10 @@ export function extractOfficialLiteLaunchUrl(html: string): string | null {
       const inviteCode = data ? inviteCodeOf(data) : null;
       if (inviteCode && shortDl.searchParams.get('af_adset') !== inviteCode) continue;
     }
-    return candidate;
+    return withDirectStoreFallbacks(candidate, html, data);
   }
-  return data ? buildOfficialLiteLaunchUrl(data) : null;
+  const rebuilt = data ? buildOfficialLiteLaunchUrl(data) : null;
+  return rebuilt ? withDirectStoreFallbacks(rebuilt, html, data) : null;
 }
 
 /** 保存済みURLを再保存する際にも使う、公式 lite_redirect の厳格な検証。 */

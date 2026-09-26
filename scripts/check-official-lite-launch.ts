@@ -11,15 +11,15 @@ const inviteUrl = new URL('https://www.tiktok.com/ug/incentive/share/pro_scan_co
 inviteUrl.searchParams.set('u_code', 'TESTCODE');
 inviteUrl.searchParams.set('share_page_data', sharePageData);
 inviteUrl.searchParams.set('inc_target_url', 'aweme://roma_redirect/?spark_page=scan_code');
-inviteUrl.searchParams.set('inc_pid', 'coin_referral');
-inviteUrl.searchParams.set('media_source', 'coin_referral');
-inviteUrl.searchParams.set('ug_launch_category', 'incentive');
-inviteUrl.searchParams.set('gd_label', 'test_label');
-inviteUrl.searchParams.set('share_enter_from', 'scan_code');
+inviteUrl.searchParams.set('inc_pid', 'coin_referral_onelink_scan_code_support_mentor');
+inviteUrl.searchParams.set('media_source', 'coin_referral_onelink_scan_code_support_mentor');
+inviteUrl.searchParams.set('ug_launch_category', 'referral');
+inviteUrl.searchParams.set('gd_label', 'click_wap_coin_scan_code_support_mentor');
+inviteUrl.searchParams.set('share_enter_from', 'bottom_tab');
 inviteUrl.searchParams.set('utm_source', 'copy');
-inviteUrl.searchParams.set('share_type', 'copy');
-inviteUrl.searchParams.set('share_position', 'button');
-inviteUrl.searchParams.set('gameplay', 'referral');
+inviteUrl.searchParams.set('share_type', 'link');
+inviteUrl.searchParams.set('share_position', 'invite_panel');
+inviteUrl.searchParams.set('gameplay', 'scan_code_support');
 
 const query = Object.fromEntries(inviteUrl.searchParams.entries());
 const universalData = {
@@ -38,7 +38,8 @@ const universalData = {
       },
     },
   },
-  'tiktok.ug_incentive.client_api/tiktok/incentive/v1/coin/share_page': {
+  // 2026-09-26添付HTMLの現行形式。
+  'tiktok.ug_incentive.client_api/tiktok/incentive/v2/share/page': {
     data: { data: { invite_code: 'OFFICIAL_ADSET' } },
   },
 };
@@ -66,14 +67,46 @@ assert.equal(redirect.searchParams.get('wid'), '1234567890');
 assert.equal(shortDl.hostname, 'snssdk473824.onelink.me');
 assert.equal(shortDl.pathname, '/4P4E');
 assert.equal(shortDl.searchParams.get('wid'), '1234567890');
-assert.equal(shortDl.searchParams.get('pid'), 'coin_referral');
+assert.equal(shortDl.searchParams.get('pid'), 'coin_referral_onelink_scan_code_support_mentor');
 assert.equal(shortDl.searchParams.get('af_adset'), 'OFFICIAL_ADSET');
+assert.equal(shortDl.searchParams.get('media_source'), 'coin_referral_onelink_scan_code_support_mentor');
+
+// 現行HTMLではshare/pageがv2。描画済み<a>が消えてもuniversal-dataだけで
+// 同じLite/ストア分岐を復元できることを固定する。
+const v2OnlyHtml = `<!doctype html><script id="universal-data" type="application/json">${JSON.stringify(universalData)}</script>`;
+const v2OnlyLaunch = extractOfficialLiteLaunchUrl(v2OnlyHtml);
+assert.ok(v2OnlyLaunch, 'v2/share/page alone can rebuild the official Lite launch');
+assert.equal(validateOfficialLiteLaunchUrl(v2OnlyLaunch), true);
+assert.equal(new URL(new URL(v2OnlyLaunch).searchParams.get('short_dl')!).searchParams.get('af_adset'), 'OFFICIAL_ADSET');
+
+// 旧HTML(v1/coin/share_page)も再保存・過去データ用に読み続ける。
+const legacyUniversalData = structuredClone(universalData) as Record<string, unknown>;
+delete legacyUniversalData['tiktok.ug_incentive.client_api/tiktok/incentive/v2/share/page'];
+legacyUniversalData['tiktok.ug_incentive.client_api/tiktok/incentive/v1/coin/share_page'] = {
+  data: { data: { invite_code: 'LEGACY_ADSET' } },
+};
+const legacyHtml = `<!doctype html><script id="universal-data" type="application/json">${JSON.stringify(legacyUniversalData)}</script>`;
+const legacyLaunch = extractOfficialLiteLaunchUrl(legacyHtml);
+assert.ok(legacyLaunch, 'legacy v1/coin/share_page remains supported');
+assert.equal(new URL(new URL(legacyLaunch).searchParams.get('short_dl')!).searchParams.get('af_adset'), 'LEGACY_ADSET');
 
 const tampered = new URL(launch);
 const tamperedShortDl = new URL(tampered.searchParams.get('short_dl')!);
 tamperedShortDl.searchParams.set('wid', '999');
 tampered.searchParams.set('short_dl', tamperedShortDl.toString());
 assert.equal(validateOfficialLiteLaunchUrl(tampered.toString()), false, 'mismatched attribution IDs are rejected');
+
+const wrongPid = new URL(launch);
+const wrongPidShortDl = new URL(wrongPid.searchParams.get('short_dl')!);
+wrongPidShortDl.searchParams.set('pid', 'different_campaign');
+wrongPid.searchParams.set('short_dl', wrongPidShortDl.toString());
+assert.equal(validateOfficialLiteLaunchUrl(wrongPid.toString()), false, 'mismatched referral pid is rejected');
+
+const wrongMediaSource = new URL(launch);
+const wrongMediaShortDl = new URL(wrongMediaSource.searchParams.get('short_dl')!);
+wrongMediaShortDl.searchParams.set('media_source', 'different_campaign');
+wrongMediaSource.searchParams.set('short_dl', wrongMediaShortDl.toString());
+assert.equal(validateOfficialLiteLaunchUrl(wrongMediaSource.toString()), false, 'mismatched media_source is rejected');
 assert.equal(validateOfficialLiteLaunchUrl(launch.replace('app-va.tiktokv.com', 'app-va.tiktokv.com.evil.example')), false);
 assert.equal(extractOfficialLiteLaunchUrl('<script id="universal-data">{bad json}</script>'), null);
 

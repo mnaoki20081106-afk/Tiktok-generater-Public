@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { followRedirects, isTikTokLiteInviteShortLink, resolveOfficialLiteInviteUrl } from '@/lib/link-generator';
+import { followRedirects, isInviteLpUrl, isTikTokLiteInviteShortLink, parseHttpUrl, resolveOfficialLiteInviteUrl } from '@/lib/link-generator';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,14 +28,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (body?.includeLaunchUrl === true && isTikTokLiteInviteShortLink(url)) {
+    const parsed = parseHttpUrl(url);
+    if (
+      body?.includeLaunchUrl === true &&
+      (isTikTokLiteInviteShortLink(url) || (!!parsed && isInviteLpUrl(parsed)))
+    ) {
       const resolved = await resolveOfficialLiteInviteUrl(url);
       return NextResponse.json({ url: resolved.landingUrl, launchUrl: resolved.launchUrl });
     }
     return NextResponse.json({ url: await followRedirects(url) });
   } catch (e) {
-    // 呼び出し側で失敗を判別する。検証済みの公式短縮リンクに限り、
-    // generateDestinationUrlは入力URLを保持して保存を継続する。
+    // 呼び出し側で失敗を判別する。招待LPを見せない要件のため、
+    // 公式分岐URLを抽出できない短縮招待URL/招待LPは保存側で拒否する。
     return NextResponse.json({ url: null, error: e instanceof Error ? e.message : String(e) });
   }
 }

@@ -890,7 +890,10 @@ async function readLimitedHtml(res: Response): Promise<string> {
  * ブラウザではSSRF対策済みの同一オリジンAPIを経由する。
  */
 export async function resolveOfficialLiteInviteUrl(raw: string): Promise<OfficialLiteInviteResolution> {
-  if (!isTikTokLiteInviteShortLink(raw)) throw new Error('TikTok Liteの公式短縮招待リンクではありません。');
+  const input = parseHttpUrl(raw);
+  if (!input || (!isTikTokLiteInviteShortLink(raw) && !isInviteLpUrl(input))) {
+    throw new Error('TikTok Liteの公式短縮招待リンクまたは招待LPではありません。');
+  }
 
   if (typeof window !== 'undefined') {
     const res = await fetch(EXPAND_ENDPOINT, {
@@ -906,9 +909,11 @@ export async function resolveOfficialLiteInviteUrl(raw: string): Promise<Officia
     return { landingUrl: data.url, launchUrl: data.launchUrl };
   }
 
-  const landingUrl = await followRedirects(raw.trim());
+  const landingUrl = isTikTokLiteInviteShortLink(raw)
+    ? await followRedirects(raw.trim())
+    : input.toString();
   const landing = parseHttpUrl(landingUrl);
-  if (!landing || !isInviteLpUrl(landing)) throw new Error('短縮リンクの着地先がTikTokの招待ページではありません。');
+  if (!landing || !isInviteLpUrl(landing)) throw new Error('着地先がTikTokの招待ページではありません。');
 
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), EXPAND_TIMEOUT_MS) : null;
@@ -1567,9 +1572,9 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
  *  4. その他の短縮リンクは自前で展開し、必要な場合だけStealth APIで抽出する
  *
  * 展開・サニタイズのいずれかに失敗した場合は例外を投げる(呼び出し側で保存を中断する)。
- * ただし、厳格に検証済みの TikTok Lite 公式短縮招待リンクは例外とする。
- * TikTok側のHTML変更や一時的な取得失敗で公式分岐URLを抽出できない場合も、
- * 推測したURLは作らず、入力された公式短縮URLそのものを保持する。
+ * サイト編集では「招待LPを絶対に表示しない」ことを優先するため、
+ * TikTok公式の app/store 分岐URL(lite_redirect)を取得できない場合に、
+ * 元の lite.tiktok.com/t/... や招待LPへフォールバックしてはいけない。
  */
 /** Known TikTok Lite OneLink host; this identifies the route, not referral eligibility. */
 export function isTikTokLiteOneLink(raw: string): boolean {
@@ -1610,11 +1615,24 @@ export async function generateDestinationUrl(
       try {
         const resolved = await resolveOfficialLiteInviteUrl(rawUrl);
         return { url: resolved.launchUrl, mode: 'original', removed: [], liteForced: false };
-      } catch {
-        // lite.tiktok.com/t/... 自体がTikTok公式の招待導線であり、アプリ／ストア分岐も
-        // TikTok側が行う。LP内部データを取得できないことを理由に公開を妨げない。
-        // 招待パラメータを推測・再構築せず、ユーザーが入力した公式URLをそのまま使う。
-        return { url: rawUrl.trim(), mode: 'original', removed: [], liteForced: false };
+      } catch (e) {
+        // 元の短縮URLへ戻すと、閲覧者のブラウザに「○○さんが協力を求めています！」
+        // の招待LPが表示されてしまう。公式 lite_redirect を抽出できた場合だけ保存する。
+        throw new Error(
+          'TikTok公式のアプリ/ストア分岐リンクを取得できませんでした。招待LPを表示しない条件を守るため、このリンクは保存しません。' +
+          (e instanceof Error ? ' (' + e.message + ')' : '')
+        );
+      }
+    }
+    if (isInviteLpUrl(input)) {
+      try {
+        const resolved = await resolveOfficialLiteInviteUrl(rawUrl);
+        return { url: resolved.launchUrl, mode: 'original', removed: [], liteForced: false };
+      } catch (e) {
+        throw new Error(
+          'TikTokの招待LPを直接の遷移先にはできません。公式のアプリ/ストア分岐リンクを取得できなかったため保存しません。' +
+          (e instanceof Error ? ' (' + e.message + ')' : '')
+        );
       }
     }
   }

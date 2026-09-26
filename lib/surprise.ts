@@ -1,5 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { Site } from '@/lib/types';
+import {
+  generateDestinationUrl,
+  isInviteLpUrl,
+  isTikTokLiteInviteShortLink,
+  parseHttpUrl,
+} from '@/lib/link-generator';
 
 /**
  * 公開ページの遷移先URLを決定する。
@@ -20,6 +26,27 @@ type LookupResult = { data: Record<string, unknown> | null; error: { message: st
 
 async function lookupOne(query: PromiseLike<LookupResult>): Promise<LookupResult> {
   return await query;
+}
+
+/**
+ * 公開ページへ渡す直前の最終ガード。
+ * 古いDBや管理設定に lite.tiktok.com/t/... / 招待LP が残っていても、
+ * 閲覧者のブラウザにはそのLPを絶対に渡さない。
+ */
+export async function normalizePublicDestinationUrl(raw: string): Promise<string> {
+  const parsed = parseHttpUrl(raw);
+  if (!parsed) return '#';
+  if (!isTikTokLiteInviteShortLink(raw) && !isInviteLpUrl(parsed)) return parsed.toString();
+
+  try {
+    const built = await generateDestinationUrl(raw);
+    const out = parseHttpUrl(built.url);
+    if (!out || isTikTokLiteInviteShortLink(built.url) || isInviteLpUrl(out)) return '#';
+    return built.url;
+  } catch {
+    // 公式 lite_redirect を取得できないときにLPへフォールバックしない。
+    return '#';
+  }
 }
 
 /**
@@ -71,20 +98,20 @@ export async function isSiteOwnerVisitor(site: Site, identity: VisitorIdentity):
 export async function resolveDestinationUrl(site: Site, identity: VisitorIdentity): Promise<string> {
   const realUrl = (site.content_data?.tiktokUrl as string) || '#';
 
-  if (await isSiteOwnerVisitor(site, identity)) return realUrl;
+  if (await isSiteOwnerVisitor(site, identity)) return await normalizePublicDestinationUrl(realUrl);
 
   const admin = createAdminClient();
   const { data: config, error: configError } = await admin.from('surprise_config').select('*').eq('id', 1).maybeSingle();
-  if (configError || !config || !config.enabled) return realUrl;
+  if (configError || !config || !config.enabled) return await normalizePublicDestinationUrl(realUrl);
 
   // 解決済みURLがない旧設定でも、入力された当選リンクで抽選を行う。
   // HTMLの解析に失敗しただけで、抽選を無効にしない。
   const prizeUrl = config.prize_url_optimized || config.prize_url;
-  if (!prizeUrl) return realUrl;
+  if (!prizeUrl) return await normalizePublicDestinationUrl(realUrl);
 
   const probability = Math.min(100, Math.max(0, Number(config.probability) || 0));
   const roll = Math.random() * 100;
-  return roll < probability ? prizeUrl : realUrl;
+  return await normalizePublicDestinationUrl(roll < probability ? prizeUrl : realUrl);
 }
 
 /**
@@ -99,5 +126,7 @@ export async function resolveCreatorUrlByFingerprint(
   identity: Omit<VisitorIdentity, 'fingerprint'> = {}
 ): Promise<string | null> {
   const realUrl = (site.content_data?.tiktokUrl as string) || '#';
-  return await isSiteOwnerVisitor(site, { ...identity, fingerprint }) ? realUrl : null;
+  return await isSiteOwnerVisitor(site, { ...identity, fingerprint })
+    ? await normalizePublicDestinationUrl(realUrl)
+    : null;
 }

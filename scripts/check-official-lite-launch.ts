@@ -129,8 +129,8 @@ wrongMediaSource.searchParams.set('short_dl', wrongMediaShortDl.toString());
 assert.equal(validateOfficialLiteLaunchUrl(wrongMediaSource.toString()), false, 'mismatched media_source is rejected');
 
 for (const key of ['gd_label', 'ug_launch_category', 'incentive_redirect'] as const) {
-  const tamperedContext = new URL(launch);
-  const tamperedContextShortDl = new URL(tamperedContext.searchParams.get('short_dl')!);
+  const tamperedContext: URL = new URL(launch!);
+  const tamperedContextShortDl: URL = new URL(tamperedContext.searchParams.get('short_dl')!);
   tamperedContextShortDl.searchParams.set(key, 'different_context');
   tamperedContext.searchParams.set('short_dl', tamperedContextShortDl.toString());
   assert.equal(

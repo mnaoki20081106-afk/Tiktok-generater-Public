@@ -30,22 +30,35 @@ async function lookupOne(query: PromiseLike<LookupResult>): Promise<LookupResult
 
 /**
  * 公開ページへ渡す直前の最終ガード。
- * 古いDBや管理設定に lite.tiktok.com/t/... / 招待LP が残っていても、
- * 閲覧者のブラウザにはそのLPを絶対に渡さない。
+ *
+ * 古いDBや管理設定に lite.tiktok.com/t/... が残っていても、まず毎回
+ * TikTok公式の lite_redirect への変換を試す。これにより保存時に一時的な
+ * 解析失敗で短縮URLへフォールバックしていても、公開時にTikTok側が復旧していれば
+ * 招待LPを見せずにLiteアプリ/ストアへ直行できる。
+ *
+ * それでも短縮URLの解決に失敗した場合だけ、招待成立の最後の保険として元の
+ * lite.tiktok.com/t/... を返す。すでに展開済みの招待LPは元の短縮URLへ戻せないため、
+ * 解決できなければ従来どおりブロックする。
  */
 export async function normalizePublicDestinationUrl(raw: string): Promise<string> {
   const parsed = parseHttpUrl(raw);
   if (!parsed) return '#';
-  if (!isTikTokLiteInviteShortLink(raw) && !isInviteLpUrl(parsed)) return parsed.toString();
+  const isShort = isTikTokLiteInviteShortLink(raw);
+  const isLp = isInviteLpUrl(parsed);
+  if (!isShort && !isLp) return parsed.toString();
 
   try {
     const built = await generateDestinationUrl(raw);
     const out = parseHttpUrl(built.url);
-    if (!out || isTikTokLiteInviteShortLink(built.url) || isInviteLpUrl(out)) return '#';
+    if (!out) return isShort ? parsed.toString() : '#';
+
+    if (isTikTokLiteInviteShortLink(built.url)) {
+      return isShort ? built.url : '#';
+    }
+    if (isInviteLpUrl(out)) return '#';
     return built.url;
   } catch {
-    // 公式 lite_redirect を取得できないときにLPへフォールバックしない。
-    return '#';
+    return isShort ? parsed.toString() : '#';
   }
 }
 

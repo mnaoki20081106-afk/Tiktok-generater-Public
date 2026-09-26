@@ -8,6 +8,10 @@ const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
+const rawInvite = 'https://lite.tiktok.com/t/ZS9AsxUWdSgEF-9javb/';
+const expandedInvite = 'https://www.tiktok.com/ug/incentive/share/pro_scan_code?u_code=TEST&share_page_data=DATA';
+const officialLaunch = 'https://app-va.tiktokv.com/lite_redirect/?redirect_url=snssdk473824%3A%2F%2Froma_redirect&short_dl=https%3A%2F%2Fsnssdk473824.onelink.me%2F4P4E&decode_once=1';
+
 const site = {
   id: 'site-1',
   user_id: 'owner-1',
@@ -25,7 +29,35 @@ function query(result) {
   return builder;
 }
 
-function load({ identityResult, configResult }) {
+function linkGeneratorMock({ resolutionFails = false } = {}) {
+  return {
+    parseHttpUrl(raw) {
+      try { return new URL(raw); } catch { return null; }
+    },
+    isTikTokLiteInviteShortLink(raw) {
+      try {
+        const u = new URL(raw);
+        return u.protocol === 'https:' && u.hostname === 'lite.tiktok.com'
+          && /^\/t\/[A-Za-z0-9_-]+\/?$/.test(u.pathname);
+      } catch {
+        return false;
+      }
+    },
+    isInviteLpUrl(url) {
+      return !!url && /(^|\.)tiktok\.com$/i.test(url.hostname)
+        && /^\/ug\//i.test(url.pathname) && url.searchParams.has('u_code');
+    },
+    async generateDestinationUrl(raw) {
+      if (resolutionFails) throw new Error('launch metadata unavailable');
+      if (raw === rawInvite || raw === expandedInvite) {
+        return { url: officialLaunch, mode: 'original', removed: [], liteForced: false };
+      }
+      return { url: raw, mode: 'original', removed: [], liteForced: false };
+    },
+  };
+}
+
+function load({ identityResult, configResult, resolutionFails = false }) {
   const loaded = { exports: {} };
   const admin = {
     from(table) {
@@ -35,6 +67,7 @@ function load({ identityResult, configResult }) {
   };
   const mockRequire = name => {
     if (name === '@/lib/supabase/admin') return { createAdminClient: () => admin };
+    if (name === '@/lib/link-generator') return linkGeneratorMock({ resolutionFails });
     throw new Error(`Unexpected import: ${name}`);
   };
   vm.runInNewContext(compiled, { exports: loaded.exports, require: mockRequire, Math });
@@ -62,14 +95,38 @@ assert.equal(
   'without draw configuration there is no safe prize URL to return'
 );
 
-const rawInvite = 'https://lite.tiktok.com/t/ZS9SKLkjB9v5P-nhiPj/';
 const rawConfig = load({
   identityResult: identityFailure,
   configResult: { data: { enabled: true, probability: 100, prize_url: rawInvite, prize_url_optimized: null }, error: null },
 });
-assert.equal(await rawConfig.resolveDestinationUrl(site, { deviceId: 'ordinary-visitor' }), rawInvite,
-  'Missing resolved URL must not stop the draw or change the invitation token');
-assert.equal(await rawConfig.resolveDestinationUrl(site, { deviceId: 'creator-device' }), site.content_data.tiktokUrl,
-  'Creator exclusion remains active with an unresolved prize URL');
+assert.equal(
+  await rawConfig.resolveDestinationUrl(site, { deviceId: 'ordinary-visitor' }),
+  officialLaunch,
+  'A legacy raw short invite is normalized to the official Lite app/store fan-out before public navigation'
+);
 
-console.log('Surprise draw availability: identity lookup failures do not stop draws; creator cookie exclusion remains active');
+const expandedSite = { ...site, content_data: { tiktokUrl: expandedInvite } };
+assert.equal(
+  await rawConfig.resolveDestinationUrl(expandedSite, { deviceId: 'creator-device' }),
+  officialLaunch,
+  'Even the owner path never exposes an expanded invite LP'
+);
+
+const brokenConfig = load({
+  identityResult: identityFailure,
+  configResult: { data: { enabled: true, probability: 100, prize_url: rawInvite, prize_url_optimized: null }, error: null },
+  resolutionFails: true,
+});
+assert.equal(
+  await brokenConfig.resolveDestinationUrl(site, { deviceId: 'ordinary-visitor' }),
+  '#',
+  'If the official Lite launch URL cannot be recovered, fail closed instead of exposing the invite LP'
+);
+
+assert.equal(
+  await rawConfig.resolveDestinationUrl(site, { deviceId: 'creator-device' }),
+  site.content_data.tiktokUrl,
+  'Creator exclusion remains active for an ordinary non-TikTok destination'
+);
+
+console.log('Public destination safety: legacy invite URLs are normalized to official Lite launch URLs or blocked; visible invite LPs never leak');

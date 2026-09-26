@@ -24,10 +24,12 @@ try {
   assert.equal(detectBuildMode('https://lite.tiktok.com/t/ZS9STpGp6kK2T-HhDaj/'), 'original');
   const suppliedInvite = 'https://lite.tiktok.com/t/ZS9AsxUWdSgEF-9javb/';
   assert.equal(isTikTokLiteInviteShortLink(suppliedInvite), true);
-  await assert.rejects(
-    () => generateDestinationUrl(suppliedInvite),
-    /公式のアプリ\/ストア分岐リンクを取得できませんでした/,
-    'If launch metadata cannot be resolved, never fall back to the visible invite page',
+  const fallback = await generateDestinationUrl(suppliedInvite);
+  assert.equal(
+    fallback.url,
+    suppliedInvite,
+    'If launch metadata cannot be resolved, preserve the original short invite as the last-resort referral path',
   );
+  assert.equal(fallback.mode, 'original');
 } finally { globalThis.fetch = savedFetch; }
-console.log('Official Lite links: OneLinks are preserved; short invites fail closed instead of exposing the invite LP');
+console.log('Official Lite links: OneLinks are preserved; short invites keep an original-link referral fallback when launch extraction fails');

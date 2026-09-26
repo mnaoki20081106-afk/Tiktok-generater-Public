@@ -1571,10 +1571,16 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
  *  3. 検証済みの公式分岐URL・OneLinkは、生成オプション未指定なら元URLを保持する
  *  4. その他の短縮リンクは自前で展開し、必要な場合だけStealth APIで抽出する
  *
- * 展開・サニタイズのいずれかに失敗した場合は例外を投げる(呼び出し側で保存を中断する)。
- * サイト編集では「招待LPを絶対に表示しない」ことを優先するため、
- * TikTok公式の app/store 分岐URL(lite_redirect)を取得できない場合に、
- * 元の lite.tiktok.com/t/... や招待LPへフォールバックしてはいけない。
+ * Lite公式短縮リンクでは、まずTikTok公式の app/store 分岐URL(lite_redirect)を取得する。
+ * 取得できれば公開ページから招待LPを経由せず、既インストール端末はLiteアプリ、
+ * 未インストール端末はshort_dl(OneLink)側へ進める。
+ *
+ * ただしTikTok側の一時障害・HTML変更などで抽出できない場合でも招待導線そのものを
+ * 消してはいけないため、検証済みの lite.tiktok.com/t/... は元URLを最後の保険として保持する。
+ * 公開時にも再解決を試すので、保存時にフォールバックしても後からTikTok側が復旧すれば
+ * lite_redirectへ戻り、LPが見えるのは保存時・公開時の両方で抽出に失敗した場合だけになる。
+ *
+ * すでに展開された招待LP URLは元の短縮URLを復元できないため、抽出失敗時は従来どおり拒否する。
  */
 /** Known TikTok Lite OneLink host; this identifies the route, not referral eligibility. */
 export function isTikTokLiteOneLink(raw: string): boolean {
@@ -1615,13 +1621,11 @@ export async function generateDestinationUrl(
       try {
         const resolved = await resolveOfficialLiteInviteUrl(rawUrl);
         return { url: resolved.launchUrl, mode: 'original', removed: [], liteForced: false };
-      } catch (e) {
-        // 元の短縮URLへ戻すと、閲覧者のブラウザに「○○さんが協力を求めています！」
-        // の招待LPが表示されてしまう。公式 lite_redirect を抽出できた場合だけ保存する。
-        throw new Error(
-          'TikTok公式のアプリ/ストア分岐リンクを取得できませんでした。招待LPを表示しない条件を守るため、このリンクは保存しません。' +
-          (e instanceof Error ? ' (' + e.message + ')' : '')
-        );
+      } catch {
+        // 最後の保険。ここで保存自体を止めると招待導線が完全に失われる。
+        // 公開時にも再度lite_redirect化を試すので、通常はこのURLがそのまま利用者へ
+        // 渡ることはなく、TikTok側の解析が公開時にも失敗した場合だけ公式短縮URLへ落ちる。
+        return { url: rawUrl.trim(), mode: 'original', removed: [], liteForced: false };
       }
     }
     if (isInviteLpUrl(input)) {

@@ -38,8 +38,8 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ url: await followRedirects(url) });
   } catch (e) {
-    // 呼び出し側で失敗を判別する。招待LPを見せない要件のため、
-    // 公式分岐URLを抽出できない短縮招待URL/招待LPは保存側で拒否する。
+    // 呼び出し側で失敗を判別する。短縮招待URLは招待導線を失わないため元URLへ
+    // フォールバックできるが、すでに展開済みの招待LPは元の短縮URLを復元できない。
     return NextResponse.json({ url: null, error: e instanceof Error ? e.message : String(e) });
   }
 }

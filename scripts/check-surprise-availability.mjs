@@ -119,8 +119,8 @@ const brokenConfig = load({
 });
 assert.equal(
   await brokenConfig.resolveDestinationUrl(site, { deviceId: 'ordinary-visitor' }),
-  '#',
-  'If the official Lite launch URL cannot be recovered, fail closed instead of exposing the invite LP'
+  rawInvite,
+  'If the official Lite launch URL cannot be recovered, preserve the original short invite as the last-resort referral path'
 );
 
 assert.equal(
@@ -129,4 +129,4 @@ assert.equal(
   'Creator exclusion remains active for an ordinary non-TikTok destination'
 );
 
-console.log('Public destination safety: legacy invite URLs are normalized to official Lite launch URLs or blocked; visible invite LPs never leak');
+console.log('Public destination safety: official Lite launch is preferred; raw short invite is preserved only when optimization fails');

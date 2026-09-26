@@ -134,6 +134,19 @@ assert.equal(extractOfficialLiteLaunchUrl(`<script>${anchor}</script>`), null);
 assert.equal(extractOfficialLiteLaunchUrl(anchor.replace('href=', 'data-href=')), null);
 assert.equal(extractOfficialLiteLaunchUrl(anchor.replace('app-va.tiktokv.com', 'evil.example')), null);
 
+// 完成済みhref自体は形式上有効でも、同じHTMLのuniversal-dataと紹介者情報が
+// 食い違う場合はそのhrefを捨て、universal-dataから正しいものを再構築する。
+const mixedOuter = new URL(renderedLaunch);
+const mixedShortDl = new URL(mixedOuter.searchParams.get('short_dl')!);
+mixedShortDl.searchParams.set('af_adset', 'OTHER_INVITER');
+mixedOuter.searchParams.set('short_dl', mixedShortDl.toString());
+const mixedAnchor = `<a href="${mixedOuter.toString().replaceAll('&', '&amp;')}">Open</a>`;
+assert.equal(
+  extractOfficialLiteLaunchUrl(html + mixedAnchor),
+  launch,
+  'a rendered CTA with a mismatched invite code is ignored and rebuilt from matching universal-data'
+);
+
 const savedFetch = globalThis.fetch;
 try {
   const short = 'https://lite.tiktok.com/t/ZS9SKLkjB9v5P-nhiPj/';

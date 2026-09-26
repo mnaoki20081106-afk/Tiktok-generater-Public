@@ -84,11 +84,11 @@ assert.equal(new URL(new URL(v2OnlyLaunch).searchParams.get('short_dl')!).search
 // 明示的に作り、lite_redirectの外側まで1バイト表現を保持できることを確認する。
 const rawInviteHref = inviteUrl.toString()
   + '&og_image=https%3A%2F%2Fexample.com%2Fcurrent.png~tplv-current.image';
-const rawUniversalData = structuredClone(universalData) as Record<string, any>;
+const rawUniversalData = structuredClone(universalData);
 rawUniversalData.app_context.href = rawInviteHref;
 rawUniversalData.app_context.query = Object.fromEntries(new URL(rawInviteHref).searchParams.entries());
 const rawStrategy = rawUniversalData['tiktok.share.api/tiktok/linker/component/strategy/get/v1/'].data.strategy;
-const rawRoma = rawStrategy.wrappers.find((item: any) => item.name === 'wrapper_incentive_share_jump_to_roma');
+const rawRoma = rawStrategy.wrappers.find(item => item.name === 'wrapper_incentive_share_jump_to_roma');
 rawRoma.wrapper_url.url_schemes = [
   `snssdk473824://roma_redirect/?params_url=${encodeURIComponent(rawInviteHref)}&spark_page={{url}}`,
 ];

@@ -89,6 +89,7 @@ rawUniversalData.app_context.href = rawInviteHref;
 rawUniversalData.app_context.query = Object.fromEntries(new URL(rawInviteHref).searchParams.entries());
 const rawStrategy = rawUniversalData['tiktok.share.api/tiktok/linker/component/strategy/get/v1/'].data.strategy;
 const rawRoma = rawStrategy.wrappers.find(item => item.name === 'wrapper_incentive_share_jump_to_roma');
+if (!rawRoma) throw new Error('current TikTok roma wrapper fixture is missing');
 rawRoma.wrapper_url.url_schemes = [
   `snssdk473824://roma_redirect/?params_url=${encodeURIComponent(rawInviteHref)}&spark_page={{url}}`,
 ];

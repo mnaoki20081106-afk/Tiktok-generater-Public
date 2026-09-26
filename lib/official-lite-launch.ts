@@ -45,6 +45,17 @@ function parseUrl(value: unknown): URL | null {
   }
 }
 
+function inviteCodeOf(data: JsonRecord): string | null {
+  for (const key of SHARE_PAGE_KEYS) {
+    const shareRoot = record(data[key]);
+    const shareResponse = record(shareRoot?.data);
+    const sharePayload = record(shareResponse?.data);
+    const inviteCode = stringValue(sharePayload?.invite_code);
+    if (inviteCode) return inviteCode;
+  }
+  return null;
+}
+
 function isInviteLp(url: URL): boolean {
   return url.protocol === 'https:'
     && /(^|\.)tiktok\.com$/i.test(url.hostname)
@@ -157,14 +168,7 @@ export function buildOfficialLiteLaunchUrl(data: JsonRecord): string | null {
   const fallback = parseUrl(fallbackTemplate.replaceAll('{{schema}}', ''));
   if (!fallback || fallback.protocol !== 'https:' || fallback.hostname !== ONELINK_HOST || fallback.pathname !== ONELINK_PATH) return null;
 
-  let inviteCode: string | null = null;
-  for (const key of SHARE_PAGE_KEYS) {
-    const shareRoot = record(data[key]);
-    const shareResponse = record(shareRoot?.data);
-    const sharePayload = record(shareResponse?.data);
-    inviteCode = stringValue(sharePayload?.invite_code);
-    if (inviteCode) break;
-  }
+  const inviteCode = inviteCodeOf(data);
   if (!inviteCode) return null;
 
   fallback.searchParams.set('pid', stringValue(query.inc_pid) || stringValue(query.media_source) || '');
@@ -203,10 +207,31 @@ export function extractOfficialLiteLaunchUrl(html: string): string | null {
     if (!href) continue;
     const candidate = decodeHtmlAttribute(href);
     if (!validateOfficialLiteLaunchUrl(candidate)) continue;
-    const query = record(record(data?.app_context)?.query);
+
+    // universal-dataが同じHTMLにある場合、完成済みhrefの紹介文脈がそのページ自身と
+    // 一致していることまで検証する。見た目が正しいlite_redirectでも、別ユーザー/
+    // 別キャンペーンのwid・pid・af_adsetが混ざっていれば採用しない。
+    const appContext = record(data?.app_context);
+    const query = record(appContext?.query);
     if (query) {
-      const redirect = new URL(new URL(candidate).searchParams.get('redirect_url')!);
+      const outer = new URL(candidate);
+      const redirect = new URL(outer.searchParams.get('redirect_url')!);
+      const shortDl = new URL(outer.searchParams.get('short_dl')!);
+
       if (['u_code', 'share_page_data'].some(key => query[key] !== redirect.searchParams.get(key))) continue;
+
+      const wid = stringValue(appContext?.wid);
+      if (wid && (redirect.searchParams.get('wid') !== wid || shortDl.searchParams.get('wid') !== wid)) continue;
+
+      const incPid = stringValue(query.inc_pid);
+      if (incPid && (redirect.searchParams.get('inc_pid') !== incPid || shortDl.searchParams.get('pid') !== incPid)) continue;
+
+      const mediaSource = stringValue(query.media_source);
+      if (mediaSource && (redirect.searchParams.get('media_source') !== mediaSource
+        || shortDl.searchParams.get('media_source') !== mediaSource)) continue;
+
+      const inviteCode = data ? inviteCodeOf(data) : null;
+      if (inviteCode && shortDl.searchParams.get('af_adset') !== inviteCode) continue;
     }
     return candidate;
   }

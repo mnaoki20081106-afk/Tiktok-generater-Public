@@ -104,6 +104,10 @@ try {
     : new Response(html.replace('id="universal-data"', 'id=universal-data') + anchor);
   const result = await generateDestinationUrl(short);
   assert.equal(result.url, renderedLaunch, 'Shared save path extracts the official button for page and prize URLs');
+  assert.equal(new URL(result.url).hostname, 'app-va.tiktokv.com');
+  assert.notEqual(new URL(result.url).hostname, 'lite.tiktok.com');
+  assert.equal((await generateDestinationUrl(inviteUrl.toString())).url, renderedLaunch,
+    'An already-expanded invite LP is also converted to the official app/store launch URL');
   assert.equal((await generateDestinationUrl(result.url)).url, renderedLaunch, 'Resaving preserves the official button URL');
 } finally {
   globalThis.fetch = savedFetch;

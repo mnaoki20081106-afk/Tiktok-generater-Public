@@ -29,7 +29,7 @@ function query(result) {
   return builder;
 }
 
-function linkGeneratorMock({ resolutionFails = false } = {}) {
+function linkGeneratorMock() {
   return {
     parseHttpUrl(raw) {
       try { return new URL(raw); } catch { return null; }
@@ -47,17 +47,16 @@ function linkGeneratorMock({ resolutionFails = false } = {}) {
       return !!url && /(^|\.)tiktok\.com$/i.test(url.hostname)
         && /^\/ug\//i.test(url.pathname) && url.searchParams.has('u_code');
     },
-    async generateDestinationUrl(raw) {
-      if (resolutionFails) throw new Error('launch metadata unavailable');
-      if (raw === rawInvite || raw === expandedInvite) {
-        return { url: officialLaunch, mode: 'original', removed: [], liteForced: false };
-      }
-      return { url: raw, mode: 'original', removed: [], liteForced: false };
+    isOfficialTikTokLiteLaunchUrl(raw) {
+      return raw === officialLaunch;
+    },
+    inviteLpFromOfficialTikTokLiteLaunchUrl(raw) {
+      return raw === officialLaunch ? expandedInvite : null;
     },
   };
 }
 
-function load({ identityResult, configResult, resolutionFails = false }) {
+function load({ identityResult, configResult }) {
   const loaded = { exports: {} };
   const admin = {
     from(table) {
@@ -67,7 +66,7 @@ function load({ identityResult, configResult, resolutionFails = false }) {
   };
   const mockRequire = name => {
     if (name === '@/lib/supabase/admin') return { createAdminClient: () => admin };
-    if (name === '@/lib/link-generator') return linkGeneratorMock({ resolutionFails });
+    if (name === '@/lib/link-generator') return linkGeneratorMock();
     throw new Error(`Unexpected import: ${name}`);
   };
   vm.runInNewContext(compiled, { exports: loaded.exports, require: mockRequire, Math });
@@ -101,26 +100,22 @@ const rawConfig = load({
 });
 assert.equal(
   await rawConfig.resolveDestinationUrl(site, { deviceId: 'ordinary-visitor' }),
-  officialLaunch,
-  'A legacy raw short invite is normalized to the official Lite app/store fan-out before public navigation'
+  rawInvite,
+  'A raw short invite stays on TikTok official short-link -> invite-LP flow'
 );
 
 const expandedSite = { ...site, content_data: { tiktokUrl: expandedInvite } };
 assert.equal(
   await rawConfig.resolveDestinationUrl(expandedSite, { deviceId: 'creator-device' }),
-  officialLaunch,
-  'Even the owner path never exposes an expanded invite LP'
+  expandedInvite,
+  'An expanded official invite LP remains the public destination so TikTok can bind the referral'
 );
 
-const brokenConfig = load({
-  identityResult: identityFailure,
-  configResult: { data: { enabled: true, probability: 100, prize_url: rawInvite, prize_url_optimized: null }, error: null },
-  resolutionFails: true,
-});
+const legacyLaunchSite = { ...site, content_data: { tiktokUrl: officialLaunch } };
 assert.equal(
-  await brokenConfig.resolveDestinationUrl(site, { deviceId: 'ordinary-visitor' }),
-  rawInvite,
-  'If the official Lite launch URL cannot be recovered, preserve the original short invite as the last-resort referral path'
+  await rawConfig.resolveDestinationUrl(legacyLaunchSite, { deviceId: 'creator-device' }),
+  expandedInvite,
+  'A legacy saved lite_redirect is migrated back to its embedded official invite LP'
 );
 
 assert.equal(
@@ -129,4 +124,4 @@ assert.equal(
   'Creator exclusion remains active for an ordinary non-TikTok destination'
 );
 
-console.log('Public destination safety: official Lite launch is preferred; raw short invite is preserved only when optimization fails');
+console.log('Public destination safety: TikTok official short-link/LP flow is preserved; legacy lite_redirect migrates back to LP');

@@ -211,38 +211,41 @@ assert.equal(
 
 const savedFetch = globalThis.fetch;
 try {
+  // 正攻法では短縮招待URLを加工しない。TikTok側が
+  // short URL -> invite LP -> Lite/Store の公式フローを担当する。
   const short = 'https://lite.tiktok.com/t/ZS9SKLkjB9v5P-nhiPj/';
-  globalThis.fetch = async input => String(input) === short
-    ? new Response(null, { status: 302, headers: { location: inviteUrl.toString() } })
-    : new Response(html.replace('id="universal-data"', 'id=universal-data') + anchor);
+  globalThis.fetch = async () => { throw new Error('Official short invite must not be fetched during save'); };
   const result = await generateDestinationUrl(short);
-  assert.equal(result.url, renderedLaunch, 'Shared save path extracts the official button for page and prize URLs');
-  assert.equal(new URL(result.url).hostname, 'app-va.tiktokv.com');
-  assert.notEqual(new URL(result.url).hostname, 'lite.tiktok.com');
-  assert.equal((await generateDestinationUrl(inviteUrl.toString())).url, renderedLaunch,
-    'An already-expanded invite LP is also converted to the official app/store launch URL');
-  assert.equal((await generateDestinationUrl(result.url)).url, renderedLaunch, 'Resaving preserves the official button URL');
+  assert.equal(result.url, short, 'Shared save path preserves the official short invite byte-for-byte');
+  assert.equal(new URL(result.url).hostname, 'lite.tiktok.com');
+
+  const expanded = await generateDestinationUrl(inviteUrl.toString());
+  assert.equal(expanded.url, inviteUrl.toString(),
+    'An already-expanded invite LP stays on the official LP so TikTok can bind the referral');
+
+  const migrated = await generateDestinationUrl(launch);
+  assert.equal(migrated.url, nestedInvite.toString(),
+    'A legacy saved lite_redirect is migrated back to its embedded official invite LP');
+  assert.equal(migrated.mode, 'lp');
 } finally {
   globalThis.fetch = savedFetch;
 }
 
-// TikTok側の一時障害・HTML変更で公式lite_redirectを抽出できない場合でも、
-// 招待導線そのものは失わない。今回ユーザーから提示された実リンク形式を固定する。
+// 今回ユーザーから提示された実リンク形式も、TikTok側のHTML取得可否に関係なく
+// 公式短縮URLのまま保持する。
 const fallbackShort = 'https://lite.tiktok.com/t/ZS9AsxUWdSgEF-9javb/';
 try {
   globalThis.fetch = async () => new Response('temporary upstream failure', { status: 503 });
   const fallback = await generateDestinationUrl(fallbackShort);
   assert.equal(fallback.url, fallbackShort,
-    'If official launch extraction fails, keep the verified TikTok Lite short invite as the last-resort referral path');
+    'Official short invite is preserved even if TikTok HTML is temporarily unavailable');
   assert.equal(detectBuildMode(fallback.url), 'original');
 
-  await assert.rejects(
-    () => generateDestinationUrl(inviteUrl.toString()),
-    /公式|招待LP|分岐リンク|取得でき/,
-    'An expanded invite LP has no recoverable original short URL, so it still fails closed'
-  );
+  const expanded = await generateDestinationUrl(inviteUrl.toString());
+  assert.equal(expanded.url, inviteUrl.toString(),
+    'Expanded official invite LP remains usable and is not forced through lite_redirect');
 } finally {
   globalThis.fetch = savedFetch;
 }
 
-console.log('Official TikTok Lite launch URL: app/store fan-out is preferred; original short invite is retained only as a last resort');
+console.log('Official TikTok Lite invite flow: short link and invite LP are preserved; legacy lite_redirect is migrated back to LP');

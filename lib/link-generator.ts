@@ -1560,27 +1560,20 @@ export function buildUrl(rawUrl: string, opts: BuildOptions): BuildResult {
 /**
  * 遷移先URLにジェネレーターを適用する(展開＋サニタイズ)。
  *
- * サイト編集画面(`app/dashboard/dashboard-form.tsx`)から、保存時に呼び出すための入口。
- * ツール単体(`/tools/link-generator`)の「URLを抽出＆自動生成」と同じ処理を、
- * 入力欄1つぶんの操作にまとめただけで、内部で呼んでいるのは
- * `callExtractApi()` と `buildUrl()`(いずれも単独版からの移植)そのもの。
+ * サイト編集画面では、TikTok Liteの公式招待リンクについて「正攻法」を優先する。
+ * 実機ではLPを飛ばして lite_redirect / OneLink へ直行した場合、アプリは開いても
+ * 招待バインドが成立しないケースが確認された。そこでTikTok自身の公式フロー
  *
- * 土台にするURLは、公式リンクの実体にどれだけ近いかで決める。
- *  1. 入力がすでに招待LPのURLなら、展開せずそのまま使う
- *  2. Lite公式短縮リンクは、招待LPのHTMLから公式ダウンロードボタンのURLを抽出する
- *  3. 検証済みの公式分岐URL・OneLinkは、生成オプション未指定なら元URLを保持する
- *  4. その他の短縮リンクは自前で展開し、必要な場合だけStealth APIで抽出する
+ *   短縮招待URL → 招待LP → LPのJS → TikTok Lite / ストア
  *
- * Lite公式短縮リンクでは、まずTikTok公式の app/store 分岐URL(lite_redirect)を取得する。
- * 取得できれば公開ページから招待LPを経由せず、既インストール端末はLiteアプリ、
- * 未インストール端末はshort_dl(OneLink)側へ進める。
+ * をそのまま使う。
  *
- * ただしTikTok側の一時障害・HTML変更などで抽出できない場合でも招待導線そのものを
- * 消してはいけないため、検証済みの lite.tiktok.com/t/... は元URLを最後の保険として保持する。
- * 公開時にも再解決を試すので、保存時にフォールバックしても後からTikTok側が復旧すれば
- * lite_redirectへ戻り、LPが見えるのは保存時・公開時の両方で抽出に失敗した場合だけになる。
+ * - lite.tiktok.com/t/... は加工せず保存する
+ * - 展開済みの公式招待LPも加工せず保存する
+ * - 旧実装で保存済みの lite_redirect は中の params_url(招待LP)へ戻す
+ * - 公式OneLink単体は、明示的に入力された場合に限り従来どおり保持する
  *
- * すでに展開された招待LP URLは元の短縮URLを復元できないため、抽出失敗時は従来どおり拒否する。
+ * overrides を指定したツール単体の生成処理は従来の buildUrl() 経路を維持する。
  */
 /** Known TikTok Lite OneLink host; this identifies the route, not referral eligibility. */
 export function isTikTokLiteOneLink(raw: string): boolean {
@@ -1600,6 +1593,28 @@ export function isOfficialTikTokLiteLaunchUrl(raw: string): boolean {
   return validateOfficialLiteLaunchUrl(raw);
 }
 
+/**
+ * 旧実装で保存済みのTikTok公式 lite_redirect から、実際の招待LP(params_url)を復元する。
+ *
+ * 実機確認では、LPを飛ばしてアプリ/OneLinkへ直行すると招待バインドが成立しない場合がある。
+ * 正攻法ではTikTok自身の招待LPを読み込み、そのJSにLite起動/ストア遷移を任せる。
+ */
+export function inviteLpFromOfficialTikTokLiteLaunchUrl(raw: string): string | null {
+  if (!validateOfficialLiteLaunchUrl(raw)) return null;
+  try {
+    const outer = new URL(raw);
+    const redirectRaw = outer.searchParams.get('redirect_url');
+    if (!redirectRaw) return null;
+    const redirect = new URL(redirectRaw);
+    const inviteRaw = redirect.searchParams.get('params_url');
+    if (!inviteRaw) return null;
+    const invite = parseHttpUrl(inviteRaw);
+    return invite && isInviteLpUrl(invite) ? inviteRaw : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function generateDestinationUrl(
   rawUrl: string,
   overrides: Partial<BuildOptions> = {}
@@ -1607,50 +1622,37 @@ export async function generateDestinationUrl(
   const input = parseHttpUrl(rawUrl);
   if (!input) throw new Error('遷移先URLが不正です。http(s):// で始まるURLを入力してください。');
 
-  // 保存済みの公式分岐URLとOneLinkは再加工しない。短縮招待リンクは、公式LP自身が
-  // ダウンロードボタンに設定する lite_redirect へ変換する。これにより、インストール済みは
-  // redirect_url、新規端末はshort_dlを通り、どちらも同じ招待コンテキストを保持する。
   if (Object.keys(overrides).length === 0) {
-    if (isOfficialTikTokLiteLaunchUrl(rawUrl)) {
+    // 正攻法: 公式短縮招待リンクはTikTok側のリダイレクト/LP処理をそのまま使う。
+    if (isTikTokLiteInviteShortLink(rawUrl)) {
       return { url: rawUrl.trim(), mode: 'original', removed: [], liteForced: false };
     }
+
+    // 展開済みLPも、そのJSが招待バインドとアプリ/ストア分岐を行うため改変しない。
+    if (isInviteLpUrl(input)) {
+      return { url: rawUrl.trim(), mode: 'lp', removed: [], liteForced: false };
+    }
+
+    // 旧方式のlite_redirectが保存されているサイトは、再保存時に公式LPへ戻す。
+    if (isOfficialTikTokLiteLaunchUrl(rawUrl)) {
+      const inviteLp = inviteLpFromOfficialTikTokLiteLaunchUrl(rawUrl);
+      if (!inviteLp) throw new Error('保存済みTikTok Lite分岐URLから招待ページを復元できませんでした。');
+      return { url: inviteLp, mode: 'lp', removed: [], liteForced: false };
+    }
+
     if (isTikTokLiteOneLink(rawUrl)) {
       return { url: rawUrl.trim(), mode: 'onelink', removed: [], liteForced: false };
-    }
-    if (isTikTokLiteInviteShortLink(rawUrl)) {
-      try {
-        const resolved = await resolveOfficialLiteInviteUrl(rawUrl);
-        return { url: resolved.launchUrl, mode: 'original', removed: [], liteForced: false };
-      } catch {
-        // 最後の保険。ここで保存自体を止めると招待導線が完全に失われる。
-        // 公開時にも再度lite_redirect化を試すので、通常はこのURLがそのまま利用者へ
-        // 渡ることはなく、TikTok側の解析が公開時にも失敗した場合だけ公式短縮URLへ落ちる。
-        return { url: rawUrl.trim(), mode: 'original', removed: [], liteForced: false };
-      }
-    }
-    if (isInviteLpUrl(input)) {
-      try {
-        const resolved = await resolveOfficialLiteInviteUrl(rawUrl);
-        return { url: resolved.launchUrl, mode: 'original', removed: [], liteForced: false };
-      } catch (e) {
-        throw new Error(
-          'TikTokの招待LPを直接の遷移先にはできません。公式のアプリ/ストア分岐リンクを取得できなかったため保存しません。' +
-          (e instanceof Error ? ' (' + e.message + ')' : '')
-        );
-      }
     }
   }
 
   let source = input.toString();
 
   if (!isInviteLpUrl(input) && !ONELINK_RE.test(input.hostname)) {
-    // まずリダイレクトを追うだけで済ませる。公式リンクはこれで招待LPに着地する。
     const expanded = parseHttpUrl(await expandShortUrl(source));
 
     if (expanded && (isInviteLpUrl(expanded) || ONELINK_RE.test(expanded.hostname))) {
       source = expanded.toString();
     } else {
-      // 展開できなかった(JS経由の遷移など)場合だけ Stealth API に頼る
       source = preferSourceUrl(await callExtractApi(source));
     }
   }

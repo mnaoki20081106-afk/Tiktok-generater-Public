@@ -1272,15 +1272,15 @@ export function DashboardForm({
           throw new Error('公開URL(slug)は半角英小文字・数字・ハイフンのみ使用できます');
         }
 
-        /* Lite公式の短縮招待リンクは、公式LPのダウンロードボタンと同じアプリ/ストア分岐URLへ変換する。
-           URL生成は画像アップロードより先に行い、失敗時の不要なファイル保存を防ぐ。
-           パラメータは保持できても、最終的な招待認定はTikTok側の参加条件による。 */
+        /* TikTok Liteの招待リンクは、招待成立を優先してTikTok公式フローをそのまま使う。
+           短縮招待URLは加工せず保存し、展開済み招待LPもそのまま保持する。
+           旧方式のlite_redirectだけは中の公式招待LPへ戻す。最終的な招待認定はTikTok側の参加条件による。 */
         let destinationUrl = tiktokUrlInput.value.trim();
         setStatusMsg({ text: '招待リンクを確認中...' });
         try {
           const built = await generateDestinationUrl(destinationUrl);
           destinationUrl = built.url;
-          // 生成結果を入力欄にも反映して、何が保存されるのかを見えるようにする
+          // 正攻法で使う最終URLを入力欄にも反映し、何が保存されるのかを見えるようにする
           tiktokUrlInput.value = destinationUrl;
           saveState();
         } catch (e) {

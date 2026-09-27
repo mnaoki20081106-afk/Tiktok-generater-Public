@@ -53,15 +53,21 @@ export async function resolveXMonitorAccess(input: {
     };
   }
 
-  if (await isXMonitorEmailAllowlisted(email)) {
-    return {
-      authenticated: true,
-      allowed: true,
-      email,
-      userId,
-      source: 'manual',
-      billingConfigured,
-    };
+  try {
+    if (await isXMonitorEmailAllowlisted(email)) {
+      return {
+        authenticated: true,
+        allowed: true,
+        email,
+        userId,
+        source: 'manual',
+        billingConfigured,
+      };
+    }
+  } catch (error) {
+    console.error('[x-monitor-access] allowlist lookup failed', error);
+    // Access-control storage failures must not break the free dashboard.
+    // Continue as not manually allowlisted and keep the premium feature closed.
   }
 
   if (billingConfigured) {

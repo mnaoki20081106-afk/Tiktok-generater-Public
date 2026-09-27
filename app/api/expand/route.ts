@@ -34,7 +34,12 @@ export async function POST(request: Request) {
       (isTikTokLiteInviteShortLink(url) || (!!parsed && isInviteLpUrl(parsed)))
     ) {
       const resolved = await resolveOfficialLiteInviteUrl(url);
-      return NextResponse.json({ url: resolved.landingUrl, launchUrl: resolved.launchUrl });
+      return NextResponse.json({
+        url: resolved.landingUrl,
+        launchUrl: resolved.launchUrl,
+        iosStoreUrl: resolved.iosStoreUrl,
+        iosAppArgument: resolved.iosAppArgument,
+      });
     }
     return NextResponse.json({ url: await followRedirects(url) });
   } catch (e) {

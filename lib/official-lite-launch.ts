@@ -157,47 +157,45 @@ function replaceRawEncodedQueryParam(raw: string, key: string, encodedValue: str
   return head + '?' + next.join('&') + hash;
 }
 
-function appleStoreUrlFromHtml(html: string): string | null {
+export interface OfficialLiteIosMeta {
+  storeUrl: string;
+  appArgument: string;
+}
+
+/**
+ * TikTok招待LPのApple Smart App Bannerメタデータを読む。
+ *
+ * 添付HTMLでは:
+ *   app-id=6447160980
+ *   app-argument=snssdk473824://webview?...u_code...wid...share_page_data...invite_code...
+ *
+ * TikTok自身がiOS向けに提示している値なので、独自推測のdeep linkより優先する。
+ */
+export function extractOfficialLiteIosMeta(html: string): OfficialLiteIosMeta | null {
   for (const match of html.matchAll(/<meta\b(?:"[^"]*"|'[^']*'|[^'">])*>/gi)) {
     if ((htmlAttribute(match[0], 'name') || '').toLowerCase() !== 'apple-itunes-app') continue;
     const content = decodeHtmlAttribute(htmlAttribute(match[0], 'content') || '');
     const appId = /(?:^|[,\s])app-id=(\d+)/i.exec(content)?.[1] || '';
-    if (appId === '6447160980') return IOS_STORE_FALLBACK;
+    const argMatch = /(?:^|[,\s])app-argument=([^,\s]+)/i.exec(content);
+    const appArgument = argMatch?.[1] || '';
+
+    if (appId !== '6447160980') return null;
+    const parsed = parseUrl(appArgument);
+    if (!parsed || parsed.protocol !== LITE_SCHEME) return null;
+
+    // 実HTMLのSmart App Banner引数には紹介識別子が直接入っている。
+    // これらが無いものはTikTok Lite起動URLではあっても招待導線として採用しない。
+    const raw = appArgument;
+    if (!/(?:^|[?&])u_code=/i.test(raw)
+      || !/(?:^|[?&])wid=/i.test(raw)
+      || !/(?:^|[?&])share_page_data=/i.test(raw)
+      || !/(?:^|[?&])invite_code=/i.test(raw)) {
+      return null;
+    }
+
+    return { storeUrl: IOS_STORE_FALLBACK, appArgument };
   }
   return null;
-}
-
-/**
- * TikTok公式OneLinkのクリック/紹介パラメータはそのまま残し、
- * 未インストール時の最終到達先だけ公式ストアへ明示する。
- *
- * AppsFlyerの af_ios_url / af_android_url はOneLinkテンプレートの
- * 「アプリ未インストール時」の遷移先をリンク単位で上書きする。
- */
-function withDirectStoreFallbacks(raw: string, html: string, data: JsonRecord | null): string {
-  const outer = parseUrl(raw);
-  if (!outer || !validateOfficialLiteLaunchUrl(raw)) return raw;
-  const shortDl = parseUrl(outer.searchParams.get('short_dl'));
-  if (!shortDl) return raw;
-
-  const query = record(record(data?.app_context)?.query);
-  const aid = stringValue(query?.aid);
-  const iosStore = appleStoreUrlFromHtml(html) || (aid === TIKTOK_LITE_AID ? IOS_STORE_FALLBACK : null);
-  const androidStore = aid === TIKTOK_LITE_AID ? ANDROID_STORE_FALLBACK : null;
-
-  let changed = false;
-  if (iosStore && !shortDl.searchParams.has('af_ios_url')) {
-    shortDl.searchParams.set('af_ios_url', iosStore);
-    changed = true;
-  }
-  if (androidStore && !shortDl.searchParams.has('af_android_url')) {
-    shortDl.searchParams.set('af_android_url', androidStore);
-    changed = true;
-  }
-  if (!changed) return raw;
-
-  // redirect_urlや外側の未知パラメータを再シリアライズしない。
-  return replaceRawQueryParam(raw, 'short_dl', shortDl.toString());
 }
 
 /** 公式LPのHTMLから universal-data JSONを読み出す。 */
@@ -365,10 +363,10 @@ export function extractOfficialLiteLaunchUrl(html: string): string | null {
       const inviteCode = data ? inviteCodeOf(data) : null;
       if (inviteCode && shortDl.searchParams.get('af_adset') !== inviteCode) continue;
     }
-    return withDirectStoreFallbacks(candidate, html, data);
+    return candidate;
   }
   const rebuilt = data ? buildOfficialLiteLaunchUrl(data) : null;
-  return rebuilt ? withDirectStoreFallbacks(rebuilt, html, data) : null;
+  return rebuilt;
 }
 
 /**
@@ -384,7 +382,10 @@ export function extractOfficialLiteLaunchUrl(html: string): string | null {
  * 以前失敗した「4P4Eをこちらで再構築する」方式とは異なり、今回はTikTok自身の完成済み
  * short_dlを土台にするため、招待者/campaignのサーバー側文脈を保持する。
  */
-export function directOfficialLiteOneLink(rawLaunch: string): string | null {
+export function directOfficialLiteOneLink(
+  rawLaunch: string,
+  iosMeta: OfficialLiteIosMeta | null = null
+): string | null {
   if (!validateOfficialLiteLaunchUrl(rawLaunch)) return null;
 
   const rawRedirect = rawQueryParam(rawLaunch, 'redirect_url');
@@ -398,33 +399,42 @@ export function directOfficialLiteOneLink(rawLaunch: string): string | null {
     return null;
   }
 
-  const parsed = parseUrl(shortDl);
-  if (!parsed || parsed.protocol !== 'https:' || parsed.hostname !== ONELINK_HOST
-    || parsed.pathname !== ONELINK_PATH || parsed.username || parsed.password || parsed.port) {
+  const original = parseUrl(shortDl);
+  if (!original || original.protocol !== 'https:' || original.hostname !== ONELINK_HOST
+    || original.pathname !== ONELINK_PATH || original.username || original.password || original.port) {
     return null;
   }
 
-  // redirect_url は outer URL 上ですでに「af_dp の値として必要な1段階encode済み」の形。
-  // 一度 decode→encode すると share_page_data の + が空白化しうるため、そのまま差し込む。
-  let direct = replaceRawEncodedQueryParam(shortDl, 'af_dp', rawRedirect);
+  // TikTok自身の完成済みshort_dlを土台にし、紹介/キャンペーン識別子は変更しない。
+  // iOSメタが取得できた場合はTikTok自身のapp-argumentをaf_dpに使う。
+  // 取得できない旧データだけ、外側lite_redirectの公式redirect_urlをそのまま使う。
+  let direct = shortDl;
+  if (iosMeta) {
+    direct = replaceRawQueryParam(direct, 'af_dp', iosMeta.appArgument);
+  } else {
+    // rawRedirectはouter URL上ですでにaf_dp値として必要な1段階encode済み。
+    direct = replaceRawEncodedQueryParam(direct, 'af_dp', rawRedirect);
+  }
   direct = replaceRawQueryParam(direct, 'af_force_deeplink', 'true');
 
-  // HTMLから抽出済みのlaunchUrlには通常これらが入るが、旧保存データにも効くよう補完する。
-  if (!parseUrl(direct)?.searchParams.has('af_ios_url')) {
-    direct = replaceRawQueryParam(direct, 'af_ios_url', IOS_STORE_FALLBACK);
-  }
-  if (!parseUrl(direct)?.searchParams.has('af_android_url')) {
-    direct = replaceRawQueryParam(direct, 'af_android_url', ANDROID_STORE_FALLBACK);
-  }
-
-  // ストアURLへ紹介パラメータを付け足す必要はない。AppsFlyer側のクリック記録には影響しない。
-  direct = replaceRawQueryParam(direct, 'af_param_forwarding', 'false');
+  // 未インストールiPhoneだけは、HTML自身が明示したApp Store IDへ送る。
+  // AndroidはTikTok/AppsFlyerの既定テンプレートに任せ、根拠のない上書きをしない。
+  if (iosMeta) direct = replaceRawQueryParam(direct, 'af_ios_url', iosMeta.storeUrl);
 
   const out = parseUrl(direct);
   if (!out || out.hostname !== ONELINK_HOST || out.pathname !== ONELINK_PATH) return null;
   if (out.searchParams.get('af_force_deeplink') !== 'true') return null;
-  if (out.searchParams.get('af_ios_url') !== IOS_STORE_FALLBACK) return null;
-  if (out.searchParams.get('af_android_url') !== ANDROID_STORE_FALLBACK) return null;
+  if (iosMeta && out.searchParams.get('af_ios_url') !== iosMeta.storeUrl) return null;
+
+  // 招待成立最優先: TikTokがshort_dlに載せた紹介/キャンペーン識別子は
+  // 追加処理の前後で1つも変えてはいけない。
+  for (const key of [
+    'pid', 'wid', 'c', 'is_retargeting', 'incentive_redirect',
+    'ug_launch_category', 'media_source', 'af_adset', 'gd_label',
+    'af_c_id', 'af_adset_id'
+  ]) {
+    if (out.searchParams.get(key) !== original.searchParams.get(key)) return null;
+  }
 
   return direct;
 }

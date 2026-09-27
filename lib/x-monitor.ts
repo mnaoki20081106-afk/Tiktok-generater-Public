@@ -1,5 +1,3 @@
-import { getPrivateXMonitorSnapshot } from '@/lib/x-monitor-private-source';
-
 export interface XMonitorPost {
   id: string;
   author: string;
@@ -250,6 +248,7 @@ function parseModel(registry: UnknownRecord, model: UnknownRecord): XModelStatus
 
 export async function getXMonitorData(): Promise<XMonitorData> {
   try {
+    const { getPrivateXMonitorSnapshot } = await import('@/lib/x-monitor-private-source');
     const snapshot = await getPrivateXMonitorSnapshot();
     const hits = record(snapshot.hits);
     const status = record(snapshot.status);

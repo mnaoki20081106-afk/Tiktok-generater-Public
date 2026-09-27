@@ -136,29 +136,30 @@ async function findReusableXMonitorCheckout(
   ) || null;
 }
 
+async function customerHasActiveXMonitorSubscription(customerId: string): Promise<boolean> {
+  const params = new URLSearchParams({
+    customer: customerId,
+    price: xMonitorPriceId(),
+    status: 'all',
+    limit: '100',
+  });
+  const result = await stripeRequest<StripeList<StripeSubscription>>(
+    `subscriptions?${params.toString()}`,
+  );
+  return (result.data || []).some((subscription) =>
+    isActiveXMonitorSubscriptionStatus(subscription.status)
+  );
+}
+
 export async function hasActiveXMonitorSubscription(email: string): Promise<boolean> {
   if (!isXMonitorBillingConfigured()) return false;
 
   const customers = await findStripeCustomersByEmail(email);
-  if (!customers.length) return false;
-
   for (const customer of customers) {
-    const params = new URLSearchParams({
-      customer: customer.id,
-      price: xMonitorPriceId(),
-      status: 'all',
-      limit: '100',
-    });
-    const result = await stripeRequest<StripeList<StripeSubscription>>(
-      `subscriptions?${params.toString()}`,
-    );
-    if ((result.data || []).some((subscription) =>
-      isActiveXMonitorSubscriptionStatus(subscription.status)
-    )) {
+    if (await customerHasActiveXMonitorSubscription(customer.id)) {
       return true;
     }
   }
-
   return false;
 }
 
@@ -216,8 +217,16 @@ export async function createXMonitorPortalSession(input: {
 }): Promise<string | null> {
   if (!stripeSecret()) return null;
 
+  if (!isXMonitorBillingConfigured()) return null;
+
   const customers = await findStripeCustomersByEmail(input.email);
-  const customer = customers[0];
+  let customer: StripeCustomer | undefined;
+  for (const candidate of customers) {
+    if (await customerHasActiveXMonitorSubscription(candidate.id)) {
+      customer = candidate;
+      break;
+    }
+  }
   if (!customer) return null;
 
   const body = new URLSearchParams();

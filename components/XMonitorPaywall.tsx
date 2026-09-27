@@ -27,15 +27,16 @@ export function XMonitorPaywall({
         </div>
 
         {authenticated ? (
-          billingConfigured ? (
+          <>
             <Link href="/x-monitor/upgrade" className="xmon-upgrade-button">
               月額サービスへアップグレード <ArrowRight size={16} />
             </Link>
-          ) : (
-            <div className="xmon-billing-pending" role="status">
-              決済設定を準備中です。料金が確定するまで課金は行われません。
-            </div>
-          )
+            {!billingConfigured && (
+              <div className="xmon-billing-pending" role="status">
+                決済設定を準備中です。料金が確定するまで課金は行われません。
+              </div>
+            )}
+          </>
         ) : (
           <Link href="/login" className="xmon-upgrade-button">
             ログインして利用状況を確認 <ArrowRight size={16} />

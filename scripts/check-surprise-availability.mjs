@@ -11,6 +11,7 @@ const compiled = ts.transpileModule(source, {
 const rawInvite = 'https://lite.tiktok.com/t/ZS9AsxUWdSgEF-9javb/';
 const expandedInvite = 'https://www.tiktok.com/ug/incentive/share/pro_scan_code?u_code=TEST&share_page_data=DATA';
 const officialLaunch = 'https://app-va.tiktokv.com/lite_redirect/?redirect_url=snssdk473824%3A%2F%2Froma_redirect&short_dl=https%3A%2F%2Fsnssdk473824.onelink.me%2F4P4E&decode_once=1';
+const optimizedInvite = 'https://snssdk473824.onelink.me/4P4E?pid=coin_referral&wid=123&af_adset=CODE&af_dp=snssdk473824%3A%2F%2Froma_redirect&af_force_deeplink=true&af_ios_url=https%3A%2F%2Fapps.apple.com%2Fapp%2Fid6447160980';
 
 const site = {
   id: 'site-1',
@@ -50,8 +51,11 @@ function linkGeneratorMock() {
     isOfficialTikTokLiteLaunchUrl(raw) {
       return raw === officialLaunch;
     },
-    inviteLpFromOfficialTikTokLiteLaunchUrl(raw) {
-      return raw === officialLaunch ? expandedInvite : null;
+    async generateDestinationUrl(raw) {
+      if (raw === rawInvite || raw === expandedInvite || raw === officialLaunch) {
+        return { url: optimizedInvite, mode: 'onelink', removed: [], liteForced: false };
+      }
+      return { url: raw, mode: 'original', removed: [], liteForced: false };
     },
   };
 }
@@ -100,22 +104,22 @@ const rawConfig = load({
 });
 assert.equal(
   await rawConfig.resolveDestinationUrl(site, { deviceId: 'ordinary-visitor' }),
-  rawInvite,
-  'A raw short invite stays on TikTok official short-link -> invite-LP flow'
+  optimizedInvite,
+  'A raw short invite is retried at public navigation and upgraded to the LP-free official OneLink'
 );
 
 const expandedSite = { ...site, content_data: { tiktokUrl: expandedInvite } };
 assert.equal(
   await rawConfig.resolveDestinationUrl(expandedSite, { deviceId: 'creator-device' }),
-  expandedInvite,
-  'An expanded official invite LP remains the public destination so TikTok can bind the referral'
+  optimizedInvite,
+  'An expanded official invite LP is upgraded to the same LP-free official OneLink'
 );
 
 const legacyLaunchSite = { ...site, content_data: { tiktokUrl: officialLaunch } };
 assert.equal(
   await rawConfig.resolveDestinationUrl(legacyLaunchSite, { deviceId: 'creator-device' }),
-  expandedInvite,
-  'A legacy saved lite_redirect is migrated back to its embedded official invite LP'
+  optimizedInvite,
+  'A legacy saved lite_redirect is migrated forward to the official attributed OneLink'
 );
 
 assert.equal(
@@ -124,4 +128,4 @@ assert.equal(
   'Creator exclusion remains active for an ordinary non-TikTok destination'
 );
 
-console.log('Public destination safety: TikTok official short-link/LP flow is preserved; legacy lite_redirect migrates back to LP');
+console.log('Public destination safety: TikTok invite URLs are upgraded to the official attributed OneLink when possible');

@@ -33,6 +33,14 @@ const checkout = fs.readFileSync(
   new URL('../app/api/billing/x-monitor/checkout/route.ts', import.meta.url),
   'utf8',
 );
+const portal = fs.readFileSync(
+  new URL('../app/api/billing/x-monitor/portal/route.ts', import.meta.url),
+  'utf8',
+);
+const monitorPage = fs.readFileSync(
+  new URL('../app/x-monitor/page.tsx', import.meta.url),
+  'utf8',
+);
 const studioHeader = fs.readFileSync(
   new URL('../components/StudioHeader.tsx', import.meta.url),
   'utf8',
@@ -67,6 +75,10 @@ assert.match(adminActions, /removeXMonitorAllowedEmail/);
 assert.match(checkout, /getCurrentXMonitorAccess\(\)/);
 assert.match(checkout, /if \(access\.allowed\)/);
 assert.match(checkout, /createXMonitorCheckoutSession/);
+assert.match(portal, /access\.source !== 'subscription'/);
+assert.match(portal, /createXMonitorPortalSession/);
+assert.match(monitorPage, /契約を管理/);
+assert.match(monitorPage, /access\.source === 'subscription'/);
 
 assert.match(studioHeader, /studio-nav-locked/);
 assert.match(studioHeader, /LockKeyhole/);

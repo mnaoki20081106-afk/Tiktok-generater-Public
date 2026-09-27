@@ -1,5 +1,7 @@
 import { Activity, BrainCircuit, Clock3, Radar } from 'lucide-react';
 import { XMonitorFeedSwitcher } from '@/components/XMonitorFeedSwitcher';
+import { XMonitorPaywall } from '@/components/XMonitorPaywall';
+import { getCurrentXMonitorAccess } from '@/lib/x-monitor-access';
 import { formatCompactNumber, getXMonitorData, xMonitorHealthMessage } from '@/lib/x-monitor';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +20,18 @@ function updatedLabel(value: string | null) {
 }
 
 export default async function XMonitorPage() {
+  const access = await getCurrentXMonitorAccess();
+
+  if (!access.allowed) {
+    return (
+      <XMonitorPaywall
+        authenticated={access.authenticated}
+        billingConfigured={access.billingConfigured}
+      />
+    );
+  }
+
+  // Premium data is fetched only after the server-side entitlement check above.
   const data = await getXMonitorData();
   const healthMessage = xMonitorHealthMessage(data.status);
 

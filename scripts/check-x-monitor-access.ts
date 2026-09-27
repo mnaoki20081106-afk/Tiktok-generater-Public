@@ -53,7 +53,7 @@ assert.match(access, /hasActiveXMonitorSubscription\(email\)/);
 assert.match(access, /allowlist lookup failed/);\nassert.match(access, /must not break the free dashboard/);\nassert.match(access, /fail closed/i);
 
 assert.match(billing, /X_MONITOR_STRIPE_PRICE_ID/);
-assert.match(billing, /mode', 'subscription'/);
+assert.match(billing, /mode', 'subscription'/);\nassert.match(billing, /findReusableXMonitorCheckout/);\nassert.match(billing, /Idempotency-Key/);\nassert.match(billing, /expires_at/);\nassert.match(billing, /body\.set\('customer', customer\.id\)/);
 assert.doesNotMatch(billing, /NEXT_PUBLIC_STRIPE_SECRET|NEXT_PUBLIC_X_MONITOR_STRIPE/);
 
 assert.match(store, /public: false/);

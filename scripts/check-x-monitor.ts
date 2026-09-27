@@ -115,7 +115,7 @@ const adminLayout = fs.readFileSync(
   'utf8',
 );
 
-assert.match(page, /<XMonitorFeedSwitcher/);
+assert.match(page, /getCurrentXMonitorAccess\\(\\)/);\nassert.match(page, /if \\(!access\\.allowed\\)/);\nassert.ok(\n  page.indexOf('if (!access.allowed)') < page.indexOf('getXMonitorData()'),\n  'premium data must not be fetched before entitlement is confirmed',\n);\nassert.match(page, /<XMonitorPaywall/);\nassert.match(page, /<XMonitorFeedSwitcher/);
 assert.match(page, /earlyPosts=\{data\.earlyPosts\}/);
 assert.match(page, /trendingPosts=\{data\.trendingPosts\}/);
 assert.doesNotMatch(

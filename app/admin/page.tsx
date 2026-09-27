@@ -10,6 +10,9 @@ import { AdminSurpriseForm } from './admin-surprise-form';
 import { isIpHashingConfigured } from '@/lib/request-identity';
 import { getXKeywordConfig, isXKeywordWriteConfigured } from '@/lib/x-monitor-github';
 import { XKeywordSettings } from './x-keyword-settings';
+import { getXMonitorAllowlist } from '@/lib/x-monitor-access-store';
+import { isXMonitorBillingConfigured } from '@/lib/x-monitor-billing';
+import { XMonitorAccessSettings } from './x-access-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +26,14 @@ export default async function AdminPage() {
   if (!isAdminEmail(user.email)) redirect('/dashboard');
 
   const admin = createAdminClient();
-  const [{ data: config }, summary24h, summary7, summary30, xKeywordsResult] = await Promise.all([
+  const [
+    { data: config },
+    summary24h,
+    summary7,
+    summary30,
+    xKeywordsResult,
+    xAccessResult,
+  ] = await Promise.all([
     admin.from('surprise_config').select('*').eq('id', 1).maybeSingle(),
     getGlobalAnalyticsHourly(admin, 24),
     getGlobalAnalytics(admin, 7),
@@ -34,8 +44,15 @@ export default async function AdminPage() {
         keywords: null,
         error: error instanceof Error ? error.message : 'キーワード設定の取得に失敗しました',
       })),
+    getXMonitorAllowlist()
+      .then((allowlist) => ({ allowlist, error: null as string | null }))
+      .catch((error: unknown) => ({
+        allowlist: null,
+        error: error instanceof Error ? error.message : 'X監視の許可リスト取得に失敗しました',
+      })),
   ]);
   const canWriteXKeywords = isXKeywordWriteConfigured();
+  const billingConfigured = isXMonitorBillingConfigured();
 
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-5 py-10 sm:px-6 sm:py-12">
@@ -49,7 +66,7 @@ export default async function AdminPage() {
           <p className="studio-eyebrow">ADMIN CONSOLE</p>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">管理画面</h1>
           <p className="mt-2 text-sm text-slate-500">
-            利用状況、X監視キーワード、サプライズ抽選を管理します。
+            利用状況、X監視のアクセス・キーワード、サプライズ抽選を管理します。
           </p>
         </div>
         <Link
@@ -81,6 +98,14 @@ export default async function AdminPage() {
           summary30={summary30}
           pvLabel="全サイト合計PV"
           uuLabel="全サイト合計UU"
+        />
+      </div>
+
+      <div className="mb-14 border-t border-slate-200 pt-10">
+        <XMonitorAccessSettings
+          allowlist={xAccessResult.allowlist}
+          billingConfigured={billingConfigured}
+          loadError={xAccessResult.error}
         />
       </div>
 

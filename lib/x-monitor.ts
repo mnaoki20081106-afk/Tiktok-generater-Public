@@ -249,6 +249,12 @@ function parseModel(registry: UnknownRecord, model: UnknownRecord): XModelStatus
 export async function getXMonitorData(): Promise<XMonitorData> {
   try {
     const { getPrivateXMonitorSnapshot } = await import('@/lib/x-monitor-private-source');
+    // Keep the private storage dependency lazy so the pure normalization
+    // helpers in this module remain executable in Node's lightweight tests.
+    // Next.js resolves the alias when this server-only path is actually used.
+    const { getPrivateXMonitorSnapshot } = await import(
+      '@/lib/x-monitor-private-source'
+    );
     const snapshot = await getPrivateXMonitorSnapshot();
     const hits = record(snapshot.hits);
     const status = record(snapshot.status);

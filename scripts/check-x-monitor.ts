@@ -176,7 +176,7 @@ assert.doesNotMatch(
   /リンクツール|\/tools\/link-generator/,
   'broken link tool must not appear in studio navigation',
 );
-assert.match(studioHeader, />\s*X監視\s*</);
+assert.match(studioHeader, /href="\/x-monitor"/);\nassert.match(studioHeader, /X監視/);\nassert.match(studioHeader, /LockKeyhole/);
 assert.match(studioHeader, />\s*マイサイト\s*</);
 assert.match(studioHeader, /studio-nav-current/);
 assert.match(layout, /<StudioHeader current="x-monitor" xMonitorLocked=\{!access\.allowed\} \/>/);

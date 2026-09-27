@@ -166,10 +166,14 @@ assert.match(autoRefresh, /router\.refresh\(\)/);
 assert.match(autoRefresh, /visibilitychange/);
 assert.match(
   monitorLib,
-  /t=\$\{Date\.now\(\)\}/,
-  'runtime JSON fetches must bypass upstream raw-file caches',
+  /getPrivateXMonitorSnapshot/,
+  'X monitor must read the premium feed from server-only private storage',
 );
-assert.match(monitorLib, /cache: 'no-store'/);
+assert.doesNotMatch(
+  monitorLib,
+  /raw\.githubusercontent\.com|fetchEngineJson/,
+  'premium monitor data must not fall back to the public GitHub raw feed',
+);
 
 assert.doesNotMatch(
   studioHeader,

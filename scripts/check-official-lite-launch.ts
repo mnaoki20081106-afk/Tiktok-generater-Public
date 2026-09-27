@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   directOfficialLiteOneLink,
+  extractOfficialLiteIosMeta,
   extractOfficialLiteLaunchUrl,
   extractUniversalData,
   validateOfficialLiteLaunchUrl,
@@ -156,28 +157,39 @@ const renderedLaunch = launch + '&official_extra=keep%2fme';
 const anchor = `<a class="matrix-smart-wrapper" href="${renderedLaunch.replaceAll('&', '&amp;')}">Open</a>`;
 assert.equal(extractOfficialLiteLaunchUrl(html + anchor), renderedLaunch);
 
-// 実HTMLでは apple-itunes-app に iOSの公式App Store IDがあり、aid=473824は
-// 日本向けTikTok Lite。未インストール時はOneLinkの紹介パラメータを保持したまま
-// af_ios_url / af_android_url だけを追加し、TikTok側テンプレートのLPフォールバックを上書きする。
+// 実HTMLのapple-itunes-appは、App Store IDだけでなく紹介情報入りの
+// app-argumentも明示している。招待成立を最優先し、こちらでdeep linkを推測せず
+// このTikTok自身の値をiOS向けに使う。
 const storeUniversalData = structuredClone(universalData);
 storeUniversalData.app_context.query.aid = '473824';
-const storeHtml = `<!doctype html><meta name="apple-itunes-app" content="app-id=6447160980, app-argument=snssdk473824://webview">
+const smartAppArgument = 'snssdk473824://webview?u_code=TESTCODE&wid=1234567890'
+  + '&share_page_data=' + encodeURIComponent(sharePageData)
+  + '&invite_code=OFFICIAL_ADSET&gd_label=click_wap_coin_scan_code_support_mentor'
+  + '&incentive_redirect=1';
+const storeHtml = `<!doctype html><meta name="apple-itunes-app" content="app-id=6447160980, app-argument=${smartAppArgument}">
 <script id="universal-data" type="application/json">${JSON.stringify(storeUniversalData)}</script>${anchor}`;
 const storeLaunch = extractOfficialLiteLaunchUrl(storeHtml);
-assert.ok(storeLaunch, 'current invite HTML can add direct store fallbacks');
+assert.equal(storeLaunch, renderedLaunch,
+  'extractor keeps TikTok rendered lite_redirect byte-for-byte; store overrides are not injected at extraction time');
+
+const iosMeta = extractOfficialLiteIosMeta(storeHtml);
+assert.deepEqual(iosMeta, {
+  storeUrl: 'https://apps.apple.com/app/id6447160980',
+  appArgument: smartAppArgument,
+});
+
 const storeShortDl = new URL(new URL(storeLaunch).searchParams.get('short_dl')!);
-assert.equal(storeShortDl.searchParams.get('af_ios_url'), 'https://apps.apple.com/app/id6447160980');
-assert.equal(
-  storeShortDl.searchParams.get('af_android_url'),
-  'https://play.google.com/store/apps/details?id=com.ss.android.ugc.tiktok.lite'
-);
-assert.equal(storeShortDl.searchParams.get('wid'), '1234567890', 'store override preserves inviter wid');
-assert.equal(storeShortDl.searchParams.get('af_adset'), 'OFFICIAL_ADSET', 'store override preserves invite code');
+assert.equal(storeShortDl.searchParams.get('af_ios_url'), null,
+  'official short_dl is not mutated before direct-link construction');
+assert.equal(storeShortDl.searchParams.get('af_android_url'), null,
+  'Android redirection is left to TikTok/AppsFlyer because the HTML did not provide an Android store target');
+assert.equal(storeShortDl.searchParams.get('wid'), '1234567890');
+assert.equal(storeShortDl.searchParams.get('af_adset'), 'OFFICIAL_ADSET');
 assert.equal(storeShortDl.searchParams.get('pid'), 'coin_referral_onelink_scan_code_support_mentor');
 assert.match(storeLaunch, /official_extra=keep%2fme$/, 'outer unknown TikTok parameters stay byte-preserved');
 
-const directStoreLink = directOfficialLiteOneLink(storeLaunch);
-assert.ok(directStoreLink, 'official rendered short_dl can be promoted to a direct attributed OneLink');
+const directStoreLink = directOfficialLiteOneLink(storeLaunch, iosMeta);
+assert.ok(directStoreLink, 'official rendered short_dl can be promoted to a minimal direct attributed OneLink');
 const directStore = new URL(directStoreLink);
 assert.equal(directStore.hostname, 'snssdk473824.onelink.me');
 assert.equal(directStore.pathname, '/4P4E');
@@ -185,19 +197,21 @@ assert.equal(directStore.searchParams.get('wid'), '1234567890');
 assert.equal(directStore.searchParams.get('af_adset'), 'OFFICIAL_ADSET');
 assert.equal(directStore.searchParams.get('af_force_deeplink'), 'true');
 assert.equal(directStore.searchParams.get('af_ios_url'), 'https://apps.apple.com/app/id6447160980');
-assert.equal(
-  directStore.searchParams.get('af_android_url'),
-  'https://play.google.com/store/apps/details?id=com.ss.android.ugc.tiktok.lite'
-);
-assert.equal(directStore.searchParams.get('af_param_forwarding'), 'false');
+assert.equal(directStore.searchParams.get('af_android_url'), null);
+assert.equal(directStore.searchParams.get('af_param_forwarding'), null,
+  'do not add attribution-unrelated forwarding overrides');
 assert.equal(
   directStore.searchParams.get('af_dp'),
-  new URL(storeLaunch).searchParams.get('redirect_url'),
-  'direct OneLink uses TikTok official redirect_url as its deep-link payload'
+  smartAppArgument,
+  'iOS deep link uses TikTok own Smart App Banner app-argument'
 );
 
-// af_dp は outer redirect_url のpercent-encoded値をそのまま移す。decode→encodeで
-// share_page_dataの「+」を空白へ変えないことをraw queryでも確認する。
+// TikTokがshort_dlへ載せた紹介/キャンペーン情報は、直行化の前後で完全一致させる。
+for (const key of ['pid', 'wid', 'c', 'is_retargeting', 'incentive_redirect',
+  'ug_launch_category', 'media_source', 'af_adset', 'gd_label', 'af_c_id', 'af_adset_id']) {
+  assert.equal(directStore.searchParams.get(key), storeShortDl.searchParams.get(key), `${key} is preserved`);
+}
+
 const rawParam = (raw: string, key: string) => {
   const q = raw.split('#', 1)[0].split('?', 2)[1] || '';
   for (const part of q.split('&')) {
@@ -211,8 +225,8 @@ const rawParam = (raw: string, key: string) => {
 };
 assert.equal(
   rawParam(directStoreLink, 'af_dp'),
-  rawParam(storeLaunch, 'redirect_url'),
-  'af_dp keeps the exact raw encoded redirect_url bytes'
+  encodeURIComponent(smartAppArgument),
+  'af_dp contains the exact TikTok-authored app-argument as one encoded query value'
 );
 assert.equal(extractOfficialLiteLaunchUrl(anchor), renderedLaunch);
 assert.equal(extractOfficialLiteLaunchUrl(anchor.replaceAll('&amp;', '&#38;')), renderedLaunch);
@@ -262,6 +276,8 @@ try {
   assert.equal(savedShort.hostname, 'snssdk473824.onelink.me');
   assert.equal(savedShort.searchParams.get('af_force_deeplink'), 'true');
   assert.equal(savedShort.searchParams.get('af_ios_url'), 'https://apps.apple.com/app/id6447160980');
+  assert.equal(savedShort.searchParams.get('af_android_url'), null);
+  assert.equal(savedShort.searchParams.get('af_dp'), smartAppArgument);
   assert.equal(savedShort.searchParams.get('wid'), '1234567890');
   assert.equal(savedShort.searchParams.get('af_adset'), 'OFFICIAL_ADSET');
 
@@ -272,8 +288,11 @@ try {
 
   const migrated = await generateDestinationUrl(storeLaunch);
   assert.equal(migrated.mode, 'onelink');
-  assert.equal(new URL(migrated.url).hostname, 'snssdk473824.onelink.me',
+  const migratedUrl = new URL(migrated.url);
+  assert.equal(migratedUrl.hostname, 'snssdk473824.onelink.me',
     'legacy lite_redirect is migrated forward to the official attributed OneLink, not back to the visible LP');
+  assert.equal(migratedUrl.searchParams.get('af_ios_url'), null,
+    'legacy data without HTML metadata does not invent a store override');
 } finally {
   globalThis.fetch = savedFetch;
 }

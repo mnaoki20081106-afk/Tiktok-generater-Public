@@ -11,6 +11,7 @@
  */
 
 import {
+  directOfficialLiteOneLink,
   extractOfficialLiteLaunchUrl,
   validateOfficialLiteLaunchUrl,
 } from './official-lite-launch.ts';
@@ -1623,21 +1624,39 @@ export async function generateDestinationUrl(
   if (!input) throw new Error('遷移先URLが不正です。http(s):// で始まるURLを入力してください。');
 
   if (Object.keys(overrides).length === 0) {
-    // 正攻法: 公式短縮招待リンクはTikTok側のリダイレクト/LP処理をそのまま使う。
-    if (isTikTokLiteInviteShortLink(rawUrl)) {
-      return { url: rawUrl.trim(), mode: 'original', removed: [], liteForced: false };
+    /*
+     * サイト編集のTikTok Lite招待は、まずLPをサーバー側だけで解析し、
+     * TikTok自身が生成した完成済み short_dl(OneLink) を直接配布する。
+     *
+     * 以前失敗した「4P4Eをこちらで再構築」は使わない。今回は完成済みshort_dlの
+     * wid/pid/media_source/af_adset/gd_label等をそのまま保持し、公式redirect_urlを
+     * af_dpへ生のエンコードで移す。未インストール時はOneLinkクリック後ストアへ、
+     * インストール済み時はLite schemeへ進む。
+     *
+     * TikTok側の一時障害等でHTMLを取れない時だけ、招待成立を失わないため
+     * 公式短縮URL/LPを最後の保険として残す。
+     */
+    if (isTikTokLiteInviteShortLink(rawUrl) || isInviteLpUrl(input)) {
+      try {
+        const resolved = await resolveOfficialLiteInviteUrl(rawUrl.trim());
+        const direct = directOfficialLiteOneLink(resolved.launchUrl);
+        if (direct) return { url: direct, mode: 'onelink', removed: [], liteForced: false };
+      } catch {
+        // 招待経路を完全に消さない。公開時にも再解決を試す。
+      }
+      return {
+        url: rawUrl.trim(),
+        mode: isInviteLpUrl(input) ? 'lp' : 'original',
+        removed: [],
+        liteForced: false,
+      };
     }
 
-    // 展開済みLPも、そのJSが招待バインドとアプリ/ストア分岐を行うため改変しない。
-    if (isInviteLpUrl(input)) {
-      return { url: rawUrl.trim(), mode: 'lp', removed: [], liteForced: false };
-    }
-
-    // 旧方式のlite_redirectが保存されているサイトは、再保存時に公式LPへ戻す。
+    // 旧保存データのlite_redirectも、LPへ戻すのではなく公式short_dlへ移行する。
     if (isOfficialTikTokLiteLaunchUrl(rawUrl)) {
-      const inviteLp = inviteLpFromOfficialTikTokLiteLaunchUrl(rawUrl);
-      if (!inviteLp) throw new Error('保存済みTikTok Lite分岐URLから招待ページを復元できませんでした。');
-      return { url: inviteLp, mode: 'lp', removed: [], liteForced: false };
+      const direct = directOfficialLiteOneLink(rawUrl);
+      if (direct) return { url: direct, mode: 'onelink', removed: [], liteForced: false };
+      return { url: rawUrl.trim(), mode: 'original', removed: [], liteForced: false };
     }
 
     if (isTikTokLiteOneLink(rawUrl)) {

@@ -155,7 +155,8 @@ export function assertXMonitorWorkflowClaims(
   }
   if (
     claims.event_name !== 'schedule' &&
-    claims.event_name !== 'workflow_dispatch'
+    claims.event_name !== 'workflow_dispatch' &&
+    claims.event_name !== 'push'
   ) {
     throw new Error('Unexpected GitHub workflow event');
   }

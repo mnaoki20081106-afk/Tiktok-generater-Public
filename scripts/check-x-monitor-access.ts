@@ -49,6 +49,18 @@ const dashboardLayout = fs.readFileSync(
   new URL('../app/dashboard/layout.tsx', import.meta.url),
   'utf8',
 );
+const oidc = fs.readFileSync(
+  new URL('../lib/github-actions-oidc.ts', import.meta.url),
+  'utf8',
+);
+const privateSource = fs.readFileSync(
+  new URL('../lib/x-monitor-private-source.ts', import.meta.url),
+  'utf8',
+);
+const syncRoute = fs.readFileSync(
+  new URL('../app/api/internal/x-monitor-sync/route.ts', import.meta.url),
+  'utf8',
+);
 
 assert.match(paywall, /X監視はロックされています/);
 assert.match(paywall, /月額サービスへのアップグレードが必要です/);
@@ -89,5 +101,17 @@ assert.match(monitorPage, /access\.source === 'subscription'/);
 assert.match(studioHeader, /studio-nav-locked/);
 assert.match(studioHeader, /LockKeyhole/);
 assert.match(dashboardLayout, /xMonitorLocked=\{!access\.allowed\}/);
+
+assert.match(oidc, /RS256/);
+assert.match(oidc, /webcrypto\.subtle\.verify/);
+assert.match(oidc, /mnaoki20081106-afk\/X-Bunseki/);
+assert.match(oidc, /refs\/heads\/main/);
+assert.match(oidc, /\.github\/workflows\/monitor\.yml@refs\/heads\/main/);
+assert.match(syncRoute, /verifyGitHubActionsOidcToken/);
+assert.match(syncRoute, /assertXMonitorWorkflowClaims/);
+assert.match(syncRoute, /savePrivateXMonitorSnapshot/);
+assert.match(privateSource, /app-private/);
+assert.match(privateSource, /public: false/);
+assert.match(privateSource, /x-monitor\/latest\.json/);
 
 console.log('✅ X monitor paid access checks passed');

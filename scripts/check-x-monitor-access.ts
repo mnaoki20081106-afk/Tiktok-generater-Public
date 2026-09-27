@@ -50,7 +50,7 @@ assert.match(paywall, /LockKeyhole/);
 assert.match(access, /isAdminEmail\(email\)/);
 assert.match(access, /isXMonitorEmailAllowlisted\(email\)/);
 assert.match(access, /hasActiveXMonitorSubscription\(email\)/);
-assert.match(access, /fail closed/i);
+assert.match(access, /allowlist lookup failed/);\nassert.match(access, /must not break the free dashboard/);\nassert.match(access, /fail closed/i);
 
 assert.match(billing, /X_MONITOR_STRIPE_PRICE_ID/);
 assert.match(billing, /mode', 'subscription'/);

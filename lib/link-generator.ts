@@ -12,6 +12,7 @@
 
 import {
   directOfficialLiteOneLink,
+  extractOfficialLiteIosMeta,
   extractOfficialLiteLaunchUrl,
   validateOfficialLiteLaunchUrl,
 } from './official-lite-launch.ts';
@@ -856,6 +857,8 @@ export async function expandShortUrl(raw: string): Promise<string | null> {
 export interface OfficialLiteInviteResolution {
   landingUrl: string;
   launchUrl: string;
+  iosStoreUrl: string | null;
+  iosAppArgument: string | null;
 }
 
 async function readLimitedHtml(res: Response): Promise<string> {
@@ -902,12 +905,23 @@ export async function resolveOfficialLiteInviteUrl(raw: string): Promise<Officia
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ url: raw.trim(), includeLaunchUrl: true }),
     });
-    const data = await res.json().catch(() => null) as { url?: unknown; launchUrl?: unknown; error?: unknown } | null;
+    const data = await res.json().catch(() => null) as {
+      url?: unknown;
+      launchUrl?: unknown;
+      iosStoreUrl?: unknown;
+      iosAppArgument?: unknown;
+      error?: unknown;
+    } | null;
     if (typeof data?.url !== 'string' || typeof data?.launchUrl !== 'string'
       || !validateOfficialLiteLaunchUrl(data.launchUrl)) {
       throw new Error(typeof data?.error === 'string' ? data.error : 'TikTok公式のアプリ/ストア分岐リンクを取得できませんでした。');
     }
-    return { landingUrl: data.url, launchUrl: data.launchUrl };
+    return {
+      landingUrl: data.url,
+      launchUrl: data.launchUrl,
+      iosStoreUrl: typeof data.iosStoreUrl === 'string' ? data.iosStoreUrl : null,
+      iosAppArgument: typeof data.iosAppArgument === 'string' ? data.iosAppArgument : null,
+    };
   }
 
   const landingUrl = isTikTokLiteInviteShortLink(raw)
@@ -926,11 +940,18 @@ export async function resolveOfficialLiteInviteUrl(raw: string): Promise<Officia
       headers: { 'user-agent': IOS_USER_AGENT, accept: 'text/html,application/xhtml+xml' },
       signal: ctrl?.signal,
     });
-    const launchUrl = extractOfficialLiteLaunchUrl(await readLimitedHtml(res));
+    const html = await readLimitedHtml(res);
+    const launchUrl = extractOfficialLiteLaunchUrl(html);
     if (!launchUrl || !validateOfficialLiteLaunchUrl(launchUrl)) {
       throw new Error('招待ページ内にTikTok公式のアプリ/ストア分岐情報が見つかりませんでした。');
     }
-    return { landingUrl, launchUrl };
+    const iosMeta = extractOfficialLiteIosMeta(html);
+    return {
+      landingUrl,
+      launchUrl,
+      iosStoreUrl: iosMeta?.storeUrl ?? null,
+      iosAppArgument: iosMeta?.appArgument ?? null,
+    };
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -1639,7 +1660,12 @@ export async function generateDestinationUrl(
     if (isTikTokLiteInviteShortLink(rawUrl) || isInviteLpUrl(input)) {
       try {
         const resolved = await resolveOfficialLiteInviteUrl(rawUrl.trim());
-        const direct = directOfficialLiteOneLink(resolved.launchUrl);
+        const direct = directOfficialLiteOneLink(
+          resolved.launchUrl,
+          resolved.iosStoreUrl && resolved.iosAppArgument
+            ? { storeUrl: resolved.iosStoreUrl, appArgument: resolved.iosAppArgument }
+            : null
+        );
         if (direct) return { url: direct, mode: 'onelink', removed: [], liteForced: false };
       } catch {
         // 招待経路を完全に消さない。公開時にも再解決を試す。

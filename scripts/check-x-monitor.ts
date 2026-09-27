@@ -115,7 +115,14 @@ const adminLayout = fs.readFileSync(
   'utf8',
 );
 
-assert.match(page, /getCurrentXMonitorAccess\\(\\)/);\nassert.match(page, /if \\(!access\\.allowed\\)/);\nassert.ok(\n  page.indexOf('if (!access.allowed)') < page.indexOf('getXMonitorData()'),\n  'premium data must not be fetched before entitlement is confirmed',\n);\nassert.match(page, /<XMonitorPaywall/);\nassert.match(page, /<XMonitorFeedSwitcher/);
+assert.match(page, /getCurrentXMonitorAccess\(\)/);
+assert.match(page, /if \(!access\.allowed\)/);
+assert.ok(
+  page.indexOf('if (!access.allowed)') < page.indexOf('getXMonitorData()'),
+  'premium data must not be fetched before entitlement is confirmed',
+);
+assert.match(page, /<XMonitorPaywall/);
+assert.match(page, /<XMonitorFeedSwitcher/);
 assert.match(page, /earlyPosts=\{data\.earlyPosts\}/);
 assert.match(page, /trendingPosts=\{data\.trendingPosts\}/);
 assert.doesNotMatch(
@@ -149,7 +156,7 @@ assert.match(
   'trending must lead with current impressions while early leads with predicted final impressions',
 );
 
-assert.match(layout, /<XMonitorAutoRefresh \/>/);
+assert.match(layout, /access\.allowed && <XMonitorAutoRefresh \/>/);
 assert.match(
   autoRefresh,
   /15 \* 60 \* 1000/,
@@ -172,9 +179,9 @@ assert.doesNotMatch(
 assert.match(studioHeader, />\s*X監視\s*</);
 assert.match(studioHeader, />\s*マイサイト\s*</);
 assert.match(studioHeader, /studio-nav-current/);
-assert.match(layout, /<StudioHeader current="x-monitor" \/>/);
-assert.match(dashboardLayout, /<StudioHeader current="dashboard" \/>/);
-assert.match(adminLayout, /<StudioHeader current="dashboard" \/>/);
+assert.match(layout, /<StudioHeader current="x-monitor" xMonitorLocked=\{!access\.allowed\} \/>/);
+assert.match(dashboardLayout, /xMonitorLocked=\{!access\.allowed\}/);
+assert.match(adminLayout, /xMonitorLocked=\{false\}/);
 assert.doesNotMatch(
   layout,
   /publicView/,

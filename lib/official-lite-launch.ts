@@ -115,6 +115,48 @@ function replaceRawQueryParam(raw: string, key: string, value: string): string {
   return head + '?' + next.join('&') + hash;
 }
 
+/** クエリ値をデコードせず取り出す。二重エンコードされた招待payloadのバイト表現を守る。 */
+function rawQueryParam(raw: string, key: string): string | null {
+  const hashAt = raw.indexOf('#');
+  const withoutHash = hashAt >= 0 ? raw.slice(0, hashAt) : raw;
+  const qAt = withoutHash.indexOf('?');
+  if (qAt < 0) return null;
+
+  for (const part of withoutHash.slice(qAt + 1).split('&')) {
+    const eq = part.indexOf('=');
+    const rawKey = eq >= 0 ? part.slice(0, eq) : part;
+    let decoded = rawKey;
+    try { decoded = decodeURIComponent(rawKey); } catch { /* keep raw */ }
+    if (decoded === key) return eq >= 0 ? part.slice(eq + 1) : '';
+  }
+  return null;
+}
+
+/** すでにpercent-encode済みの値を、そのままクエリへ差し込む。 */
+function replaceRawEncodedQueryParam(raw: string, key: string, encodedValue: string): string {
+  const hashAt = raw.indexOf('#');
+  const hash = hashAt >= 0 ? raw.slice(hashAt) : '';
+  const withoutHash = hashAt >= 0 ? raw.slice(0, hashAt) : raw;
+  const qAt = withoutHash.indexOf('?');
+  const head = qAt >= 0 ? withoutHash.slice(0, qAt) : withoutHash;
+  const parts = qAt >= 0 && withoutHash.slice(qAt + 1)
+    ? withoutHash.slice(qAt + 1).split('&')
+    : [];
+
+  let replaced = false;
+  const next = parts.map(part => {
+    const eq = part.indexOf('=');
+    const rawKey = eq >= 0 ? part.slice(0, eq) : part;
+    let decoded = rawKey;
+    try { decoded = decodeURIComponent(rawKey); } catch { /* keep raw */ }
+    if (decoded !== key) return part;
+    replaced = true;
+    return rawKey + '=' + encodedValue;
+  });
+  if (!replaced) next.push(encodeURIComponent(key) + '=' + encodedValue);
+  return head + '?' + next.join('&') + hash;
+}
+
 function appleStoreUrlFromHtml(html: string): string | null {
   for (const match of html.matchAll(/<meta\b(?:"[^"]*"|'[^']*'|[^'">])*>/gi)) {
     if ((htmlAttribute(match[0], 'name') || '').toLowerCase() !== 'apple-itunes-app') continue;
@@ -327,6 +369,64 @@ export function extractOfficialLiteLaunchUrl(html: string): string | null {
   }
   const rebuilt = data ? buildOfficialLiteLaunchUrl(data) : null;
   return rebuilt ? withDirectStoreFallbacks(rebuilt, html, data) : null;
+}
+
+/**
+ * TikTokが招待LP内で生成した公式 short_dl(OneLink)を、そのまま直接配布できる形へ変換する。
+ *
+ * 重要:
+ * - OneLink本体の wid / pid / media_source / af_adset / gd_label 等は一切作り直さない。
+ * - af_dp には外側 lite_redirect が実際に使っていた redirect_url を**生のエンコードのまま**移す。
+ *   share_page_data の + / %2F を URLSearchParams で再解釈しないため。
+ * - iOS Safariで既インストール時にURI scheme fallbackを使えるよう af_force_deeplink=true。
+ * - 未インストール時はOneLinkのクリックを先に記録させたうえで公式ストアへ落とす。
+ *
+ * 以前失敗した「4P4Eをこちらで再構築する」方式とは異なり、今回はTikTok自身の完成済み
+ * short_dlを土台にするため、招待者/campaignのサーバー側文脈を保持する。
+ */
+export function directOfficialLiteOneLink(rawLaunch: string): string | null {
+  if (!validateOfficialLiteLaunchUrl(rawLaunch)) return null;
+
+  const rawRedirect = rawQueryParam(rawLaunch, 'redirect_url');
+  const rawShortDl = rawQueryParam(rawLaunch, 'short_dl');
+  if (rawRedirect === null || rawShortDl === null) return null;
+
+  let shortDl: string;
+  try {
+    shortDl = decodeURIComponent(rawShortDl);
+  } catch {
+    return null;
+  }
+
+  const parsed = parseUrl(shortDl);
+  if (!parsed || parsed.protocol !== 'https:' || parsed.hostname !== ONELINK_HOST
+    || parsed.pathname !== ONELINK_PATH || parsed.username || parsed.password || parsed.port) {
+    return null;
+  }
+
+  // redirect_url は outer URL 上ですでに「af_dp の値として必要な1段階encode済み」の形。
+  // 一度 decode→encode すると share_page_data の + が空白化しうるため、そのまま差し込む。
+  let direct = replaceRawEncodedQueryParam(shortDl, 'af_dp', rawRedirect);
+  direct = replaceRawQueryParam(direct, 'af_force_deeplink', 'true');
+
+  // HTMLから抽出済みのlaunchUrlには通常これらが入るが、旧保存データにも効くよう補完する。
+  if (!parseUrl(direct)?.searchParams.has('af_ios_url')) {
+    direct = replaceRawQueryParam(direct, 'af_ios_url', IOS_STORE_FALLBACK);
+  }
+  if (!parseUrl(direct)?.searchParams.has('af_android_url')) {
+    direct = replaceRawQueryParam(direct, 'af_android_url', ANDROID_STORE_FALLBACK);
+  }
+
+  // ストアURLへ紹介パラメータを付け足す必要はない。AppsFlyer側のクリック記録には影響しない。
+  direct = replaceRawQueryParam(direct, 'af_param_forwarding', 'false');
+
+  const out = parseUrl(direct);
+  if (!out || out.hostname !== ONELINK_HOST || out.pathname !== ONELINK_PATH) return null;
+  if (out.searchParams.get('af_force_deeplink') !== 'true') return null;
+  if (out.searchParams.get('af_ios_url') !== IOS_STORE_FALLBACK) return null;
+  if (out.searchParams.get('af_android_url') !== ANDROID_STORE_FALLBACK) return null;
+
+  return direct;
 }
 
 /** 保存済みURLを再保存する際にも使う、公式 lite_redirect の厳格な検証。 */

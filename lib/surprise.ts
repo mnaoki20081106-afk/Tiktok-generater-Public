@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { Site } from '@/lib/types';
 import {
-  inviteLpFromOfficialTikTokLiteLaunchUrl,
+  generateDestinationUrl,
   isInviteLpUrl,
   isOfficialTikTokLiteLaunchUrl,
   isTikTokLiteInviteShortLink,
@@ -32,24 +32,27 @@ async function lookupOne(query: PromiseLike<LookupResult>): Promise<LookupResult
 /**
  * 公開ページへ渡す直前の最終ガード。
  *
- * TikTok Lite招待は、LPを飛ばさずTikTok公式の招待フローをそのまま使う。
- * 公式短縮リンク/招待LPは加工せず返し、旧実装でDBに残っているlite_redirectだけ
- * 中に埋め込まれたparams_url(招待LP)へ戻す。
+ * TikTok Lite招待の短縮URL/LP/旧lite_redirectが残っている場合は、公開時にも
+ * もう一度TikTok公式HTMLの解析または公式launch URLの変換を試す。
  *
- * これにより:
- * - インストール済み端末: 招待LPのJSがTikTok Liteを起動
- * - 未インストール端末: 招待LPを表示し、TikTok側の公式ストア導線へ進む
- * - 招待バインド: LP自身のJS/サーバー処理に任せる
+ * 成功時:
+ *   公式short_dl(OneLink) → AppsFlyer click → Lite / App Store
+ * 失敗時:
+ *   招待導線を消さず、元のTikTok公式URLを最後の保険として返す。
  */
 export async function normalizePublicDestinationUrl(raw: string): Promise<string> {
   const parsed = parseHttpUrl(raw);
   if (!parsed) return '#';
 
-  if (isTikTokLiteInviteShortLink(raw)) return raw.trim();
-  if (isInviteLpUrl(parsed)) return raw.trim();
-
-  if (isOfficialTikTokLiteLaunchUrl(raw)) {
-    return inviteLpFromOfficialTikTokLiteLaunchUrl(raw) ?? '#';
+  if (isTikTokLiteInviteShortLink(raw) || isInviteLpUrl(parsed) || isOfficialTikTokLiteLaunchUrl(raw)) {
+    try {
+      const built = await generateDestinationUrl(raw);
+      const out = parseHttpUrl(built.url);
+      if (out) return built.url;
+    } catch {
+      // TikTok側が一時的に解決不能でも、招待URL自体は失わない。
+    }
+    return raw.trim();
   }
 
   return parsed.toString();

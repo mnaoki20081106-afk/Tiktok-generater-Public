@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  directOfficialLiteOneLink,
   extractOfficialLiteLaunchUrl,
   extractUniversalData,
   validateOfficialLiteLaunchUrl,
@@ -174,6 +175,45 @@ assert.equal(storeShortDl.searchParams.get('wid'), '1234567890', 'store override
 assert.equal(storeShortDl.searchParams.get('af_adset'), 'OFFICIAL_ADSET', 'store override preserves invite code');
 assert.equal(storeShortDl.searchParams.get('pid'), 'coin_referral_onelink_scan_code_support_mentor');
 assert.match(storeLaunch, /official_extra=keep%2fme$/, 'outer unknown TikTok parameters stay byte-preserved');
+
+const directStoreLink = directOfficialLiteOneLink(storeLaunch);
+assert.ok(directStoreLink, 'official rendered short_dl can be promoted to a direct attributed OneLink');
+const directStore = new URL(directStoreLink);
+assert.equal(directStore.hostname, 'snssdk473824.onelink.me');
+assert.equal(directStore.pathname, '/4P4E');
+assert.equal(directStore.searchParams.get('wid'), '1234567890');
+assert.equal(directStore.searchParams.get('af_adset'), 'OFFICIAL_ADSET');
+assert.equal(directStore.searchParams.get('af_force_deeplink'), 'true');
+assert.equal(directStore.searchParams.get('af_ios_url'), 'https://apps.apple.com/app/id6447160980');
+assert.equal(
+  directStore.searchParams.get('af_android_url'),
+  'https://play.google.com/store/apps/details?id=com.ss.android.ugc.tiktok.lite'
+);
+assert.equal(directStore.searchParams.get('af_param_forwarding'), 'false');
+assert.equal(
+  directStore.searchParams.get('af_dp'),
+  new URL(storeLaunch).searchParams.get('redirect_url'),
+  'direct OneLink uses TikTok official redirect_url as its deep-link payload'
+);
+
+// af_dp は outer redirect_url のpercent-encoded値をそのまま移す。decode→encodeで
+// share_page_dataの「+」を空白へ変えないことをraw queryでも確認する。
+const rawParam = (raw: string, key: string) => {
+  const q = raw.split('#', 1)[0].split('?', 2)[1] || '';
+  for (const part of q.split('&')) {
+    const at = part.indexOf('=');
+    const rk = at >= 0 ? part.slice(0, at) : part;
+    let decoded = rk;
+    try { decoded = decodeURIComponent(rk); } catch {}
+    if (decoded === key) return at >= 0 ? part.slice(at + 1) : '';
+  }
+  return null;
+};
+assert.equal(
+  rawParam(directStoreLink, 'af_dp'),
+  rawParam(storeLaunch, 'redirect_url'),
+  'af_dp keeps the exact raw encoded redirect_url bytes'
+);
 assert.equal(extractOfficialLiteLaunchUrl(anchor), renderedLaunch);
 assert.equal(extractOfficialLiteLaunchUrl(anchor.replaceAll('&amp;', '&#38;')), renderedLaunch);
 assert.equal(extractOfficialLiteLaunchUrl(`<!--${anchor}-->`), null);
@@ -211,22 +251,29 @@ assert.equal(
 
 const savedFetch = globalThis.fetch;
 try {
-  // 正攻法では短縮招待URLを加工しない。TikTok側が
-  // short URL -> invite LP -> Lite/Store の公式フローを担当する。
   const short = 'https://lite.tiktok.com/t/ZS9SKLkjB9v5P-nhiPj/';
-  globalThis.fetch = async () => { throw new Error('Official short invite must not be fetched during save'); };
+  globalThis.fetch = async input => String(input) === short
+    ? new Response(null, { status: 302, headers: { location: inviteUrl.toString() } })
+    : new Response(storeHtml);
+
   const result = await generateDestinationUrl(short);
-  assert.equal(result.url, short, 'Shared save path preserves the official short invite byte-for-byte');
-  assert.equal(new URL(result.url).hostname, 'lite.tiktok.com');
+  assert.equal(result.mode, 'onelink');
+  const savedShort = new URL(result.url);
+  assert.equal(savedShort.hostname, 'snssdk473824.onelink.me');
+  assert.equal(savedShort.searchParams.get('af_force_deeplink'), 'true');
+  assert.equal(savedShort.searchParams.get('af_ios_url'), 'https://apps.apple.com/app/id6447160980');
+  assert.equal(savedShort.searchParams.get('wid'), '1234567890');
+  assert.equal(savedShort.searchParams.get('af_adset'), 'OFFICIAL_ADSET');
 
   const expanded = await generateDestinationUrl(inviteUrl.toString());
-  assert.equal(expanded.url, inviteUrl.toString(),
-    'An already-expanded invite LP stays on the official LP so TikTok can bind the referral');
+  assert.equal(expanded.mode, 'onelink');
+  assert.equal(new URL(expanded.url).hostname, 'snssdk473824.onelink.me',
+    'expanded invite LP is also converted to the same LP-free official OneLink path');
 
-  const migrated = await generateDestinationUrl(launch);
-  assert.equal(migrated.url, nestedInvite.toString(),
-    'A legacy saved lite_redirect is migrated back to its embedded official invite LP');
-  assert.equal(migrated.mode, 'lp');
+  const migrated = await generateDestinationUrl(storeLaunch);
+  assert.equal(migrated.mode, 'onelink');
+  assert.equal(new URL(migrated.url).hostname, 'snssdk473824.onelink.me',
+    'legacy lite_redirect is migrated forward to the official attributed OneLink, not back to the visible LP');
 } finally {
   globalThis.fetch = savedFetch;
 }
@@ -248,4 +295,4 @@ try {
   globalThis.fetch = savedFetch;
 }
 
-console.log('Official TikTok Lite invite flow: short link and invite LP are preserved; legacy lite_redirect is migrated back to LP');
+console.log('Official TikTok Lite invite flow: TikTok-authored OneLink is used directly; app/store fallbacks avoid the visible invite LP when resolution succeeds');

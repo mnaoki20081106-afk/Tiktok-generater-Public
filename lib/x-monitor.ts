@@ -1,8 +1,3 @@
-const ENGINE_REPO = 'mnaoki20081106-afk/X-Bunseki';
-const RAW_BASE =
-  process.env.X_BUNSEKI_RAW_BASE?.replace(/\/$/, '') ||
-  `https://raw.githubusercontent.com/${ENGINE_REPO}/main`;
-
 export interface XMonitorPost {
   id: string;
   author: string;
@@ -200,18 +195,6 @@ function mergeForDetail(
   return [...byId.values()];
 }
 
-async function fetchEngineJson(path: string): Promise<UnknownRecord> {
-  const separator = path.includes('?') ? '&' : '?';
-  const response = await fetch(`${RAW_BASE}/${path}${separator}t=${Date.now()}`, {
-    cache: 'no-store',
-    headers: { Accept: 'application/json' },
-  });
-  if (!response.ok) {
-    throw new Error(`${path}: HTTP ${response.status}`);
-  }
-  return record(await response.json());
-}
-
 function parseStatus(raw: UnknownRecord): XMonitorStatus {
   const observation = record(raw.observation_db);
   const health = record(raw.collection_health);
@@ -265,16 +248,24 @@ function parseModel(registry: UnknownRecord, model: UnknownRecord): XModelStatus
 
 export async function getXMonitorData(): Promise<XMonitorData> {
   try {
-    const [hits, status, registry, model] = await Promise.all([
-      fetchEngineJson('hits.json'),
-      fetchEngineJson('status.json'),
-      fetchEngineJson('data/model_registry.json').catch(() => ({})),
-      fetchEngineJson('data/impression_model.json').catch(() => ({})),
-    ]);
+    // Keep the private storage dependency lazy so the pure normalization
+    // helpers in this module remain executable in Node's lightweight tests.
+    // Next.js resolves the alias when this server-only path is actually used.
+    const { getPrivateXMonitorSnapshot } = await import(
+      '@/lib/x-monitor-private-source'
+    );
+    const snapshot = await getPrivateXMonitorSnapshot();
+    const hits = record(snapshot.hits);
+    const status = record(snapshot.status);
+    const registry = record(snapshot.model_registry);
+    const model = record(snapshot.impression_model);
     const { earlyPosts, trendingPosts } = splitXMonitorHits(hits);
+
     return {
       updatedAt:
-        stringOrNull(hits.updated_at) || stringOrNull(status.updated_at),
+        stringOrNull(hits.updated_at) ||
+        stringOrNull(status.updated_at) ||
+        stringOrNull(snapshot.received_at),
       earlyPosts,
       trendingPosts,
       allPosts: mergeForDetail(earlyPosts, trendingPosts),

@@ -115,6 +115,13 @@ const adminLayout = fs.readFileSync(
   'utf8',
 );
 
+assert.match(page, /getCurrentXMonitorAccess\(\)/);
+assert.match(page, /if \(!access\.allowed\)/);
+assert.ok(
+  page.indexOf('if (!access.allowed)') < page.indexOf('getXMonitorData()'),
+  'premium data must not be fetched before entitlement is confirmed',
+);
+assert.match(page, /<XMonitorPaywall/);
 assert.match(page, /<XMonitorFeedSwitcher/);
 assert.match(page, /earlyPosts=\{data\.earlyPosts\}/);
 assert.match(page, /trendingPosts=\{data\.trendingPosts\}/);
@@ -149,7 +156,7 @@ assert.match(
   'trending must lead with current impressions while early leads with predicted final impressions',
 );
 
-assert.match(layout, /<XMonitorAutoRefresh \/>/);
+assert.match(layout, /access\.allowed && <XMonitorAutoRefresh \/>/);
 assert.match(
   autoRefresh,
   /15 \* 60 \* 1000/,
@@ -159,22 +166,28 @@ assert.match(autoRefresh, /router\.refresh\(\)/);
 assert.match(autoRefresh, /visibilitychange/);
 assert.match(
   monitorLib,
-  /t=\$\{Date\.now\(\)\}/,
-  'runtime JSON fetches must bypass upstream raw-file caches',
+  /getPrivateXMonitorSnapshot/,
+  'X monitor must read the premium feed from server-only private storage',
 );
-assert.match(monitorLib, /cache: 'no-store'/);
+assert.doesNotMatch(
+  monitorLib,
+  /raw\.githubusercontent\.com|fetchEngineJson/,
+  'premium monitor data must not fall back to the public GitHub raw feed',
+);
 
 assert.doesNotMatch(
   studioHeader,
   /リンクツール|\/tools\/link-generator/,
   'broken link tool must not appear in studio navigation',
 );
-assert.match(studioHeader, />\s*X監視\s*</);
+assert.match(studioHeader, /href="\/x-monitor"/);
+assert.match(studioHeader, /X監視/);
+assert.match(studioHeader, /LockKeyhole/);
 assert.match(studioHeader, />\s*マイサイト\s*</);
 assert.match(studioHeader, /studio-nav-current/);
-assert.match(layout, /<StudioHeader current="x-monitor" \/>/);
-assert.match(dashboardLayout, /<StudioHeader current="dashboard" \/>/);
-assert.match(adminLayout, /<StudioHeader current="dashboard" \/>/);
+assert.match(layout, /<StudioHeader current="x-monitor" xMonitorLocked=\{!access\.allowed\} \/>/);
+assert.match(dashboardLayout, /xMonitorLocked=\{!access\.allowed\}/);
+assert.match(adminLayout, /xMonitorLocked=\{false\}/);
 assert.doesNotMatch(
   layout,
   /publicView/,

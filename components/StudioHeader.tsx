@@ -1,9 +1,15 @@
 import Link from 'next/link';
-import { Layers } from 'lucide-react';
+import { Layers, LockKeyhole } from 'lucide-react';
 
 type StudioSection = 'x-monitor' | 'dashboard';
 
-export function StudioHeader({ current }: { current?: StudioSection }) {
+export function StudioHeader({
+  current,
+  xMonitorLocked = false,
+}: {
+  current?: StudioSection;
+  xMonitorLocked?: boolean;
+}) {
   return (
     <header className="studio-nav">
       <Link href="/dashboard" className="studio-brand" aria-label="ProfileHub ホーム">
@@ -17,9 +23,14 @@ export function StudioHeader({ current }: { current?: StudioSection }) {
       <nav aria-label="メインナビゲーション">
         <Link
           href="/x-monitor"
-          className={current === 'x-monitor' ? 'studio-nav-current' : undefined}
+          className={[
+            current === 'x-monitor' ? 'studio-nav-current' : '',
+            xMonitorLocked ? 'studio-nav-locked' : '',
+          ].filter(Boolean).join(' ') || undefined}
           aria-current={current === 'x-monitor' ? 'page' : undefined}
+          aria-label={xMonitorLocked ? 'X監視・月額サービスが必要' : 'X監視'}
         >
+          {xMonitorLocked && <LockKeyhole size={12} aria-hidden="true" />}
           X監視
         </Link>
         <Link

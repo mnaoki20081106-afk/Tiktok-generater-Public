@@ -9,6 +9,8 @@ import {
   Quote,
   Repeat2,
 } from 'lucide-react';
+import { XMonitorPaywall } from '@/components/XMonitorPaywall';
+import { getCurrentXMonitorAccess } from '@/lib/x-monitor-access';
 import {
   formatCompactNumber,
   formatRelativeTime,
@@ -22,6 +24,16 @@ export default async function XMonitorDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const access = await getCurrentXMonitorAccess();
+  if (!access.allowed) {
+    return (
+      <XMonitorPaywall
+        authenticated={access.authenticated}
+        billingConfigured={access.billingConfigured}
+      />
+    );
+  }
+
   const { id } = await params;
   const data = await getXMonitorData();
   const post = data.allPosts.find((row) => row.id === id);

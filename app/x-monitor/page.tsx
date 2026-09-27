@@ -1,5 +1,7 @@
-import { Activity, BrainCircuit, Clock3, Radar } from 'lucide-react';
+import { Activity, BrainCircuit, Clock3, CreditCard, Radar } from 'lucide-react';
 import { XMonitorFeedSwitcher } from '@/components/XMonitorFeedSwitcher';
+import { XMonitorPaywall } from '@/components/XMonitorPaywall';
+import { getCurrentXMonitorAccess } from '@/lib/x-monitor-access';
 import { formatCompactNumber, getXMonitorData, xMonitorHealthMessage } from '@/lib/x-monitor';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +19,24 @@ function updatedLabel(value: string | null) {
   }).format(d);
 }
 
-export default async function XMonitorPage() {
+export default async function XMonitorPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ billing?: string }>;
+}) {
+  const access = await getCurrentXMonitorAccess();
+  const query = await searchParams;
+
+  if (!access.allowed) {
+    return (
+      <XMonitorPaywall
+        authenticated={access.authenticated}
+        billingConfigured={access.billingConfigured}
+      />
+    );
+  }
+
+  // Premium data is fetched only after the server-side entitlement check above.
   const data = await getXMonitorData();
   const healthMessage = xMonitorHealthMessage(data.status);
 
@@ -28,15 +47,30 @@ export default async function XMonitorPage() {
           <p className="studio-eyebrow">X VIRAL SIGNAL</p>
           <h1>X監視</h1>
         </div>
-        <div className="xmon-live-card">
-          <div className={`xmon-live-dot ${data.status.status === 'success' ? 'is-live' : ''}`} />
-          <div>
-            <span>MONITOR STATUS</span>
-            <strong>{data.status.status === 'success' ? 'LIVE' : data.status.status.toUpperCase()}</strong>
-            <small><Clock3 size={13} /> {updatedLabel(data.updatedAt)}</small>
+        <div className="xmon-hero-actions">
+          <div className="xmon-live-card">
+            <div className={`xmon-live-dot ${data.status.status === 'success' ? 'is-live' : ''}`} />
+            <div>
+              <span>MONITOR STATUS</span>
+              <strong>{data.status.status === 'success' ? 'LIVE' : data.status.status.toUpperCase()}</strong>
+              <small><Clock3 size={13} /> {updatedLabel(data.updatedAt)}</small>
+            </div>
           </div>
+          {access.source === 'subscription' && (
+            <form action="/api/billing/x-monitor/portal" method="post">
+              <button type="submit" className="xmon-manage-subscription">
+                <CreditCard size={14} /> 契約を管理
+              </button>
+            </form>
+          )}
         </div>
       </section>
+
+      {query.billing === 'portal-error' && (
+        <div className="xmon-alert" role="alert">
+          契約管理画面を開けませんでした。Stripeのカスタマーポータル設定を確認してください。
+        </div>
+      )}
 
       {data.sourceError && (
         <div className="xmon-alert">

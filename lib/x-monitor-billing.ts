@@ -5,6 +5,7 @@ type StripeList<T> = {
 type StripeCustomer = {
   id: string;
   email?: string | null;
+  metadata?: Record<string, string>;
 };
 
 type StripeSubscription = {
@@ -15,6 +16,9 @@ type StripeSubscription = {
 type StripeCheckoutSession = {
   id: string;
   url?: string | null;
+  status?: string | null;
+  mode?: string | null;
+  metadata?: Record<string, string>;
 };
 
 type StripePortalSession = {
@@ -39,7 +43,11 @@ export function isActiveXMonitorSubscriptionStatus(status: string | null | undef
 
 async function stripeRequest<T>(
   path: string,
-  init?: { method?: 'GET' | 'POST'; body?: URLSearchParams },
+  init?: {
+    method?: 'GET' | 'POST';
+    body?: URLSearchParams;
+    idempotencyKey?: string;
+  },
 ): Promise<T> {
   const secret = stripeSecret();
   if (!secret) {
@@ -52,6 +60,9 @@ async function stripeRequest<T>(
       Authorization: `Bearer ${secret}`,
       ...(init?.body
         ? { 'Content-Type': 'application/x-www-form-urlencoded' }
+        : {}),
+      ...(init?.idempotencyKey
+        ? { 'Idempotency-Key': init.idempotencyKey }
         : {}),
     },
     body: init?.body?.toString(),
@@ -79,6 +90,50 @@ async function findStripeCustomersByEmail(email: string): Promise<StripeCustomer
     `customers?${params.toString()}`,
   );
   return result.data || [];
+}
+
+async function getOrCreateXMonitorCustomer(input: {
+  email: string;
+  userId: string;
+}): Promise<StripeCustomer> {
+  const customers = await findStripeCustomersByEmail(input.email);
+  const exact = customers.find(
+    (customer) => customer.metadata?.supabase_user_id === input.userId,
+  );
+  if (exact) return exact;
+  if (customers[0]) return customers[0];
+
+  const body = new URLSearchParams();
+  body.set('email', input.email);
+  body.set('metadata[supabase_user_id]', input.userId);
+  body.set('metadata[product]', 'x-monitor');
+
+  return stripeRequest<StripeCustomer>('customers', {
+    method: 'POST',
+    body,
+    idempotencyKey: `x-monitor-customer-${input.userId}`,
+  });
+}
+
+async function findReusableXMonitorCheckout(
+  customerId: string,
+  userId: string,
+): Promise<StripeCheckoutSession | null> {
+  const params = new URLSearchParams({
+    customer: customerId,
+    status: 'open',
+    limit: '20',
+  });
+  const result = await stripeRequest<StripeList<StripeCheckoutSession>>(
+    `checkout/sessions?${params.toString()}`,
+  );
+
+  return (result.data || []).find((session) =>
+    session.mode === 'subscription' &&
+    session.metadata?.product === 'x-monitor' &&
+    session.metadata?.supabase_user_id === userId &&
+    Boolean(session.url)
+  ) || null;
 }
 
 export async function hasActiveXMonitorSubscription(email: string): Promise<boolean> {
@@ -116,11 +171,23 @@ export async function createXMonitorCheckoutSession(input: {
     throw new Error('X monitoring billing is not configured');
   }
 
+  const customer = await getOrCreateXMonitorCustomer(input);
+  const reusable = await findReusableXMonitorCheckout(customer.id, input.userId);
+  if (reusable?.url) return reusable.url;
+
+  // Use a deterministic 30-minute bucket so simultaneous/repeated POSTs create
+  // at most one Checkout Session for the same user/environment. The Checkout
+  // itself stays open for at least 30 minutes and at most 60 minutes.
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const bucketStart = Math.floor(nowSeconds / 1800) * 1800;
+  const expiresAt = bucketStart + 3600;
+  const host = new URL(input.origin).host.replace(/[^a-zA-Z0-9.-]/g, '_');
+
   const body = new URLSearchParams();
   body.set('mode', 'subscription');
   body.set('success_url', `${input.origin}/x-monitor?billing=success`);
   body.set('cancel_url', `${input.origin}/x-monitor/upgrade?billing=cancelled`);
-  body.set('customer_email', input.email);
+  body.set('customer', customer.id);
   body.set('client_reference_id', input.userId);
   body.set('line_items[0][price]', xMonitorPriceId());
   body.set('line_items[0][quantity]', '1');
@@ -128,11 +195,13 @@ export async function createXMonitorCheckoutSession(input: {
   body.set('metadata[product]', 'x-monitor');
   body.set('subscription_data[metadata][supabase_user_id]', input.userId);
   body.set('subscription_data[metadata][product]', 'x-monitor');
+  body.set('expires_at', String(expiresAt));
   body.set('locale', 'ja');
 
   const session = await stripeRequest<StripeCheckoutSession>('checkout/sessions', {
     method: 'POST',
     body,
+    idempotencyKey: `x-monitor-checkout-${input.userId}-${host}-${bucketStart}`,
   });
 
   if (!session.url) {

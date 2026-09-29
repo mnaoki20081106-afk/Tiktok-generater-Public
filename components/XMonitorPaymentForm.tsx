@@ -51,6 +51,7 @@ export function XMonitorPaymentForm({
       setResult(next);
       if (next.ok) {
         setLink('');
+        router.push('/x-monitor?billing=success');
         router.refresh();
       }
     } finally {
@@ -65,7 +66,10 @@ export function XMonitorPaymentForm({
     try {
       const next = await retryXMonitorPaymentAction(pendingPayment.id);
       setResult(next);
-      if (next.ok) {\n        router.push('/x-monitor?billing=success');\n        router.refresh();\n      }
+      if (next.ok) {
+        router.push('/x-monitor?billing=success');
+        router.refresh();
+      }
     } finally {
       setRetrying(false);
     }

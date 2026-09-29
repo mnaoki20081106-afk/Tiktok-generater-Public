@@ -160,3 +160,35 @@ $$;
 revoke all on function public.x_monitor_finalize_payment(uuid) from public;
 revoke all on function public.x_monitor_finalize_payment(uuid) from anon, authenticated;
 grant execute on function public.x_monitor_finalize_payment(uuid) to service_role;
+\n
+-- Defense in depth: explicit client deny policies plus FK index.
+create index if not exists x_monitor_subscriptions_last_payment_idx
+  on public.x_monitor_subscriptions (last_payment_id);
+
+drop policy if exists "x monitor payment config server only" on public.x_monitor_payment_config;
+create policy "x monitor payment config server only"
+  on public.x_monitor_payment_config as restrictive for all to anon, authenticated
+  using (false) with check (false);
+
+drop policy if exists "x monitor payment accounts server only" on public.x_monitor_payment_accounts;
+create policy "x monitor payment accounts server only"
+  on public.x_monitor_payment_accounts as restrictive for all to anon, authenticated
+  using (false) with check (false);
+
+drop policy if exists "x monitor payment challenges server only" on public.x_monitor_payment_login_challenges;
+create policy "x monitor payment challenges server only"
+  on public.x_monitor_payment_login_challenges as restrictive for all to anon, authenticated
+  using (false) with check (false);
+
+drop policy if exists "x monitor payments server only" on public.x_monitor_payments;
+create policy "x monitor payments server only"
+  on public.x_monitor_payments as restrictive for all to anon, authenticated
+  using (false) with check (false);
+
+drop policy if exists "x monitor subscriptions server only" on public.x_monitor_subscriptions;
+create policy "x monitor subscriptions server only"
+  on public.x_monitor_subscriptions as restrictive for all to anon, authenticated
+  using (false) with check (false);
+
+-- Existing event-trigger helper must never be callable from the public API.
+revoke execute on function public.rls_auto_enable() from public, anon, authenticated;

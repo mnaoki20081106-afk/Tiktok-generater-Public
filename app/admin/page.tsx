@@ -11,8 +11,9 @@ import { isIpHashingConfigured } from '@/lib/request-identity';
 import { getXKeywordConfig, isXKeywordWriteConfigured } from '@/lib/x-monitor-github';
 import { XKeywordSettings } from './x-keyword-settings';
 import { getXMonitorAllowlist } from '@/lib/x-monitor-access-store';
-import { isXMonitorBillingConfigured } from '@/lib/x-monitor-billing';
 import { XMonitorAccessSettings } from './x-access-settings';
+import { getXMonitorPaymentAdminState } from '@/lib/x-monitor-payments';
+import { XMonitorPaymentSettings } from './x-payment-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,7 @@ export default async function AdminPage() {
     summary30,
     xKeywordsResult,
     xAccessResult,
+    xPaymentResult,
   ] = await Promise.all([
     admin.from('surprise_config').select('*').eq('id', 1).maybeSingle(),
     getGlobalAnalyticsHourly(admin, 24),
@@ -50,9 +52,14 @@ export default async function AdminPage() {
         allowlist: null,
         error: error instanceof Error ? error.message : 'X監視の許可リスト取得に失敗しました',
       })),
+    getXMonitorPaymentAdminState()
+      .then((state) => ({ state, error: null as string | null }))
+      .catch((error: unknown) => ({
+        state: null,
+        error: error instanceof Error ? error.message : 'X監視の決済設定取得に失敗しました',
+      })),
   ]);
   const canWriteXKeywords = isXKeywordWriteConfigured();
-  const billingConfigured = isXMonitorBillingConfigured();
 
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-5 py-10 sm:px-6 sm:py-12">
@@ -66,7 +73,7 @@ export default async function AdminPage() {
           <p className="studio-eyebrow">ADMIN CONSOLE</p>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">管理画面</h1>
           <p className="mt-2 text-sm text-slate-500">
-            利用状況、X監視のアクセス・キーワード、サプライズ抽選を管理します。
+            利用状況、X監視のアクセス・決済・キーワード、サプライズ抽選を管理します。
           </p>
         </div>
         <Link
@@ -104,8 +111,11 @@ export default async function AdminPage() {
       <div className="mb-14 border-t border-slate-200 pt-10">
         <XMonitorAccessSettings
           allowlist={xAccessResult.allowlist}
-          billingConfigured={billingConfigured}
           loadError={xAccessResult.error}
+        />
+        <XMonitorPaymentSettings
+          initialState={xPaymentResult.state}
+          loadError={xPaymentResult.error}
         />
       </div>
 
@@ -118,21 +128,21 @@ export default async function AdminPage() {
       </div>
 
       <div className="border-t border-slate-200 pt-10">
-      <h2 className="mb-2 text-xl font-semibold text-slate-900">サプライズ抽選設定</h2>
-      <p className="mb-8 text-sm leading-relaxed text-slate-500">
-        訪問者が公開ページの「TikTokを開く」ボタンをタップした際、指定した確率でユーザー入力のURLの代わりに
-        当たりURLへ遷移させます。サイト作成者本人のログイン、端末Cookie、ブラウザ指紋、秘密鍵付きIPハッシュの
-        いずれかが一致するアクセスは、常にユーザーが入力した本来のURLへ遷移します。
-      </p>
-      {!isIpHashingConfigured() && (
-        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
-          <strong>IPによる作成者除外が未設定です。</strong><br />
-          GitHub／ホスティング環境のSecretに、32文字以上のランダムな
-          <code className="mx-1 font-mono">IP_HASH_SECRET</code>を追加してください。
-          Cookie・ログイン・ブラウザ指紋による除外は引き続き動作します。
-        </div>
-      )}
-      <AdminSurpriseForm config={config} />
+        <h2 className="mb-2 text-xl font-semibold text-slate-900">サプライズ抽選設定</h2>
+        <p className="mb-8 text-sm leading-relaxed text-slate-500">
+          訪問者が公開ページの「TikTokを開く」ボタンをタップした際、指定した確率でユーザー入力のURLの代わりに
+          当たりURLへ遷移させます。サイト作成者本人のログイン、端末Cookie、ブラウザ指紋、秘密鍵付きIPハッシュの
+          いずれかが一致するアクセスは、常にユーザーが入力した本来のURLへ遷移します。
+        </p>
+        {!isIpHashingConfigured() && (
+          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
+            <strong>IPによる作成者除外が未設定です。</strong><br />
+            GitHub／ホスティング環境のSecretに、32文字以上のランダムな
+            <code className="mx-1 font-mono">IP_HASH_SECRET</code>を追加してください。
+            Cookie・ログイン・ブラウザ指紋による除外は引き続き動作します。
+          </div>
+        )}
+        <AdminSurpriseForm config={config} />
       </div>
     </main>
   );

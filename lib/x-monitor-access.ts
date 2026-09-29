@@ -3,7 +3,7 @@ import { isAdminEmail } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
 import { isXMonitorEmailAllowlisted } from '@/lib/x-monitor-access-store';
 import {
-  hasActiveXMonitorSubscription,
+  getXMonitorSubscriptionExpiry,
   isXMonitorBillingConfigured,
 } from '@/lib/x-monitor-billing';
 
@@ -21,7 +21,17 @@ export type XMonitorAccess = {
   userId: string | null;
   source: XMonitorAccessSource;
   billingConfigured: boolean;
+  subscriptionExpiresAt: string | null;
 };
+
+async function billingConfiguredSafely(): Promise<boolean> {
+  try {
+    return await isXMonitorBillingConfigured();
+  } catch (error) {
+    console.error('[x-monitor-access] billing config lookup failed', error);
+    return false;
+  }
+}
 
 export async function resolveXMonitorAccess(input: {
   email: string | null | undefined;
@@ -29,7 +39,7 @@ export async function resolveXMonitorAccess(input: {
 }): Promise<XMonitorAccess> {
   const email = input.email?.trim().toLowerCase() || null;
   const userId = input.userId || null;
-  const billingConfigured = isXMonitorBillingConfigured();
+  const billingConfigured = await billingConfiguredSafely();
 
   if (!email || !userId) {
     return {
@@ -39,6 +49,7 @@ export async function resolveXMonitorAccess(input: {
       userId,
       source: 'signed_out',
       billingConfigured,
+      subscriptionExpiresAt: null,
     };
   }
 
@@ -50,6 +61,7 @@ export async function resolveXMonitorAccess(input: {
       userId,
       source: 'admin',
       billingConfigured,
+      subscriptionExpiresAt: null,
     };
   }
 
@@ -62,6 +74,7 @@ export async function resolveXMonitorAccess(input: {
         userId,
         source: 'manual',
         billingConfigured,
+        subscriptionExpiresAt: null,
       };
     }
   } catch (error) {
@@ -70,23 +83,25 @@ export async function resolveXMonitorAccess(input: {
     // Continue as not manually allowlisted and keep the premium feature closed.
   }
 
-  if (billingConfigured) {
-    try {
-      if (await hasActiveXMonitorSubscription(email)) {
-        return {
-          authenticated: true,
-          allowed: true,
-          email,
-          userId,
-          source: 'subscription',
-          billingConfigured,
-        };
-      }
-    } catch (error) {
-      console.error('[x-monitor-access] subscription lookup failed', error);
-      // Billing lookup failures fail closed. A payment/API outage must never
-      // accidentally expose the premium monitor.
+  // Existing paid access remains valid even if new purchases are temporarily
+  // disabled or both receiving accounts are disconnected.
+  try {
+    const subscriptionExpiresAt = await getXMonitorSubscriptionExpiry(userId);
+    if (subscriptionExpiresAt) {
+      return {
+        authenticated: true,
+        allowed: true,
+        email,
+        userId,
+        source: 'subscription',
+        billingConfigured,
+        subscriptionExpiresAt,
+      };
     }
+  } catch (error) {
+    console.error('[x-monitor-access] subscription lookup failed', error);
+    // Billing lookup failures fail closed. A database/payment outage must never
+    // accidentally expose the premium monitor.
   }
 
   return {
@@ -96,6 +111,7 @@ export async function resolveXMonitorAccess(input: {
     userId,
     source: 'none',
     billingConfigured,
+    subscriptionExpiresAt: null,
   };
 }
 

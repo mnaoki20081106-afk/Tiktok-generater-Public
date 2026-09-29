@@ -443,5 +443,12 @@ create policy "x monitor subscriptions server only"
   on public.x_monitor_subscriptions as restrictive for all to anon, authenticated
   using (false) with check (false);
 
--- Existing event-trigger helper must never be callable from the public API.
-revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+-- If the base schema has the RLS event-trigger helper, it must never be callable
+-- from the public API. The standalone billing SQL also remains safe on databases
+-- where that helper does not exist.
+do $
+begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    execute 'revoke execute on function public.rls_auto_enable() from public, anon, authenticated';
+  end if;
+end $;

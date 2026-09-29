@@ -1,4 +1,5 @@
-import { Activity, BrainCircuit, Clock3, CreditCard, Radar } from 'lucide-react';
+import Link from 'next/link';
+import { Activity, BrainCircuit, CalendarClock, Clock3, Radar } from 'lucide-react';
 import { XMonitorFeedSwitcher } from '@/components/XMonitorFeedSwitcher';
 import { XMonitorPaywall } from '@/components/XMonitorPaywall';
 import { getCurrentXMonitorAccess } from '@/lib/x-monitor-access';
@@ -11,6 +12,20 @@ function updatedLabel(value: string | null) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return new Intl.DateTimeFormat('ja-JP', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Tokyo',
+  }).format(d);
+}
+
+function expiryLabel(value: string | null) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat('ja-JP', {
+    year: 'numeric',
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
@@ -39,6 +54,7 @@ export default async function XMonitorPage({
   // Premium data is fetched only after the server-side entitlement check above.
   const data = await getXMonitorData();
   const healthMessage = xMonitorHealthMessage(data.status);
+  const subscriptionExpiry = expiryLabel(access.subscriptionExpiresAt);
 
   return (
     <main className="xmon-wrap">
@@ -57,18 +73,23 @@ export default async function XMonitorPage({
             </div>
           </div>
           {access.source === 'subscription' && (
-            <form action="/api/billing/x-monitor/portal" method="post">
-              <button type="submit" className="xmon-manage-subscription">
-                <CreditCard size={14} /> 契約を管理
-              </button>
-            </form>
+            <>
+              {subscriptionExpiry && (
+                <div className="xmon-subscription-expiry">
+                  <CalendarClock size={13} /> 利用期限 {subscriptionExpiry}
+                </div>
+              )}
+              <Link href="/x-monitor/upgrade" className="xmon-manage-subscription">
+                <CalendarClock size={14} /> 30日延長
+              </Link>
+            </>
           )}
         </div>
       </section>
 
-      {query.billing === 'portal-error' && (
-        <div className="xmon-alert" role="alert">
-          契約管理画面を開けませんでした。Stripeのカスタマーポータル設定を確認してください。
+      {query.billing === 'success' && (
+        <div className="xmon-alert xmon-alert-success" role="status">
+          支払いを反映しました。X監視の利用期限が30日延長されています。
         </div>
       )}
 

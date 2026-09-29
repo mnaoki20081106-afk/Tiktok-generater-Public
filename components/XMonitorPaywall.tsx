@@ -29,11 +29,11 @@ export function XMonitorPaywall({
         {authenticated ? (
           <>
             <Link href="/x-monitor/upgrade" className="xmon-upgrade-button">
-              月額サービスへアップグレード <ArrowRight size={16} />
+              PayPay / Kyashで30日利用 <ArrowRight size={16} />
             </Link>
             {!billingConfigured && (
               <div className="xmon-billing-pending" role="status">
-                決済設定を準備中です。料金が確定するまで課金は行われません。
+                現在は受取アカウントまたは料金設定が未完了のため、新しい決済を開始できません。
               </div>
             )}
           </>
@@ -44,7 +44,7 @@ export function XMonitorPaywall({
         )}
 
         <p className="xmon-lock-note">
-          管理者または管理画面で個別に許可されたアカウントは、月額契約なしでも利用できます。
+          管理者または管理画面で個別に許可されたアカウントは、支払いなしでも利用できます。
         </p>
       </section>
     </main>

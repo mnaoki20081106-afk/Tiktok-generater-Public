@@ -5,7 +5,7 @@ import { resolvePublicSiteOrigin } from '@/lib/site-url';
 export const dynamic = 'force-dynamic';
 
 /**
- * Kept so old links do not 404 after removing Stripe.
+ * Kept so old billing links do not 404 after the payment migration.
  * Payment renewal is handled on the X-monitor upgrade page.
  */
 export async function POST(request: NextRequest) {

@@ -5,7 +5,7 @@ import { resolvePublicSiteOrigin } from '@/lib/site-url';
 export const dynamic = 'force-dynamic';
 
 /**
- * Compatibility endpoint for old Stripe checkout links.
+ * Compatibility endpoint for old billing checkout links.
  * PayPay/Kyash payments are now entered directly on /x-monitor/upgrade.
  */
 export async function POST(request: NextRequest) {

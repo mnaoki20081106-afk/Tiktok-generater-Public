@@ -65,7 +65,7 @@ export function XMonitorPaymentForm({
     try {
       const next = await retryXMonitorPaymentAction(pendingPayment.id);
       setResult(next);
-      if (next.ok) router.refresh();
+      if (next.ok) {\n        router.push('/x-monitor?billing=success');\n        router.refresh();\n      }
     } finally {
       setRetrying(false);
     }

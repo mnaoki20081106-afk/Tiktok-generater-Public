@@ -8,6 +8,7 @@ import { recordPageView } from '@/lib/analytics';
 import { DEVICE_COOKIE } from '@/lib/device';
 import { hashClientIp } from '@/lib/request-identity';
 import { resolvePublicSiteOrigin } from '@/lib/site-url';
+import { decideDirectFire, directFireRedirectResponse } from '@/lib/direct-fire';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,8 +46,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   }
   const destinationUrl = await resolveDestinationUrl(site, { deviceId, ipHash, userId: visitorUserId });
 
+  const userAgent = request.headers.get('user-agent');
+
   // PV/UU集計用の記録はレスポンス送信をブロックしないよう、応答後に実行する
-  after(() => recordPageView(supabase, site.id, deviceId, request.headers.get('user-agent')));
+  after(() => recordPageView(supabase, site.id, deviceId, userAgent));
+
+  // 直接発火(編集画面のチェックボックスでオンにしたサイトのみ):
+  // クローラには従来の OGP 付き HTML、人間には自分のページを出さず埋め込みリンクへ 302。
+  // 抽選・本人除外は上の resolveDestinationUrl で済んでいるので、その結果をそのまま転送先にする。
+  const directFire = decideDirectFire(site, userAgent, destinationUrl);
+  if (directFire.kind === 'redirect') {
+    return directFireRedirectResponse(directFire.location);
+  }
 
   const viewerData = siteToViewerData(site, origin);
   viewerData.tiktokUrl = destinationUrl;

@@ -392,7 +392,8 @@
 }
 
 .piRow,
-.floatRow {
+.floatRow,
+.directFireRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -405,15 +406,33 @@
   padding: 10px 12px;
 }
 .piRow .piLeft,
-.floatRow .piLeft {
+.floatRow .piLeft,
+.directFireRow .piLeft {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 .piRow input[type=checkbox],
-.floatRow input[type=checkbox] {
+.floatRow input[type=checkbox],
+.directFireRow input[type=checkbox] {
   width: 16px;
   height: 16px;
+}
+/* 直接発火は全モード共通なので非表示にしない。縦並びにして説明文を添える */
+.directFireRow {
+  width: auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.directFireRow .piLeft label {
+  color: rgba(255, 255, 255, .85);
+  font-weight: 600;
+}
+.directFireRow .directFireHint {
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, .45);
 }
 .piRow input[type=text] {
   width: 48px;

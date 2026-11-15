@@ -23,6 +23,12 @@ export interface SiteContentData {
   shareCount?: string;
   showPageIndicator?: boolean;
   pageIndicatorCount?: string;
+  /**
+   * 直接発火。true のとき、公開ページは SNS クローラ(OGP 取得)にだけ HTML を返し、
+   * 人間のブラウザには自分のページを表示せず埋め込みリンク(tiktokUrl)へ 302 で送る。
+   * 未設定・false は従来どおり自分のページを表示する。
+   */
+  directFire?: boolean;
   images?: {
     background?: string;
     ogpImage?: string;

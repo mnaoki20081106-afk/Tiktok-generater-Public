@@ -41,6 +41,7 @@ type DraftJson = {
   piToggle: boolean;
   piCount: string;
   floatToggle: boolean;
+  directFire?: boolean;
   bgTransform: { zoom: number; offsetX: number; offsetY: number } | null;
   existingUrls: { background?: string; avatar?: string; ogp?: string; icon?: string };
 };
@@ -116,6 +117,7 @@ export function DashboardForm({
     const piToggle = $<HTMLInputElement>('piToggle');
     const piCount = $<HTMLInputElement>('piCount');
     const floatToggle = $<HTMLInputElement>('floatToggle');
+    const directFireToggle = $<HTMLInputElement>('directFireToggle');
     const floatPreview = $('floatPreview');
     const floatLater = $<HTMLButtonElement>('floatLater');
     const previewIconArea = $('previewIconArea');
@@ -213,6 +215,7 @@ export function DashboardForm({
         piToggle: piToggle.checked,
         piCount: piCount.value,
         floatToggle: floatToggle.checked,
+        directFire: directFireToggle.checked,
         bgTransform:
           state.bg?.kind === 'new'
             ? { zoom: bgTransform.zoom, offsetX: bgTransform.offsetX, offsetY: bgTransform.offsetY }
@@ -947,6 +950,10 @@ export function DashboardForm({
       floatPreview.classList.toggle(styles.visible, floatToggle.checked);
       saveState();
     });
+    // ===== 直接発火(保存時に content_data.directFire として公開ページへ反映) =====
+    directFireToggle.addEventListener('change', () => {
+      saveState();
+    });
     floatLater.addEventListener('click', (event) => {
       event.stopPropagation();
       floatToggle.checked = false;
@@ -1346,6 +1353,7 @@ export function DashboardForm({
               shareCount: shareCountEl.textContent?.trim() || '0',
               showPageIndicator: piToggle.checked,
               pageIndicatorCount: piCount.value.trim() || '3',
+              directFire: directFireToggle.checked,
               images: {
                 background: backgroundUrl ?? undefined,
                 ogpImage: ogpUrl ?? undefined,
@@ -1415,6 +1423,8 @@ export function DashboardForm({
       piCount.value = saved?.piCount || (cd.pageIndicatorCount as string) || '3';
       floatToggle.checked = saved?.floatToggle ?? false;
       floatPreview.classList.toggle(styles.visible, floatToggle.checked);
+      // 既定はオフ(自分のページを表示)。未保存の下書きがあればそちらを優先する
+      directFireToggle.checked = saved ? saved.directFire === true : cd.directFire === true;
       renderDesc();
       renderModeFields();
       syncAlternatePreview();
@@ -1991,6 +2001,20 @@ export function DashboardForm({
               <input type="url" data-id="tiktokUrl" placeholder="https://lite.tiktok.com/t/..." />
               <div className={styles.hint}>
                 短縮招待リンク（lite.tiktok.com/t/...）は保存時にTikTok公式の分岐リンクを取得し、取得できない場合も公式短縮URLをそのまま保持します。招待の最終認定は端末環境とTikTok側の参加条件によります。
+              </div>
+            </div>
+            <div className={styles.field}>
+              <div className={styles.directFireRow}>
+                <div className={styles.piLeft}>
+                  <input type="checkbox" data-id="directFireToggle" id="directFireToggle" />
+                  <label htmlFor="directFireToggle">直接発火</label>
+                </div>
+                <div className={styles.directFireHint}>
+                  オンにすると、X などのカード（OGP画像）をタップした人はこのページを経由せず、上のリンクへ直接飛びます。
+                  カードの画像・タイトルは今までどおり表示されます。オフ（既定）なら従来どおりこのページを表示します。
+                  <br />
+                  注意: 直接飛ばすとこのページの黒画面タップによるアプリ起動は使われません。招待の紐づけは招待LPが開いた時点で成立しますが、アプリを開く操作はLP側のボタンになります。
+                </div>
               </div>
             </div>
             <div className={styles.field}>
